@@ -1,3 +1,4 @@
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import { Header } from "./components/Layout/Header"
 import { Footer } from "./components/Layout/Footer"
 import { ScrollToTop } from "./components/ui/ScrollToTop"
@@ -24,6 +25,7 @@ function App() {
         <Contact />
       </main>
       <Footer />
+      <SpeedInsights />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Github, ExternalLink } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/Card"
 import { Badge } from "../ui/Badge"
@@ -41,7 +41,7 @@ export function Projects() {
                         </p>
                     </div>
                 </motion.div>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
+                <div className="flex flex-wrap justify-center gap-6 max-w-6xl mx-auto">
                     {projects.map((project, idx) => (
                         <motion.div
                             key={idx}
@@ -49,6 +49,7 @@ export function Projects() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true, margin: "-50px" }}
                             transition={{ duration: 0.4, delay: idx * 0.1 }}
+                            className="w-full md:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)] max-w-md flex"
                         >
                             <Card className="flex flex-col overflow-hidden border bg-background group hover:border-primary/50 transition-colors h-full">
                                 <div className="relative aspect-video overflow-hidden bg-muted">
@@ -58,9 +59,6 @@ export function Projects() {
                                         className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
                                     />
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                                        <a href={project.githubUrl} className="p-2 bg-background/90 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors" title="View Code">
-                                            <Github className="h-5 w-5" />
-                                        </a>
                                         <a href={project.liveUrl} className="p-2 bg-background/90 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors" title="Live Preview">
                                             <ExternalLink className="h-5 w-5" />
                                         </a>

@@ -11,7 +11,7 @@ export function Footer() {
                 </div>
                 <div className="flex items-center space-x-4">
                     <a
-                        href="https://github.com"
+                        href="https://github.com/HaroldSelga"
                         target="_blank"
                         rel="noreferrer"
                         className="text-muted-foreground hover:text-foreground transition-colors"
@@ -20,22 +20,13 @@ export function Footer() {
                         <span className="sr-only">GitHub</span>
                     </a>
                     <a
-                        href="https://facebook.com"
+                        href="https://www.facebook.com/BarumBadu18/"
                         target="_blank"
                         rel="noreferrer"
                         className="text-muted-foreground hover:text-[#1877F2] transition-colors"
                     >
                         <Facebook className="h-5 w-5" />
                         <span className="sr-only">Facebook</span>
-                    </a>
-                    <a
-                        href="https://twitter.com"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-muted-foreground hover:text-[#1DA1F2] transition-colors"
-                    >
-                        <Twitter className="h-5 w-5" />
-                        <span className="sr-only">Twitter</span>
                     </a>
                     <a
                         href="https://linkedin.com"

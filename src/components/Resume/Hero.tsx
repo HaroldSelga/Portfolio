@@ -1,4 +1,4 @@
-import { Mail, Phone, Github, Twitter, Facebook, User } from "lucide-react"
+import { Mail, Phone, Github, Facebook, User } from "lucide-react"
 import { LocationLink } from "../ui/LocationLink"
 import { motion } from "framer-motion"
 
@@ -46,17 +46,13 @@ export default function Hero() {
 
                             {/* Social Links */}
                             <div className="flex items-center justify-center md:justify-start gap-3 pt-3">
-                                <a href="https://facebook.com" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-[#1877F2] transition-colors">
+                                <a href="https://www.facebook.com/BarumBadu18/" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-[#1877F2] transition-colors">
                                     <Facebook className="h-5 w-5" />
                                     <span className="sr-only">Facebook</span>
                                 </a>
-                                <a href="https://github.com" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                                <a href="https://github.com/HaroldSelga" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
                                     <Github className="h-5 w-5" />
                                     <span className="sr-only">GitHub</span>
-                                </a>
-                                <a href="https://twitter.com" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-[#1DA1F2] transition-colors">
-                                    <Twitter className="h-5 w-5" />
-                                    <span className="sr-only">Twitter</span>
                                 </a>
                             </div>
                         </div>
@@ -89,8 +85,7 @@ export default function Hero() {
                                 Professional Objective
                             </h3>
                             <p className="text-foreground/90 leading-relaxed text-[15px] sm:text-base text-justify">
-                                Seeking for a responsible job that may be a good help to my professional growth and to enhance my
-                                professional skills in a dynamic and fast paced workplace.
+                                Entry-level software developer seeking a position where I can apply my programming skills, learn new technologies, and gain real-world development experience. I am eager to grow as a developer while contributing to building efficient and reliable software solutions.
                             </p>
                         </div>
 

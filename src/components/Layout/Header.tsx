@@ -1,5 +1,6 @@
 import { FileText, Send } from "lucide-react"
 import { Button } from "../ui/Button"
+import { ThemeToggle } from "../ThemeToggle"
 
 export function Header() {
     return (
@@ -29,17 +30,18 @@ export function Header() {
                         <a href="#projects" className="transition-colors hover:text-primary text-foreground/70">
                             Projects
                         </a>
-                        <a href="#media" className="transition-colors hover:text-primary text-foreground/70">
-                            Multimedia
-                        </a>
                         <a href="#skills" className="transition-colors hover:text-primary text-foreground/70">
                             Skills
+                        </a>
+                        <a href="#media" className="transition-colors hover:text-primary text-foreground/70">
+                            Multimedia
                         </a>
                     </nav>
                 </div>
 
-                {/* Right: Contact Button */}
-                <div className="flex w-1/3 justify-end items-center">
+                {/* Right: Actions */}
+                <div className="flex w-1/3 justify-end items-center space-x-2">
+                    <ThemeToggle />
                     <nav className="flex items-center">
                         <a href="#contact">
                             <Button className="font-semibold h-9 px-5 rounded-full shadow-sm transition-all hover:shadow-md bg-primary text-primary-foreground hover:bg-primary/90">

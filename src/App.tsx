@@ -8,23 +8,26 @@ import { Skills } from "./components/Resume/Skills"
 import { Projects } from "./components/Resume/Projects"
 import { Videos } from "./components/Resume/Videos"
 import { Contact } from "./components/Resume/Contact"
+import { ThemeProvider } from "./components/ThemeProvider"
 
 function App() {
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
-      <ScrollToTop />
-      <Header />
-      <main className="flex-1">
-        <Hero />
-        <Education />
-        <Experience />
-        <Skills />
-        <Projects />
-        <Videos />
-        <Contact />
-      </main>
-      <Footer />
-    </div>
+    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+      <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
+        <ScrollToTop />
+        <Header />
+        <main className="flex-1">
+          <Hero />
+          <Education />
+          <Experience />
+          <Skills />
+          <Projects />
+          <Videos />
+          <Contact />
+        </main>
+        <Footer />
+      </div>
+    </ThemeProvider>
   )
 }
 

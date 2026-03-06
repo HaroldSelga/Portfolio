@@ -12,49 +12,55 @@ export function Videos() {
             title: "TRB System Demo 1",
             id: "vQVZKAIgeUQ",
             category: "PROFESSIONAL WORK",
-            description: "Showcasing the core logistics and courier management dashboard features."
+            description: "Just a Simple Guide for our Admin user."
         },
         {
-            title: "TRB Workflow Process",
+            title: "TRB System Demo 2",
             id: "zAoN6E6c6no",
             category: "PROFESSIONAL WORK",
-            description: "Detailed walkthrough of the automated parcel tracking and branch administration."
+            description: "Just a Simple Guide for our Admin user."
         },
         {
-            title: "TRB Internal Systems",
+            title: "TRB System Demo 3",
             id: "jlxvA0AcvzU",
             category: "PROFESSIONAL WORK",
-            description: "A deep dive into the backend management and database interactions for TRB."
+            description: "Just a Simple Guide for our Admin user."
         },
         {
-            title: "iDeliver Service Highlights",
+            title: "TRB System Demo 4",
             id: "uYr1riTEZhQ",
             category: "PROFESSIONAL WORK",
-            description: "The official service highlights and user interface overview for iDeliver."
+            description: "Just a Simple Guide for our Admin user."
         },
         {
-            title: "Hobby Project: Edit 1",
+            title: "Old Capitol System Demo",
             id: "gcXusbcqGsU",
             category: "HOBBIES",
-            description: "Exploring creative video editing and visual effects in my free time."
+            description: "Automated DTR, attendance summary, and report generation system.\n\nKey features:\n• Municipality and district-level reporting for farmers\n• Automatic document generation (Certificates, Offer Sheets)\n• Demographic data analysis across Nueva Ecija"
         },
         {
-            title: "Hobby Project: Edit 2",
+            title: "For Fun",
             id: "9l1OJsgfy0s",
             category: "HOBBIES",
-            description: "Experimenting with pacing, transitions, and sound design."
+            description: "Custom tool for sorting voter data and generating analytical reports."
         },
         {
-            title: "Creative Exploration",
+            title: "Kingsman Demo",
             id: "_IcAbmCnc6c",
             category: "HOBBIES",
-            description: "A compilation of visual experiments and storytelling through video."
+            description: "School sideline project demonstrating efficient data management.\n\nHighlights:\n• Client-based practice project\n• Simple, efficient data organization interface\n• Task automation for easier user workflows"
         },
         {
-            title: "Life in Motion",
+            title: "College for Research and technology Portal",
             id: "rnRfD0PMHSo",
             category: "HOBBIES",
-            description: "Capturing moments and refining my cinematography skills."
+            description: "A personal portal simulation project for practice and experimentation.\n\nFocus areas:\n• Web system structure\n• Portal-style interfaces\n• Basic database and user interaction"
+        },
+        {
+            title: "Recipe Book System",
+            id: "placeholder_recipe", // Placeholder ID
+            category: "PROFESSIONAL WORK",
+            description: "A comprehensive recipe management platform.\n\nKey features:\n• Full CRUD functionality for recipes\n• Interactive landing page for browsing\n• Recipe rating and feedback system\n• Admin dashboard for content management"
         },
         {
             title: "Personal Highlights",
@@ -149,7 +155,7 @@ export function Videos() {
                                                     {video.title}
                                                 </h3>
                                             </div>
-                                            <p className="text-sm text-muted-foreground leading-relaxed text-justify">
+                                            <p className="text-sm text-muted-foreground leading-relaxed text-justify whitespace-pre-line">
                                                 {video.description}
                                             </p>
                                         </div>

@@ -17,18 +17,17 @@ export function Contact() {
         setStatus("idle")
 
         const formData = new FormData(e.currentTarget)
-        const name = formData.get("name")
-        const email = formData.get("email")
-        const message = formData.get("message")
+        formData.append("access_key", "b543a86e-7c6d-4f61-a862-277c91f7311d")
 
         try {
-            const response = await fetch("/api/sms", {
+            const response = await fetch("https://api.web3forms.com/submit", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, email, message }),
+                body: formData
             })
 
-            if (response.ok) {
+            const data = await response.json()
+
+            if (data.success) {
                 setStatus("success")
                     ; (e.target as HTMLFormElement).reset()
             } else {
@@ -55,7 +54,7 @@ export function Contact() {
                             Get in Touch
                         </h2>
                         <p className="max-w-[600px] text-muted-foreground md:text-xl/relaxed">
-                            Have a question or a project in mind? Send me a message and it will be texted directly to my phone.
+                            Have a question or a project in mind? Fill out the form below and I'll get back to you directly.
                         </p>
                     </div>
                 </motion.div>
@@ -70,7 +69,7 @@ export function Contact() {
                         <CardHeader>
                             <CardTitle>Send a Message</CardTitle>
                             <CardDescription>
-                                Fill out the form below to initiate an SMS to me.
+                                Fill out the form below to send an email to my inbox.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>

@@ -1,4 +1,5 @@
-import { Mail, Phone, Github, Facebook, User, Linkedin } from "lucide-react"
+import { Mail, Phone, Github, Facebook, User, Linkedin, Download } from "lucide-react"
+import { Button } from "../ui/Button"
 import { LocationLink } from "../ui/LocationLink"
 import { motion } from "framer-motion"
 
@@ -58,6 +59,22 @@ export default function Hero() {
                                     <Linkedin className="h-5 w-5" />
                                     <span className="sr-only">LinkedIn</span>
                                 </a>
+                            </div>
+
+                            {/* Download Buttons */}
+                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-4">
+                                <Button asChild variant="outline" size="sm" className="rounded-full border-primary/20 hover:border-primary/50 text-xs sm:text-sm">
+                                    <a href="/documents/Resume.docx" download="John_Harold_Selga_Resume.docx">
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Download Resume
+                                    </a>
+                                </Button>
+                                <Button asChild variant="outline" size="sm" className="rounded-full border-primary/20 hover:border-primary/50 text-xs sm:text-sm">
+                                    <a href="/documents/PDS 2026.xlsx" download="John_Harold_Selga_PDS_2026.xlsx">
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Download PDS
+                                    </a>
+                                </Button>
                             </div>
                         </div>
 

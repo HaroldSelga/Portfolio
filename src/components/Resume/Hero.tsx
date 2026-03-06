@@ -1,9 +1,13 @@
 import { Mail, Phone, Github, Facebook, User, Linkedin, Download, Eye } from "lucide-react"
 import { Button } from "../ui/Button"
+import { Modal } from "../ui/Modal"
+import { useState } from "react"
 import { LocationLink } from "../ui/LocationLink"
 import { motion } from "framer-motion"
 
 export default function Hero() {
+    const [previewDoc, setPreviewDoc] = useState<{ title: string, url: string } | null>(null)
+
     return (
         <section id="about" className="w-full py-12 md:py-16 lg:py-24 bg-background">
             <div className="container max-w-5xl mx-auto px-4 md:px-6">
@@ -66,30 +70,38 @@ export default function Hero() {
                                 {/* Resume Group */}
                                 <div className="flex items-center">
                                     <Button asChild variant="outline" size="sm" className="rounded-l-full rounded-r-none border-primary/20 hover:border-primary/50 text-xs">
-                                        <a href="/documents/Resume.docx" download="John_Harold_Selga_Resume.docx">
+                                        <a href="/documents/Resume.pdf" download="John_Harold_Selga_Resume.pdf">
                                             <Download className="mr-2 h-3.5 w-3.5" />
                                             Resume
                                         </a>
                                     </Button>
-                                    <Button asChild variant="outline" size="sm" className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3" title="View Resume">
-                                        <a href="/documents/Resume.docx" target="_blank" rel="noreferrer">
-                                            <Eye className="h-3.5 w-3.5" />
-                                        </a>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3"
+                                        title="View Resume"
+                                        onClick={() => setPreviewDoc({ title: "Resume Preview", url: "/documents/Resume.pdf" })}
+                                    >
+                                        <Eye className="h-3.5 w-3.5" />
                                     </Button>
                                 </div>
 
                                 {/* PDS Group */}
                                 <div className="flex items-center">
                                     <Button asChild variant="outline" size="sm" className="rounded-l-full rounded-r-none border-primary/20 hover:border-primary/50 text-xs">
-                                        <a href="/documents/PDS 2026.xlsx" download="John_Harold_Selga_PDS_2026.xlsx">
+                                        <a href="/documents/PDS 2026.pdf" download="John_Harold_Selga_PDS_2026.pdf">
                                             <Download className="mr-2 h-3.5 w-3.5" />
                                             PDS 2026
                                         </a>
                                     </Button>
-                                    <Button asChild variant="outline" size="sm" className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3" title="View PDS">
-                                        <a href="/documents/PDS 2026.xlsx" target="_blank" rel="noreferrer">
-                                            <Eye className="h-3.5 w-3.5" />
-                                        </a>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3"
+                                        title="View PDS"
+                                        onClick={() => setPreviewDoc({ title: "PDS 2026 Preview", url: "/documents/PDS 2026.pdf" })}
+                                    >
+                                        <Eye className="h-3.5 w-3.5" />
                                     </Button>
                                 </div>
                             </div>
@@ -163,6 +175,23 @@ export default function Hero() {
                     </div>
                 </motion.div>
             </div>
+
+            {/* Document Preview Modal */}
+            <Modal
+                isOpen={!!previewDoc}
+                onClose={() => setPreviewDoc(null)}
+                title={previewDoc?.title || ""}
+                className="max-w-6xl h-[95vh]"
+            >
+                {previewDoc && (
+                    <iframe
+                        src={`${previewDoc.url}#toolbar=0&navpanes=0`}
+                        className="w-full h-full border-none"
+                        title={previewDoc.title}
+                    />
+                )}
+            </Modal>
         </section>
     )
 }
+

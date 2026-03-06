@@ -1,4 +1,4 @@
-import { Mail, Phone, Github, Facebook, User, Linkedin, Download } from "lucide-react"
+import { Mail, Phone, Github, Facebook, User, Linkedin, Download, Eye } from "lucide-react"
 import { Button } from "../ui/Button"
 import { LocationLink } from "../ui/LocationLink"
 import { motion } from "framer-motion"
@@ -61,20 +61,37 @@ export default function Hero() {
                                 </a>
                             </div>
 
-                            {/* Download Buttons */}
-                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-4">
-                                <Button asChild variant="outline" size="sm" className="rounded-full border-primary/20 hover:border-primary/50 text-xs sm:text-sm">
-                                    <a href="/documents/Resume.docx" download="John_Harold_Selga_Resume.docx">
-                                        <Download className="mr-2 h-4 w-4" />
-                                        Download Resume
-                                    </a>
-                                </Button>
-                                <Button asChild variant="outline" size="sm" className="rounded-full border-primary/20 hover:border-primary/50 text-xs sm:text-sm">
-                                    <a href="/documents/PDS 2026.xlsx" download="John_Harold_Selga_PDS_2026.xlsx">
-                                        <Download className="mr-2 h-4 w-4" />
-                                        Download PDS
-                                    </a>
-                                </Button>
+                            {/* Document Buttons */}
+                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-4">
+                                {/* Resume Group */}
+                                <div className="flex items-center">
+                                    <Button asChild variant="outline" size="sm" className="rounded-l-full rounded-r-none border-primary/20 hover:border-primary/50 text-xs">
+                                        <a href="/documents/Resume.docx" download="John_Harold_Selga_Resume.docx">
+                                            <Download className="mr-2 h-3.5 w-3.5" />
+                                            Resume
+                                        </a>
+                                    </Button>
+                                    <Button asChild variant="outline" size="sm" className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3" title="View Resume">
+                                        <a href="/documents/Resume.docx" target="_blank" rel="noreferrer">
+                                            <Eye className="h-3.5 w-3.5" />
+                                        </a>
+                                    </Button>
+                                </div>
+
+                                {/* PDS Group */}
+                                <div className="flex items-center">
+                                    <Button asChild variant="outline" size="sm" className="rounded-l-full rounded-r-none border-primary/20 hover:border-primary/50 text-xs">
+                                        <a href="/documents/PDS 2026.xlsx" download="John_Harold_Selga_PDS_2026.xlsx">
+                                            <Download className="mr-2 h-3.5 w-3.5" />
+                                            PDS 2026
+                                        </a>
+                                    </Button>
+                                    <Button asChild variant="outline" size="sm" className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3" title="View PDS">
+                                        <a href="/documents/PDS 2026.xlsx" target="_blank" rel="noreferrer">
+                                            <Eye className="h-3.5 w-3.5" />
+                                        </a>
+                                    </Button>
+                                </div>
                             </div>
                         </div>
 

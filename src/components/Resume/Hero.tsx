@@ -1,4 +1,4 @@
-import { Mail, Phone, Github, Facebook, User } from "lucide-react"
+import { Mail, Phone, Github, Facebook, User, Linkedin } from "lucide-react"
 import { LocationLink } from "../ui/LocationLink"
 import { motion } from "framer-motion"
 
@@ -53,6 +53,10 @@ export default function Hero() {
                                 <a href="https://github.com/HaroldSelga" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
                                     <Github className="h-5 w-5" />
                                     <span className="sr-only">GitHub</span>
+                                </a>
+                                <a href="https://www.linkedin.com/in/john-harold-selga-0133a2254/" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-[#0A66C2] transition-colors">
+                                    <Linkedin className="h-5 w-5" />
+                                    <span className="sr-only">LinkedIn</span>
                                 </a>
                             </div>
                         </div>

@@ -29,7 +29,7 @@ export function Footer() {
                         <span className="sr-only">Facebook</span>
                     </a>
                     <a
-                        href="https://linkedin.com"
+                        href="https://www.linkedin.com/in/john-harold-selga-0133a2254/"
                         target="_blank"
                         rel="noreferrer"
                         className="text-muted-foreground hover:text-[#0A66C2] transition-colors"

@@ -21,14 +21,6 @@ export function Projects() {
             liveUrl: "https://login.idelivertrb.com/",
             githubUrl: "#",
         },
-        {
-            title: "Personal Portfolio v2",
-            description: "A modern, high-performance portfolio website built with React and Framer Motion. Features dynamic scroll animations, project filtering, and a custom design system.",
-            image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=800&auto=format&fit=crop",
-            tags: ["React", "TypeScript", "Framer Motion", "TailwindCSS"],
-            liveUrl: "#",
-            githubUrl: "#",
-        }
     ]
 
     return (

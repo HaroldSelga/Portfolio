@@ -8,7 +8,7 @@ import {
 import {
     FaPhp, FaPython, FaReact, FaBootstrap, FaHtml5, FaLaravel,
     FaNodeJs, FaDocker, FaUbuntu, FaGithub, FaFigma, FaJava,
-    FaMicrosoft, FaCloudflare, FaCss3Alt, FaLaptopCode
+    FaMicrosoft, FaCloudflare, FaCss3Alt, FaLaptopCode, FaWordpress
 } from "react-icons/fa"
 
 import {
@@ -58,6 +58,7 @@ export function Skills() {
         { name: "JSON", icon: <Code2 />, category: "Backend", subCategory: "API Architecture" },
         { name: "Node.js", icon: <FaNodeJs />, category: "Backend", subCategory: "Environments" },
         { name: "Express", icon: <SiExpress />, category: "Backend", subCategory: "Environments" },
+        { name: "WordPress", icon: <FaWordpress />, category: "Backend", subCategory: "CMS" },
 
         // Databases
         { name: "MySQL", icon: <DiMysql />, category: "Databases", subCategory: "Relational (SQL)" },

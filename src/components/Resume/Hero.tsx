@@ -1,4 +1,4 @@
-import { Mail, Phone, Github, Facebook, User, Linkedin, Download, Eye } from "lucide-react"
+import { Mail, Phone, Github, Facebook, User, Linkedin, Download } from "lucide-react"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
 import { useState } from "react"
@@ -78,11 +78,11 @@ export default function Hero() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3"
+                                        className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-[10px] font-bold px-3"
                                         title="View Resume"
                                         onClick={() => setPreviewDoc({ title: "Resume Preview", url: "/documents/Resume.pdf" })}
                                     >
-                                        <Eye className="h-3.5 w-3.5" />
+                                        VIEW
                                     </Button>
                                 </div>
 
@@ -97,11 +97,11 @@ export default function Hero() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-xs px-3"
+                                        className="rounded-r-full rounded-l-none border-l-0 border-primary/20 hover:border-primary/50 text-[10px] font-bold px-3"
                                         title="View PDS"
                                         onClick={() => setPreviewDoc({ title: "PDS 2026 Preview", url: "/documents/PDS 2026.pdf" })}
                                     >
-                                        <Eye className="h-3.5 w-3.5" />
+                                        VIEW
                                     </Button>
                                 </div>
                             </div>

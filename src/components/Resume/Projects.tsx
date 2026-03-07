@@ -1,85 +1,134 @@
-import { ExternalLink } from "lucide-react"
+import { ExternalLink, Github, Sparkles } from "lucide-react"
 import { motion } from "framer-motion"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/Card"
 import { Badge } from "../ui/Badge"
+import { projects } from "../../data/projects"
 
 export function Projects() {
-    const projects = [
-        {
-            title: "IGIS - Municipality Portal",
-            description: "Integrated Government Information System for Santa Rosa, Nueva Ecija. A comprehensive digital portal for municipal services, official announcements, and administrative dashboards.",
-            image: "/projects/igis-portal.png",
-            tags: ["Laravel", "React", "PostgreSQL", "TailwindCSS", "Cloudflare"],
-            liveUrl: "https://app.simsportal.xyz/",
-            githubUrl: "#",
-        },
-        {
-            title: "TRB EXPRESS Inc. Logistics System",
-            description: "A full-scale logistics and courier management platform for TRB Express Inc. Features automated parcel tracking, branch administration, and real-time delivery status updates.",
-            image: "/projects/trb-express.png",
-            tags: ["Laravel PHP", "Flutter", "MySQL", "REST API", "C-Panel"],
-            liveUrl: "https://login.idelivertrb.com/",
-            githubUrl: "#",
-        },
-    ]
-
     return (
-        <section id="projects" className="w-full py-12 md:py-24 lg:py-32 bg-muted/30">
-            <div className="container px-4 md:px-6 mx-auto">
+        <section id="projects" className="w-full py-20 md:py-32 bg-background relative overflow-hidden">
+            {/* Subtle Background Pattern */}
+            <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)", backgroundSize: "40px 40px" }} />
+
+            <div className="container px-4 md:px-6 mx-auto max-w-6xl relative z-10">
+                {/* Section Header */}
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-100px" }}
-                    className="flex flex-col items-center justify-center space-y-4 text-center mb-12"
+                    className="text-center mb-16 md:mb-20 space-y-4"
                 >
-                    <div className="space-y-2">
-                        <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl inline-block bg-gradient-to-r from-primary to-primary/60 text-transparent bg-clip-text">
-                            Featured Projects
-                        </h2>
-                        <p className="max-w-[700px] text-muted-foreground md:text-xl/relaxed">
-                            Some of the latest work I've built and shipped.
-                        </p>
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest mx-auto">
+                        <Sparkles className="h-3 w-3" />
+                        <span>Portfolio</span>
                     </div>
+                    <h2 className="text-4xl sm:text-5xl font-black tracking-tight">
+                        <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/50 bg-clip-text text-transparent">Featured Projects</span>
+                    </h2>
+                    <p className="max-w-lg mx-auto text-muted-foreground md:text-lg font-medium">
+                        Real-world systems I've designed, developed, and deployed.
+                    </p>
                 </motion.div>
-                <div className="flex flex-wrap justify-center gap-6 max-w-6xl mx-auto">
+
+                {/* Project Cards - Stacked Case Study Style */}
+                <div className="space-y-12 md:space-y-16">
                     {projects.map((project, idx) => (
                         <motion.div
                             key={idx}
-                            initial={{ opacity: 0, y: 50 }}
+                            initial={{ opacity: 0, y: 60 }}
                             whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true, margin: "-50px" }}
-                            transition={{ duration: 0.4, delay: idx * 0.1 }}
-                            className="w-full md:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-1.5rem)] max-w-md flex"
+                            viewport={{ once: true, margin: "-80px" }}
+                            transition={{ duration: 0.6, delay: idx * 0.15 }}
+                            className="group"
                         >
-                            <Card className="flex flex-col overflow-hidden border bg-background group hover:border-primary/50 transition-colors h-full">
-                                <div className="relative aspect-video overflow-hidden bg-muted">
-                                    <img
-                                        src={project.image}
-                                        alt={project.title}
-                                        className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
-                                    />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                                        <a href={project.liveUrl} className="p-2 bg-background/90 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors" title="Live Preview">
-                                            <ExternalLink className="h-5 w-5" />
-                                        </a>
+                            <div className={`relative rounded-3xl overflow-hidden bg-card border border-border/50 hover:border-primary/30 transition-all duration-500 shadow-lg hover:shadow-2xl hover:shadow-primary/5`}>
+                                {/* Gradient accent line */}
+                                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${project.accent} opacity-60 group-hover:opacity-100 transition-opacity`} />
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+                                    {/* Image Side */}
+                                    <div className={`relative aspect-[16/10] lg:aspect-auto overflow-hidden bg-muted ${idx % 2 === 1 ? "lg:order-2" : ""}`}>
+                                        <img
+                                            src={project.image}
+                                            alt={project.title}
+                                            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                                        {/* Floating Action on Image */}
+                                        <div className="absolute bottom-4 right-4 flex gap-2 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                                            <a
+                                                href={project.liveUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="p-3 rounded-xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm text-primary hover:bg-white dark:hover:bg-zinc-800 hover:scale-110 active:scale-95 transition-all shadow-lg"
+                                                aria-label={`Visit ${project.title} live demo`}
+                                            >
+                                                <ExternalLink className="h-5 w-5" />
+                                            </a>
+                                            {project.githubUrl !== "#" && (
+                                                <a
+                                                    href={project.githubUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-3 rounded-xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm text-foreground hover:bg-white dark:hover:bg-zinc-800 hover:scale-110 active:scale-95 transition-all shadow-lg"
+                                                    aria-label={`View ${project.title} on GitHub`}
+                                                >
+                                                    <Github className="h-5 w-5" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Content Side */}
+                                    <div className="p-8 md:p-10 lg:p-12 flex flex-col justify-center space-y-6">
+                                        <div className="space-y-4">
+                                            <h3 className="text-2xl md:text-3xl font-black tracking-tight group-hover:text-primary transition-colors duration-300">
+                                                {project.title}
+                                            </h3>
+                                            <p className="text-muted-foreground leading-relaxed text-base md:text-lg">
+                                                {project.description}
+                                            </p>
+                                        </div>
+
+                                        {/* Tags */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {project.tags.map((tag) => (
+                                                <Badge
+                                                    key={tag}
+                                                    variant="secondary"
+                                                    className="text-xs font-bold px-3 py-1 bg-muted/60 border border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all"
+                                                >
+                                                    {tag}
+                                                </Badge>
+                                            ))}
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-4 pt-2">
+                                            <a
+                                                href={project.liveUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 active:scale-95 transition-all duration-300"
+                                            >
+                                                <ExternalLink className="h-4 w-4" />
+                                                Live Demo
+                                            </a>
+                                            {project.githubUrl !== "#" && (
+                                                <a
+                                                    href={project.githubUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-border/80 font-bold text-sm hover:bg-muted hover:border-primary/30 hover:-translate-y-0.5 active:scale-95 transition-all duration-300"
+                                                >
+                                                    <Github className="h-4 w-4" />
+                                                    Source
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                                <CardHeader className="p-6">
-                                    <CardTitle className="text-xl">{project.title}</CardTitle>
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                        {project.tags.map((tag) => (
-                                            <Badge key={tag} variant="secondary" className="text-xs">
-                                                {tag}
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="p-6 pt-0 flex-1">
-                                    <CardDescription className="text-base text-muted-foreground text-justify">
-                                        {project.description}
-                                    </CardDescription>
-                                </CardContent>
-                            </Card>
+                            </div>
                         </motion.div>
                     ))}
                 </div>

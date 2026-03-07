@@ -1,46 +1,8 @@
-import { GraduationCap, Award, BookOpen } from "lucide-react"
+import { Award } from "lucide-react"
 import { Badge } from "../ui/Badge"
 import { LocationLink } from "../ui/LocationLink"
 import { motion } from "framer-motion"
-
-const educationData = [
-    {
-        degree: "Bachelor of Science in Information & Technology",
-        school: "College for Research and Technology",
-        location: "Burgos Ave, Cabanatuan City, Nueva Ecija",
-        query: "College+for+Research+and+Technology+Cabanatuan",
-        period: "2018 - 2022",
-        level: "College",
-        icon: GraduationCap
-    },
-    {
-        degree: "Information Communication & Technology",
-        school: "College for Research and Technology",
-        location: "Burgos Ave, Cabanatuan City, Nueva Ecija",
-        query: "College+for+Research+and+Technology+Cabanatuan",
-        period: "2016 - 2018",
-        level: "Vocational / Trade Course",
-        icon: BookOpen
-    },
-    {
-        degree: "High School",
-        school: "Nueva Ecija High School",
-        location: "Burgos Ave, Cabanatuan City, Nueva Ecija",
-        query: "Nueva+Ecija+High+School+Cabanatuan",
-        period: "2012 - 2016",
-        level: "Secondary",
-        icon: BookOpen
-    },
-    {
-        degree: "Elementary",
-        school: "Lazaro Francisco Integrated School",
-        location: "Cabanatuan City, Nueva Ecija",
-        query: "Lazaro+Francisco+Integrated+School+Cabanatuan",
-        period: "2007 - 2013",
-        level: "Elementary",
-        icon: BookOpen
-    }
-]
+import { educationData } from "../../data/education"
 
 export function Education() {
     return (

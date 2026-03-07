@@ -1,56 +1,111 @@
-import { FileText, Send } from "lucide-react"
+import { FileText, Send, Menu, X } from "lucide-react"
 import { Button } from "../ui/Button"
 import { ThemeToggle } from "../ThemeToggle"
+import { useState, useEffect } from "react"
+import { cn } from "../../lib/utils"
+import { motion, useScroll, useSpring } from "framer-motion"
 
 export function Header() {
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const { scrollYProgress } = useScroll()
+    const scaleX = useSpring(scrollYProgress, {
+        stiffness: 100,
+        damping: 30,
+        restDelta: 0.001
+    })
+
+    // Close menu when clicking on a link
+    const closeMenu = () => setIsMenuOpen(false)
+
+    // Close menu on escape key
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setIsMenuOpen(false)
+        }
+        window.addEventListener("keydown", handleEsc)
+        return () => window.removeEventListener("keydown", handleEsc)
+    }, [])
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <motion.div
+                className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary origin-left z-50"
+                style={{ scaleX }}
+            />
             <div className="container flex h-16 items-center justify-between mx-auto px-4 md:px-6">
                 {/* Left: Logo */}
-                <div className="flex w-1/3 justify-start">
+                <div className="flex w-1/4 md:w-1/3 justify-start">
                     <a className="flex items-center space-x-2 group" href="/">
-                        <div className="bg-primary/10 p-2 rounded-lg group-hover:bg-primary/20 transition-colors">
+                        <div className="bg-primary/10 p-2 rounded-lg group-hover:bg-primary/20 transition-all duration-300">
                             <FileText className="h-5 w-5 text-primary" />
                         </div>
-                        <span className="hidden font-bold sm:inline-block tracking-tight text-lg">
+                        <span className="hidden font-bold tracking-tight text-lg group-hover:text-primary transition-colors sm:inline-block">
                             Portfolio
                         </span>
                     </a>
                 </div>
 
-                {/* Center: Nav Links */}
+                {/* Center: Desktop Nav Links */}
                 <div className="hidden md:flex w-1/3 justify-center">
                     <nav className="flex items-center space-x-8 text-sm font-medium">
-                        <a href="#about" className="transition-colors hover:text-primary text-foreground/70">
+                        <a href="#about" className="transition-all hover:text-primary text-foreground/70 hover:scale-105">
                             About
                         </a>
-                        <a href="#experience" className="transition-colors hover:text-primary text-foreground/70">
+                        <a href="#experience" className="transition-all hover:text-primary text-foreground/70 hover:scale-105">
                             Experience
                         </a>
-                        <a href="#projects" className="transition-colors hover:text-primary text-foreground/70">
-                            Projects
-                        </a>
-                        <a href="#skills" className="transition-colors hover:text-primary text-foreground/70">
+                        <a href="#skills" className="transition-all hover:text-primary text-foreground/70 hover:scale-105">
                             Skills
                         </a>
-                        <a href="#media" className="transition-colors hover:text-primary text-foreground/70">
+                        <a href="#projects" className="transition-all hover:text-primary text-foreground/70 hover:scale-105">
+                            Projects
+                        </a>
+
+                        <a href="#media" className="transition-all hover:text-primary text-foreground/70 hover:scale-105">
                             Multimedia
                         </a>
                     </nav>
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex w-1/3 justify-end items-center space-x-2">
-                    <ThemeToggle />
-                    <nav className="flex items-center">
-                        <a href="#contact">
-                            <Button className="font-semibold h-9 px-5 rounded-full shadow-sm transition-all hover:shadow-md bg-primary text-primary-foreground hover:bg-primary/90">
-                                <Send className="mr-2 h-4 w-4" />
-                                Contact Me
+                <div className="flex w-3/4 md:w-1/3 justify-end items-center gap-2 sm:gap-4">
+                    <div className="flex items-center bg-muted/30 rounded-full px-2 py-1 border border-border/40 hover:border-primary/30 transition-all duration-300 group">
+                        <ThemeToggle />
+                        <div className="w-[1px] h-4 bg-border/60 mx-1 hidden sm:block" />
+                        <a href="#contact" className="ml-1 hidden sm:block">
+                            <Button size="sm" className="font-bold h-8 rounded-full shadow-sm transition-all hover:shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2">
+                                <Send className="h-3.5 w-3.5" />
+                                <span>Contact Me</span>
                             </Button>
                         </a>
-                    </nav>
+                        {/* Mobile Menu Trigger */}
+                        <button
+                            className="md:hidden ml-2 p-1 rounded-md hover:bg-muted transition-colors"
+                            onClick={() => setIsMenuOpen(!isMenuOpen)}
+                            aria-expanded={isMenuOpen}
+                            aria-label="Toggle menu"
+                        >
+                            {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                        </button>
+                    </div>
                 </div>
+            </div>
+
+            {/* Mobile Navigation Menu */}
+            <div className={cn(
+                "md:hidden absolute top-16 left-0 w-full bg-background border-b transition-all duration-300 overflow-hidden",
+                isMenuOpen ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"
+            )}>
+                <nav className="flex flex-col p-6 space-y-4 font-medium text-lg">
+                    <a href="#about" onClick={closeMenu} className="hover:text-primary transition-colors">About</a>
+                    <a href="#experience" onClick={closeMenu} className="hover:text-primary transition-colors">Experience</a>
+                    <a href="#projects" onClick={closeMenu} className="hover:text-primary transition-colors">Projects</a>
+                    <a href="#skills" onClick={closeMenu} className="hover:text-primary transition-colors">Skills</a>
+                    <a href="#media" onClick={closeMenu} className="hover:text-primary transition-colors">Multimedia</a>
+                    <a href="#contact" onClick={closeMenu} className="flex items-center gap-2 text-primary font-bold pt-2">
+                        <Send className="h-4 w-4" />
+                        Contact Me
+                    </a>
+                </nav>
             </div>
         </header>
     )

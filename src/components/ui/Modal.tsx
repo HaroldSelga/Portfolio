@@ -50,6 +50,9 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="modal-title"
                         className={cn(
                             "relative z-10 w-full max-w-5xl h-full max-h-[90vh] flex flex-col bg-card border border-border shadow-2xl rounded-2xl overflow-hidden",
                             className
@@ -57,7 +60,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between p-4 border-b border-border/60">
-                            <h3 className="text-lg font-semibold text-foreground uppercase tracking-tight">
+                            <h3 id="modal-title" className="text-lg font-semibold text-foreground uppercase tracking-tight">
                                 {title}
                             </h3>
                             <button

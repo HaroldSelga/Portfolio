@@ -17,7 +17,10 @@ export function Contact() {
         setStatus("idle")
 
         const formData = new FormData(e.currentTarget)
-        formData.append("access_key", "b543a86e-7c6d-4f61-a862-277c91f7311d")
+        const accessKey = import.meta.env.VITE_WEB3FORMS_KEY
+        if (accessKey) {
+            formData.append("access_key", accessKey)
+        }
 
         try {
             const response = await fetch("https://api.web3forms.com/submit", {

@@ -15,10 +15,10 @@ export function LocationLink({ location, query, className = "", iconClassName = 
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
+
         setMounted(true)
     }, [])
 
-    // Prevent scrolling on the body when the modal is open
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden"
@@ -33,7 +33,6 @@ export function LocationLink({ location, query, className = "", iconClassName = 
     const mapQuery = encodeURIComponent(query || location)
     const embedUrl = `https://www.google.com/maps?q=${mapQuery}&output=embed`
 
-    // The modal content to portal
     const modalContent = (
         <AnimatePresence>
             {isOpen && (
@@ -43,16 +42,20 @@ export function LocationLink({ location, query, className = "", iconClassName = 
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="location-modal-title"
                         className="relative w-full max-w-4xl bg-card border shadow-2xl rounded-xl overflow-hidden flex flex-col h-[70vh] md:h-[80vh]"
                     >
                         <div className="flex items-center justify-between p-4 border-b bg-card">
-                            <div className="flex items-center gap-2 font-medium">
+                            <div id="location-modal-title" className="flex items-center gap-2 font-medium">
                                 <MapPin className="h-5 w-5 text-primary" />
                                 {location}
                             </div>
                             <button
                                 onClick={() => setIsOpen(false)}
                                 className="p-1.5 rounded-full hover:bg-muted transition-colors"
+                                aria-label="Close map"
                             >
                                 <X className="h-5 w-5" />
                             </button>

@@ -206,6 +206,24 @@ function ProjectDetails({ project }: { project: ProjectItem }) {
                     <p className="text-muted-foreground leading-relaxed text-lg">
                         {project.description}
                     </p>
+
+                    {project.features && project.features.length > 0 && (
+                        <div className="pt-2 space-y-4">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-primary/70">Key Features</h4>
+                            <ul className="space-y-4">
+                                {project.features.map((feature, i) => (
+                                    <li key={i} className="flex gap-3 group/feature">
+                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mt-0.5 group-hover/feature:bg-primary/20 transition-colors">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]" />
+                                        </div>
+                                        <span className="text-sm md:text-base text-muted-foreground leading-snug group-hover/feature:text-foreground transition-colors font-medium">
+                                            {feature}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-3">

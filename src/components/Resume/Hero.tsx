@@ -1,4 +1,4 @@
-import { Mail, Phone, MapPin, Download, Eye, ChevronDown, Sparkles, User } from "lucide-react"
+import { Mail, Phone, Download, Eye, ChevronDown, Sparkles, User, LayoutDashboard, ArrowRight } from "lucide-react"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
 import { Badge } from "../ui/Badge"
@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { LocationLink } from "../ui/LocationLink"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { socialLinks } from "../../data/social"
+import { Link } from "react-router-dom"
 
 export default function Hero() {
     const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null)
@@ -153,6 +154,21 @@ export default function Hero() {
                                         <Eye className="h-4 w-4 text-purple-500 transition-transform group-hover:scale-125" />
                                     </button>
                                 </div>
+
+                                {/* Career Workspace Link */}
+                                <Link
+                                    to="/workspace"
+                                    className="flex items-center shadow-lg hover:shadow-orange-500/20 transition-all rounded-full overflow-hidden border border-orange-500/20"
+                                >
+                                    <Button
+                                        variant="outline"
+                                        className="rounded-none border-none bg-card hover:bg-muted px-6 h-12 font-bold group gap-2"
+                                    >
+                                        <LayoutDashboard className="h-4 w-4 text-orange-500 transition-transform group-hover:rotate-12" />
+                                        Career Workspace
+                                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                                    </Button>
+                                </Link>
                             </motion.div>
 
                             <motion.div variants={itemVariants} className="space-y-4 pt-4 border-t border-white/10 max-w-md mx-auto lg:mx-0">
@@ -166,7 +182,7 @@ export default function Hero() {
                                         <span>0936-3324-878</span>
                                     </div>
                                     <div className="flex items-center justify-center lg:justify-start group sm:col-span-2">
-                                        <MapPin className="h-4 w-4 text-primary mr-3 group-hover:scale-110 transition-transform" />
+
                                         <LocationLink
                                             location="Matadero, Cabanatuan City, Nueva Ecija"
                                             query="Matadero, Cabanatuan City, Nueva Ecija"
@@ -294,6 +310,7 @@ export default function Hero() {
                     />
                 )}
             </Modal>
+
         </section>
     )
 }

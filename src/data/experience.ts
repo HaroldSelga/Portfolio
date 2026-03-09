@@ -17,9 +17,9 @@ export const experiences: ExperienceItem[] = [
         duration: "January 05, 2026 - PRESENT",
         tag: "WORK EXPERIENCE",
         description: [
-            "Responsible for the maintenance and development of municipal web applications and digital assets.",
-            "Ensuring web infrastructure uptime and optimizing performance for public-facing services.",
-            "Collaborating with department heads to digitize administrative workflows and public information systems."
+            "Developed a complete LGU Management System (IGIS) using Laravel, React, and PostgreSQL to digitalize the manual workflows of over 15 municipal departments.",
+            "Engineered comprehensive internal platforms, including an automated HRIS/Payroll system and a financial tracking module for municipal budgets, taxes, and procurement.",
+            "Built a Citizen Portal and a React Native mobile app equipped with a Universal ID System, enabling residents to access online services, report incidents, and track permits easily."
         ],
     },
     {
@@ -30,10 +30,9 @@ export const experiences: ExperienceItem[] = [
         duration: "March 01, 2024 - January 01, 2026",
         tag: "WORK EXPERIENCE",
         description: [
-            "Responsible for assisting in field assessments and data verification for real property appraisal.",
-            "Conducted site inspections and data collection to update property tax records and assessments.",
-            "Maintained and updated geographic and descriptive data for property inventory.",
-            "Coordinated with local assessor units for streamlined provincial property mapping."
+            "Gathered and managed field data by conducting surveys across various barangays to evaluate the success and impact of provincial youth programs.",
+            "Handled inventory data tracking for relief goods, outreach supplies, and distributed items to ensure accurate records during provincial operations.",
+            "Coordinated directly with stakeholders, including local SK (Sangguniang Kabataan) leaders and LGU officials, to organize and execute youth activities smoothly."
         ],
     },
     {
@@ -44,9 +43,10 @@ export const experiences: ExperienceItem[] = [
         duration: "October 01, 2022 – November 08, 2023",
         tag: "WORK EXPERIENCE",
         description: [
-            "Responsible for the development and improvement of current logistics system, using Laravel PHP, Flutter, Postman.",
-            "Responsible for the training of branch administrator on how to use the system using zoom and going to their branch.",
-            "Responsible for overseeing the database model and managing the MySQL database."
+            "Developed and improved the core logistics and courier system using Laravel and Flutter, adding features for parcel tracking, waybill generation, and delivery dispatch.",
+            "Managed the MySQL database to securely store thousands of daily transaction records, customer details, and real-time package statuses.",
+            "Tested and maintained system APIs using Postman to ensure smooth communication between the web dashboard and the mobile delivery app.",
+            "Trained branch administrators through Zoom and on-site visits, teaching them how to effectively use the system for their daily branch operations and package receiving."
         ],
     },
     {
@@ -57,8 +57,9 @@ export const experiences: ExperienceItem[] = [
         duration: "240 Hours 2019-2020",
         tag: "OJT",
         description: [
-            "Responsible for addressing technical issues, including printer troubleshooting, stage setup, and deep cleaning of computers.",
-            "Responsible for inputting provided data from the admin/cashier into the database using SQL."
+            "Provided primary technical support across hospital departments, handling hardware troubleshooting, printer maintenance, and regular computer diagnostics.",
+            "Managed data entry and database records, utilizing SQL to accurately input and update administrative and cashier data into the hospital's system.",
+            "Assisted in IT and audiovisual setups for hospital events and presentations, ensuring smooth technical operations."
         ],
     },
     {
@@ -69,8 +70,7 @@ export const experiences: ExperienceItem[] = [
         duration: "240 Hours 2020-2021",
         tag: "OJT",
         description: [
-            "Responsible for preparing the machine for voting and setup.",
-            "Data Encode."
+            "Configured and deployed automated voting machines, handling the strict technical setup and hardware preparation to ensure all systems were fully operational for election use."
         ],
     },
     {
@@ -81,7 +81,8 @@ export const experiences: ExperienceItem[] = [
         duration: "80 Hours 2017-2018",
         tag: "WORK IMMERSION",
         description: [
-            "Responsible for utilizing Photoshop to design and create banners, invitation cards, and other graphical materials."
+            "Designed digital and print marketing materials using Adobe Photoshop, including promotional banners and custom invitation cards for restaurant events.",
+            "Supported local business branding by creating visually appealing graphical assets to enhance customer engagement."
         ],
     }
 ]

@@ -93,4 +93,29 @@ export const projects: ProjectItem[] = [
         githubUrl: "#",
         accent: "from-orange-500 to-amber-400",
     },
+    {
+        title: "MedPharm Pharmacy System",
+        description: "A comprehensive point-of-sale, inventory, and management system specifically tailored for Philippine pharmacies. Features multi-branch operations, specialized discounts, offline POS capabilities, and rigorous batch tracking.",
+        features: [
+            "Built a Multi-Branch Operations system supporting seamless branch switching, isolated inventory data, and real-time syncing via Supabase.",
+            "Developed an offline-first Point of Sale (POS) using Dexie.js for queued local transactions, equipped with global barcode scanning and unit conversions.",
+            "Integrated Philippine regulatory calculations for Regular, Senior Citizen (SC), and PWD discounts to automatically compute taxes and totals.",
+            "Engineered a robust Inventory and Purchase Order system with rigorous FEFO batch tracking, expiry alerts, and supplier coordination."
+        ],
+        image: "/projects/medpharm/dashboard.png",
+        images: [
+            "/projects/medpharm/login.png",
+            "/projects/medpharm/loading.png",
+            "/projects/medpharm/dashboard.png",
+            "/projects/medpharm/inventory.png",
+            "/projects/medpharm/pos.png",
+            "/projects/medpharm/orders.png",
+            "/projects/medpharm/sales.png",
+            "/projects/medpharm/settings-branch.png"
+        ],
+        tags: ["React 19", "Vite", "Tailwind CSS", "Zustand", "Supabase", "Dexie.js"],
+        liveUrl: "#",
+        githubUrl: "#",
+        accent: "from-green-500 to-emerald-400",
+    },
 ]

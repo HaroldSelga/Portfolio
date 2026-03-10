@@ -1,4 +1,4 @@
-import { ExternalLink, Github, Sparkles, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react"
+import { ExternalLink, Github, Sparkles, ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useEffect } from "react"
 import { Badge } from "../ui/Badge"
@@ -115,6 +115,7 @@ function ProjectCard({ project, idx, onSelect }: { project: ProjectItem, idx: nu
 
 function ProjectDetails({ project }: { project: ProjectItem }) {
     const [currentImageIdx, setCurrentImageIdx] = useState(0)
+    const [isZoomed, setIsZoomed] = useState(false)
     const images = project.images && project.images.length > 0 ? project.images : [project.image]
 
     const nextImage = (e?: React.MouseEvent) => {
@@ -132,18 +133,24 @@ function ProjectDetails({ project }: { project: ProjectItem }) {
     // Handle keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (isZoomed) {
+                if (e.key === "Escape") setIsZoomed(false);
+            }
             if (e.key === "ArrowRight") nextImage();
             if (e.key === "ArrowLeft") prevImage();
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [currentImageIdx]); // currentImageIdx dependency for correct navigation
+    }, [currentImageIdx, isZoomed]); // currentImageIdx dependency for correct navigation
 
     return (
-        <div className="flex flex-col lg:flex-row h-full">
+        <div className="flex flex-col lg:flex-row h-full relative">
             {/* Carousel Side */}
             <div className="relative lg:w-3/5 bg-black/5 aspect-[16/10] lg:aspect-auto flex flex-col">
-                <div className="flex-1 relative overflow-hidden group/modal-img">
+                <div
+                    className="flex-1 relative overflow-hidden group/modal-img cursor-zoom-in"
+                    onClick={() => setIsZoomed(true)}
+                >
                     <AnimatePresence mode="wait">
                         <motion.img
                             key={currentImageIdx}
@@ -262,6 +269,36 @@ function ProjectDetails({ project }: { project: ProjectItem }) {
                     )}
                 </div>
             </div>
+
+            {/* Zoom Overlay */}
+            <AnimatePresence>
+                {isZoomed && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsZoomed(false)}
+                        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center cursor-zoom-out p-4 md:p-8 lg:p-12"
+                    >
+                        <motion.img
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            src={images[currentImageIdx]}
+                            alt={`${project.title} zoomed screenshot`}
+                            className="w-full h-full object-contain shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        <button
+                            onClick={() => setIsZoomed(false)}
+                            className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                        >
+                            <X className="w-8 h-8" />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }

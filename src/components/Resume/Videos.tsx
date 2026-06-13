@@ -1,4 +1,4 @@
-import { Play, Clapperboard, Film, Sparkles, ExternalLink } from "lucide-react"
+import { Play, Clapperboard, Film, ExternalLink } from "lucide-react"
 import { useState } from "react"
 import { Badge } from "../ui/Badge"
 import { motion, AnimatePresence } from "framer-motion"
@@ -25,7 +25,6 @@ export function Videos() {
                     className="text-center mb-12 space-y-4"
                 >
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest mx-auto">
-                        <Sparkles className="h-3 w-3" />
                         <span>Gallery</span>
                     </div>
                     <h2 className="text-4xl sm:text-5xl font-black tracking-tight">

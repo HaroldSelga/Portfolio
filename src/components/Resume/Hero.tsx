@@ -1,4 +1,4 @@
-import { Mail, Phone, Download, Eye, ChevronDown, Sparkles, User, LayoutDashboard, ArrowRight } from "lucide-react"
+import { Mail, Phone, Download, Eye, ChevronDown, User } from "lucide-react"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
 import { Badge } from "../ui/Badge"
@@ -6,7 +6,6 @@ import { useState, useEffect } from "react"
 import { LocationLink } from "../ui/LocationLink"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { socialLinks } from "../../data/social"
-import { Link } from "react-router-dom"
 
 export default function Hero() {
     const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null)
@@ -96,10 +95,7 @@ export default function Hero() {
                     viewport={{ once: true }}
                     className="bg-background/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden p-8 md:p-14 lg:p-16 relative"
                 >
-                    {/* Top Right Decorative Element */}
-                    <div className="absolute top-8 right-8 text-primary/20">
-                        <Sparkles className="h-12 w-12" />
-                    </div>
+
 
                     <div className="flex flex-col lg:flex-row items-center lg:items-start justify-between gap-12 lg:gap-16">
 
@@ -155,20 +151,7 @@ export default function Hero() {
                                     </button>
                                 </div>
 
-                                {/* Career Workspace Link */}
-                                <Link
-                                    to="/workspace"
-                                    className="flex items-center shadow-lg hover:shadow-orange-500/20 transition-all rounded-full overflow-hidden border border-orange-500/20"
-                                >
-                                    <Button
-                                        variant="outline"
-                                        className="rounded-none border-none bg-card hover:bg-muted px-6 h-12 font-bold group gap-2"
-                                    >
-                                        <LayoutDashboard className="h-4 w-4 text-orange-500 transition-transform group-hover:rotate-12" />
-                                        Career Workspace
-                                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                                    </Button>
-                                </Link>
+
                             </motion.div>
 
                             <motion.div variants={itemVariants} className="space-y-4 pt-4 border-t border-white/10 max-w-md mx-auto lg:mx-0">
@@ -213,8 +196,7 @@ export default function Hero() {
                             variants={itemVariants}
                             className="order-1 lg:order-2 flex-shrink-0 relative group"
                         >
-                            <div className="absolute -inset-4 bg-gradient-to-tr from-primary to-purple-500 rounded-[2.5rem] blur-2xl opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
-                            <div className="relative h-56 w-56 md:h-72 md:w-72 overflow-hidden rounded-[2.5rem] border-4 border-white/50 bg-muted shadow-2xl transition-transform duration-500 group-hover:scale-105 group-hover:rotate-2">
+                            <div className="relative h-56 w-56 md:h-72 md:w-72 overflow-hidden rounded-[2.5rem] border-4 border-white/50 bg-muted shadow-md transition-transform duration-500 group-hover:scale-105 group-hover:rotate-2">
                                 {!imageError ? (
                                     <img
                                         src="/profile.jpg"
@@ -230,14 +212,7 @@ export default function Hero() {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                             </div>
 
-                            {/* Floating Decorative Badge */}
-                            <motion.div
-                                animate={{ y: [0, -10, 0] }}
-                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                                className="absolute -top-4 -right-4 p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-border/50 text-primary font-bold text-xs"
-                            >
-                                <Sparkles className="h-4 w-4" />
-                            </motion.div>
+
                         </motion.div>
                     </div>
 

@@ -12,6 +12,8 @@ import { Videos } from "./components/Resume/Videos"
 import { Contact } from "./components/Resume/Contact"
 import { ThemeProvider } from "./components/ThemeProvider"
 import Workspace from "./components/Workspace/Workspace.tsx"
+import Requirements from "./components/Requirements/Requirements.tsx"
+import { Gatekeeper } from "./components/ui/Gatekeeper.tsx"
 
 function Home() {
   return (
@@ -37,7 +39,8 @@ function App() {
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<HomeLoader />} />
-            <Route path="/workspace" element={<Workspace />} />
+            <Route path="/workspace" element={<Gatekeeper><Workspace /></Gatekeeper>} />
+            <Route path="/requirements" element={<Gatekeeper><Requirements /></Gatekeeper>} />
           </Routes>
         </main>
         <Footer />

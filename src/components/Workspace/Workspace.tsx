@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Sparkles, LayoutDashboard, Loader2 } from "lucide-react"
+import { LayoutDashboard, Loader2 } from "lucide-react"
 import { ApplicationTrackerInner } from "../Resume/ApplicationTracker"
 import { CoverLetterModal } from "../Resume/CoverLetterModal"
 import type { ApplicationEntry } from "../../data/applications"
@@ -99,9 +99,8 @@ export default function Workspace() {
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase flex items-center gap-4">
+                            <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase">
                                 Career <span className="text-primary">Workspace</span>
-                                <Sparkles className="h-8 w-8 text-yellow-500 animate-pulse" />
                             </h1>
                             <p className="text-muted-foreground font-medium max-w-xl">
                                 Track your job applications and generate professional cover letters instantly.

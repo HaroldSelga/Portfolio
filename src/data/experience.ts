@@ -11,10 +11,24 @@ export interface ExperienceItem {
 export const experiences: ExperienceItem[] = [
     {
         role: "Web Developer",
+        company: "AAL MILKTEA SUPPLIES",
+        location: "Bitas, Cabanatuan City, Nueva Ecija",
+        locationUrl: "https://maps.google.com/?q=Bitas,+Cabanatuan+City,+Nueva+Ecija",
+        duration: "March 14, 2026 - PRESENT",
+        tag: "WORK EXPERIENCE",
+        description: [
+            "Architected and developed a full-scale Enterprise Resource Planning (ERP) system using Laravel 12, React 19, and PostgreSQL, consolidating HR, payroll, sales, inventory, manufacturing, logistics, and finance into a single platform.",
+            "Built five distinct portals (Admin, Employee, Customer, Store, POS) with role-based access control, serving owners, branch staff, cashiers, and B2B customers across multiple branches.",
+            "Engineered real-time features using Laravel Reverb and WebSocket broadcasting, including internal chat, customer support, AI chat agent, and live dispatch tracking with Lalamove integration.",
+            "Implemented advanced modules including face-recognition attendance, custom cup design studio, production pipeline management, and a full retail POS terminal with Z-reading settlement."
+        ],
+    },
+    {
+        role: "Web Developer",
         company: "MUNICIPALITY OF SANTA ROSA",
         location: "Santa Rosa, Nueva Ecija",
         locationUrl: "https://maps.google.com/?q=Santa+Rosa+Municipal+Hall+Nueva+Ecija",
-        duration: "January 05, 2026 - PRESENT",
+        duration: "January 05, 2026 - March 02, 2026",
         tag: "WORK EXPERIENCE",
         description: [
             "Developed a complete LGU Management System (IGIS) using Laravel, React, and PostgreSQL to digitalize the manual workflows of over 15 municipal departments.",
@@ -27,7 +41,7 @@ export const experiences: ExperienceItem[] = [
         company: "PROVINCIAL ASSESSOR'S OFFICE",
         location: "Old Capitol, Burgos Ave, Cabanatuan City, Nueva Ecija",
         locationUrl: "https://maps.google.com/?q=Old+Capitol,+Burgos+Ave,+Cabanatuan+City,+Nueva+Ecija",
-        duration: "March 01, 2024 - January 01, 2026",
+        duration: "March 01, 2024 - January 05, 2026",
         tag: "WORK EXPERIENCE",
         description: [
             "Gathered and managed field data by conducting surveys across various barangays to evaluate the success and impact of provincial youth programs.",
@@ -40,7 +54,7 @@ export const experiences: ExperienceItem[] = [
         company: "TRB EXPRESS INC.",
         location: "Arems Place, Binmaley, Pangasinan, Philippines",
         locationUrl: "https://maps.google.com/?q=Buenlag,+Binmaley,+Pangasinan",
-        duration: "October 01, 2022 – November 08, 2023",
+        duration: "September 01, 2022 - November 08, 2023",
         tag: "WORK EXPERIENCE",
         description: [
             "Developed and improved the core logistics and courier system using Laravel and Flutter, adding features for parcel tracking, waybill generation, and delivery dispatch.",

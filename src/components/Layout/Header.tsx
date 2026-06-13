@@ -9,7 +9,7 @@ import { motion, useScroll, useSpring } from "framer-motion"
 export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const location = useLocation()
-    const isWorkspace = location.pathname === "/workspace"
+    const isPrivate = ["/workspace", "/requirements"].includes(location.pathname)
     const { scrollYProgress } = useScroll()
     const scaleX = useSpring(scrollYProgress, {
         stiffness: 100,
@@ -28,6 +28,7 @@ export function Header() {
         window.addEventListener("keydown", handleEsc)
         return () => window.removeEventListener("keydown", handleEsc)
     }, [])
+    
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <motion.div
@@ -50,7 +51,7 @@ export function Header() {
                 {/* Center: Desktop Nav Links */}
                 <div className="hidden md:flex w-1/3 justify-center">
                     <nav className="flex items-center space-x-8 text-sm font-medium">
-                        {isWorkspace ? (
+                        {isPrivate ? (
                             <Link to="/" className="transition-all hover:text-primary text-foreground/70 flex items-center gap-2 group">
                                 <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
                                 Back to Home
@@ -82,7 +83,7 @@ export function Header() {
                     <div className="flex items-center bg-muted/30 rounded-full px-2 py-1 border border-border/40 hover:border-primary/30 transition-all duration-300 group">
                         <ThemeToggle />
                         <div className="w-[1px] h-4 bg-border/60 mx-1 hidden sm:block" />
-                        <a href={isWorkspace ? "/#contact" : "#contact"} className="ml-1 hidden sm:block">
+                        <a href={isPrivate ? "/#contact" : "#contact"} className="ml-1 hidden sm:block">
                             <Button size="sm" className="font-bold h-8 rounded-full shadow-sm transition-all hover:shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2">
                                 <Send className="h-3.5 w-3.5" />
                                 <span>Contact Me</span>
@@ -107,7 +108,7 @@ export function Header() {
                 isMenuOpen ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"
             )}>
                 <nav className="flex flex-col p-6 space-y-4 font-medium text-lg">
-                    {isWorkspace ? (
+                    {isPrivate ? (
                         <Link to="/" onClick={closeMenu} className="hover:text-primary transition-colors flex items-center gap-2">
                             <ArrowLeft className="h-4 w-4" />
                             Return Home
@@ -121,7 +122,7 @@ export function Header() {
                             <a href="#media" onClick={closeMenu} className="hover:text-primary transition-colors">Multimedia</a>
                         </>
                     )}
-                    <a href={isWorkspace ? "/#contact" : "#contact"} onClick={closeMenu} className="flex items-center gap-2 text-primary font-bold pt-2">
+                    <a href={isPrivate ? "/#contact" : "#contact"} onClick={closeMenu} className="flex items-center gap-2 text-primary font-bold pt-2">
                         <Send className="h-4 w-4" />
                         Contact Me
                     </a>

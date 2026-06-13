@@ -1,3 +1,10 @@
+export interface ProjectTab {
+    label: string
+    description: string
+    images: string[]
+    features: string[]
+}
+
 export interface ProjectItem {
     title: string
     description: string
@@ -8,29 +15,141 @@ export interface ProjectItem {
     liveUrl: string
     githubUrl: string
     accent: string
+    tabs?: ProjectTab[]
 }
 
 export const projects: ProjectItem[] = [
     {
+        title: "AAL Milktea Supplies ERP",
+        description: "A full-scale enterprise resource planning platform consolidating HR, payroll, sales, POS, inventory, manufacturing, logistics, finance, and customer operations for a milktea supplies business.",
+        image: "/projects/aalmilktea/landing.png",
+        tags: ["Laravel 12", "React 19", "TypeScript", "PostgreSQL", "Tailwind CSS 4", "Inertia.js", "Laravel Reverb", "Radix UI"],
+        liveUrl: "https://milktea.testwebsitonline.xyz/",
+        githubUrl: "#",
+        accent: "from-amber-500 to-yellow-400",
+        tabs: [
+            {
+                label: "Overview",
+                description: "A multi-portal ERP platform centralizing business processes for administrators, employees, cashiers, and B2B customers.",
+                images: ["/projects/aalmilktea/landing.png"],
+                features: [
+                    "Architected a unified ERP system with role-based access control, serving owners, staff, cashiers, and customers.",
+                    "Integrates real-time notifications and an interactive system-wide AI chat agent for workflow assistance.",
+                    "Secured with robust logging and audit trails to track financial transactions and user actions."
+                ]
+            },
+            {
+                label: "POS Terminal",
+                description: "A robust cashier Point of Sale interface designed for high-performance retail operations.",
+                images: ["/projects/aalmilktea/pos.png"],
+                features: [
+                    "Features barcode-driven checkout and barcode scanning with instant inventory lookup.",
+                    "Session management with opening and closing cash denomination counts.",
+                    "Provides secure Z-reading reports and manager-override approval gates for processing custom discounts."
+                ]
+            },
+            {
+                label: "HR & Payroll",
+                description: "A complete workforce module automates attendance, scheduling, and Philippine government deductions.",
+                images: [
+                    "/projects/aalmilktea/hr-dashboard.png",
+                    "/projects/aalmilktea/payroll.png",
+                    "/projects/aalmilktea/employee-dashboard.png"
+                ],
+                features: [
+                    "Includes face-recognition attendance checks with location validation.",
+                    "Automated payroll computations incorporating SSS, PhilHealth, Pag-IBIG, and tax contributions.",
+                    "Manages work shift schedules, overtime, and leave applications with multi-tier approval flows."
+                ]
+            },
+            {
+                label: "CRM & Portals",
+                description: "Dedicated client environments featuring customized design studios and interactive data tools.",
+                images: [
+                    "/projects/aalmilktea/crm.png",
+                    "/projects/aalmilktea/customer-dashboard.png",
+                    "/projects/aalmilktea/cup-studio.png",
+                    "/projects/aalmilktea/design-request.png"
+                ],
+                features: [
+                    "Interactive custom cup design studio allows clients to preview and request branded milktea cup mockups.",
+                    "Customer dashboard tracks orders, handles support tickets, and displays invoices.",
+                    "Heatmap analytics identify geographical areas with high customer concentration."
+                ]
+            },
+            {
+                label: "Procurement & Logistics",
+                description: "Automated pipelines coordinate stock replenishment and B2B orders.",
+                images: [
+                    "/projects/aalmilktea/procurement.png",
+                    "/projects/aalmilktea/heatmap.png"
+                ],
+                features: [
+                    "Integrates the Lalamove API for calculating logistics routing and shipping fees.",
+                    "Synchronizes listing stocks with external online stores (TikTok Shop, Shopee, Lazada).",
+                    "Supports bulk purchasing orders with automated re-ordering thresholds."
+                ]
+            },
+            {
+                label: "Finance & Accounting",
+                description: "Double-entry bookkeeping tools monitor profitability and cash flows.",
+                images: [
+                    "/projects/aalmilktea/finance.png",
+                    "/projects/aalmilktea/accounting.png",
+                    "/projects/aalmilktea/analytics.png"
+                ],
+                features: [
+                    "Includes interactive general accounting ledgers and generates balance sheets automatically.",
+                    "Analyzes margins and tracks store profitability across branch operations.",
+                    "Integrates with the PayMongo gateway to process digital credit card, GCash, and Maya transactions."
+                ]
+            }
+        ]
+    },
+    {
         title: "IGIS - Municipality Portal",
         description: "Integrated Government Information System for Santa Rosa, Nueva Ecija. A complete LGU Management System to digitalize the manual workflows of over 15 municipal departments.",
-        features: [
-            "Developed a complete LGU Management System (IGIS) using Laravel, React, and PostgreSQL to digitalize the manual workflows of over 15 municipal departments.",
-            "Engineered comprehensive internal platforms, including an automated HRIS/Payroll system and a financial tracking module for municipal budgets, taxes, and procurement.",
-            "Built a Citizen Portal and a React Native mobile app equipped with a Universal ID System, enabling residents to access online services, report incidents, and track permits easily."
-        ],
         image: "/projects/igis/bims.png",
-        images: [
-            "/projects/igis/bims.png",
-            "/projects/igis/map.png",
-            "/projects/igis/gso.png",
-            "/projects/igis/igis-dashboard.png",
-            "/projects/igis/igis-portal.png"
-        ],
         tags: ["Laravel", "React", "PostgreSQL", "TailwindCSS", "Framer Motion"],
         liveUrl: "https://app.simsportal.xyz/",
         githubUrl: "#",
         accent: "from-blue-500 to-cyan-400",
+        tabs: [
+            {
+                label: "Overview",
+                description: "A comprehensive digital infrastructure connecting various offices in Santa Rosa LGU.",
+                images: ["/projects/igis/igis-dashboard.png"],
+                features: [
+                    "Centralizes data streams from over 15 government departments, reducing cross-department processing delays.",
+                    "Real-time analytics monitor budget statuses, tax collections, and active permit applications.",
+                    "Equipped with secure access levels for municipal administrators, officers, and department heads."
+                ]
+            },
+            {
+                label: "Citizen Portal",
+                description: "A citizen-facing system that lets residents request and monitor government services.",
+                images: ["/projects/igis/igis-portal.png"],
+                features: [
+                    "Features a Universal ID System linking citizens to their records and active applications.",
+                    "Enables online applications for business permits, barangay clearances, and civil certificates.",
+                    "Includes an incident reporting module to flag infrastructure hazards or request emergency assistance."
+                ]
+            },
+            {
+                label: "Departments",
+                description: "Specialized sub-systems built to handle the workflows of distinct LGU offices.",
+                images: [
+                    "/projects/igis/bims.png",
+                    "/projects/igis/map.png",
+                    "/projects/igis/gso.png"
+                ],
+                features: [
+                    "Includes HRIS/Payroll tools supporting government item classifications and attendance checking.",
+                    "Zoning and real property tax assessment tools mapping land values and assessments.",
+                    "GSO asset manager tracks municipal inventory, vehicles, and equipment deployments."
+                ]
+            }
+        ]
     },
     {
         title: "Online Weteng",

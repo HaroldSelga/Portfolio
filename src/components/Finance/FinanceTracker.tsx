@@ -7,6 +7,7 @@ import {
     CreditCard,
     BarChart3,
     ArrowRightLeft,
+    Receipt,
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -17,13 +18,15 @@ import { IncomeSection } from "./IncomeSection"
 import { ExpenseSection } from "./ExpenseSection"
 import { DebtSection } from "./DebtSection"
 import { ReportsSection } from "./ReportsSection"
-import type { Wallet, FinanceEntry, Debt, DebtPayment } from "./types"
+import { BillsSection } from "./BillsSection"
+import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate } from "./types"
 
-type Tab = "income" | "expenses" | "debts" | "reports"
+type Tab = "income" | "expenses" | "bills" | "debts" | "reports"
 
 const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[] = [
     { key: "income", label: "Income", icon: TrendingUp, color: "text-emerald-500" },
     { key: "expenses", label: "Expenses", icon: TrendingDown, color: "text-rose-500" },
+    { key: "bills", label: "Bills", icon: Receipt, color: "text-amber-500" },
     { key: "debts", label: "Debts", icon: CreditCard, color: "text-orange-500" },
     { key: "reports", label: "Reports", icon: BarChart3, color: "text-primary" },
 ]
@@ -35,6 +38,7 @@ export default function FinanceTracker() {
     const [entries, setEntries] = useState<FinanceEntry[]>([])
     const [debts, setDebts] = useState<Debt[]>([])
     const [payments, setPayments] = useState<DebtPayment[]>([])
+    const [bills, setBills] = useState<BillTemplate[]>([])
 
     // Transfer modal
     const [showTransfer, setShowTransfer] = useState(false)
@@ -47,17 +51,19 @@ export default function FinanceTracker() {
     // Fetch all data
     const fetchAll = useCallback(async () => {
         try {
-            const [walletsRes, entriesRes, debtsRes, paymentsRes] = await Promise.all([
+            const [walletsRes, entriesRes, debtsRes, paymentsRes, billsRes] = await Promise.all([
                 supabase.from("wallets").select("*").order("created_at"),
                 supabase.from("finance_entries").select("*").order("date", { ascending: false }),
                 supabase.from("debts").select("*").order("created_at"),
                 supabase.from("debt_payments").select("*").order("date", { ascending: false }),
+                supabase.from("bill_templates").select("*").order("created_at"),
             ])
 
             if (walletsRes.data) setWallets(walletsRes.data)
             if (entriesRes.data) setEntries(entriesRes.data)
             if (debtsRes.data) setDebts(debtsRes.data)
             if (paymentsRes.data) setPayments(paymentsRes.data)
+            if (billsRes.data) setBills(billsRes.data)
         } catch (e) {
             console.error("Error fetching finance data:", e)
         } finally {
@@ -206,6 +212,49 @@ export default function FinanceTracker() {
         }
     }
 
+    // Add bill template
+    const handleAddBill = async (bill: Omit<BillTemplate, "id" | "created_at">) => {
+        try {
+            const { data, error } = await supabase
+                .from("bill_templates")
+                .insert(bill)
+                .select()
+                .single()
+
+            if (error) throw error
+            if (data) setBills(prev => [...prev, data])
+        } catch (e) {
+            console.error("Error adding bill template:", e)
+        }
+    }
+
+    // Delete bill template
+    const handleDeleteBill = async (id: string) => {
+        try {
+            const { error } = await supabase
+                .from("bill_templates")
+                .delete()
+                .eq("id", id)
+
+            if (error) throw error
+            setBills(prev => prev.filter(b => b.id !== id))
+        } catch (e) {
+            console.error("Error deleting bill template:", e)
+        }
+    }
+
+    // Pay bill template
+    const handlePayBill = async (bill: BillTemplate, walletId: string) => {
+        await handleAddEntry({
+            type: "expense",
+            date: new Date().toISOString().split("T")[0],
+            category: bill.category,
+            description: `Paid ${bill.label}`,
+            amount: bill.amount,
+            wallet_id: walletId,
+        })
+    }
+
     // Transfer between wallets
     const handleTransfer = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -325,12 +374,21 @@ export default function FinanceTracker() {
                                     onDelete={handleDeleteEntry}
                                 />
                             )}
-                            {activeTab === "expenses" && (
+                             {activeTab === "expenses" && (
                                 <ExpenseSection
                                     entries={entries}
                                     wallets={wallets}
                                     onAdd={handleAddEntry}
                                     onDelete={handleDeleteEntry}
+                                />
+                            )}
+                            {activeTab === "bills" && (
+                                <BillsSection
+                                    bills={bills}
+                                    wallets={wallets}
+                                    onAddBill={handleAddBill}
+                                    onDeleteBill={handleDeleteBill}
+                                    onPayBill={handlePayBill}
                                 />
                             )}
                             {activeTab === "debts" && (

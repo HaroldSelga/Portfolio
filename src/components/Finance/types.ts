@@ -35,6 +35,14 @@ export interface DebtPayment {
     created_at: string
 }
 
+export interface BillTemplate {
+    id: string
+    label: string
+    category: string
+    amount: number
+    created_at: string
+}
+
 export const EXPENSE_CATEGORIES = [
     { value: "food", label: "Food", emoji: "🍜" },
     { value: "transport", label: "Transport", emoji: "🚗" },

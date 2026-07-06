@@ -243,6 +243,27 @@ export default function FinanceTracker() {
         }
     }
 
+    // Update bill template
+    const handleUpdateBill = async (bill: BillTemplate) => {
+        try {
+            const { data, error } = await supabase
+                .from("bill_templates")
+                .update({
+                    label: bill.label,
+                    category: bill.category,
+                    amount: bill.amount,
+                })
+                .eq("id", bill.id)
+                .select()
+                .single()
+
+            if (error) throw error
+            if (data) setBills(prev => prev.map(b => b.id === bill.id ? data : b))
+        } catch (e) {
+            console.error("Error updating bill template:", e)
+        }
+    }
+
     // Pay bill template
     const handlePayBill = async (bill: BillTemplate, walletId: string) => {
         await handleAddEntry({
@@ -387,6 +408,7 @@ export default function FinanceTracker() {
                                     bills={bills}
                                     wallets={wallets}
                                     onAddBill={handleAddBill}
+                                    onUpdateBill={handleUpdateBill}
                                     onDeleteBill={handleDeleteBill}
                                     onPayBill={handlePayBill}
                                 />

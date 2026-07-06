@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Check, Trash2, Receipt, X } from "lucide-react"
+import { Plus, Check, Trash2, Receipt, X, Edit2 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
@@ -11,6 +11,7 @@ interface BillsSectionProps {
     bills: BillTemplate[]
     wallets: Wallet[]
     onAddBill: (bill: Omit<BillTemplate, "id" | "created_at">) => void
+    onUpdateBill: (bill: BillTemplate) => void
     onDeleteBill: (id: string) => void
     onPayBill: (bill: BillTemplate, walletId: string) => void
 }
@@ -19,10 +20,18 @@ function formatPeso(amount: number): string {
     return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-export function BillsSection({ bills, wallets, onAddBill, onDeleteBill, onPayBill }: BillsSectionProps) {
+export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDeleteBill, onPayBill }: BillsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [payModalBill, setPayModalBill] = useState<BillTemplate | null>(null)
     const [selectedWalletId, setSelectedWalletId] = useState(wallets[0]?.id || "")
+    const [payAmount, setPayAmount] = useState("")
+
+    const [editModalBill, setEditModalBill] = useState<BillTemplate | null>(null)
+    const [editForm, setEditForm] = useState({
+        label: "",
+        category: "bills",
+        amount: "",
+    })
 
     const [newBill, setNewBill] = useState({
         label: "",
@@ -48,11 +57,30 @@ export function BillsSection({ bills, wallets, onAddBill, onDeleteBill, onPayBil
         setShowAddForm(false)
     }
 
+    const handleEditSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!editModalBill || !editForm.label || !editForm.amount) return
+
+        onUpdateBill({
+            ...editModalBill,
+            label: editForm.label,
+            category: editForm.category,
+            amount: parseFloat(editForm.amount),
+        })
+        setEditModalBill(null)
+    }
+
     const handlePayConfirm = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!payModalBill || !selectedWalletId) return
+        if (!payModalBill || !selectedWalletId || !payAmount) return
 
-        onPayBill(payModalBill, selectedWalletId)
+        onPayBill(
+            {
+                ...payModalBill,
+                amount: parseFloat(payAmount),
+            },
+            selectedWalletId
+        )
         setPayModalBill(null)
     }
 
@@ -186,6 +214,7 @@ export function BillsSection({ bills, wallets, onAddBill, onDeleteBill, onPayBil
                                     <Button
                                         onClick={() => {
                                             setPayModalBill(bill)
+                                            setPayAmount(bill.amount.toString())
                                             setSelectedWalletId(wallets[0]?.id || "")
                                         }}
                                         size="sm"
@@ -194,6 +223,20 @@ export function BillsSection({ bills, wallets, onAddBill, onDeleteBill, onPayBil
                                         <Check className="h-3 w-3" />
                                         Pay
                                     </Button>
+                                    <button
+                                        onClick={() => {
+                                            setEditModalBill(bill)
+                                            setEditForm({
+                                                label: bill.label,
+                                                category: bill.category,
+                                                amount: bill.amount.toString(),
+                                            })
+                                        }}
+                                        className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                        title="Edit bill template"
+                                    >
+                                        <Edit2 className="h-4 w-4" />
+                                    </button>
                                     <button
                                         onClick={() => onDeleteBill(bill.id)}
                                         className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
@@ -216,17 +259,20 @@ export function BillsSection({ bills, wallets, onAddBill, onDeleteBill, onPayBil
                 className="max-w-md"
             >
                 <form onSubmit={handlePayConfirm} className="p-6 space-y-4">
-                    <div className="bg-muted/30 border border-border/40 rounded-xl p-4 flex items-center justify-between">
-                        <div>
-                            <span className="text-xs font-bold text-muted-foreground block uppercase tracking-wider">Bill Amount</span>
-                            <span className="text-lg font-black text-foreground">{payModalBill ? formatPeso(payModalBill.amount) : "₱0.00"}</span>
-                        </div>
-                        <div className="text-right">
-                            <span className="text-xs font-bold text-muted-foreground block uppercase tracking-wider">Category</span>
-                            <span className="text-sm font-bold text-foreground">
-                                {EXPENSE_CATEGORIES.find(c => c.value === payModalBill?.category)?.label || payModalBill?.category}
-                            </span>
-                        </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Bill Amount (₱)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            value={payAmount}
+                            onChange={e => setPayAmount(e.target.value)}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            required
+                        />
+                        <span className="text-[10px] text-muted-foreground mt-1 block">
+                            (Modify amount if bill has increased or decreased for this month)
+                        </span>
                     </div>
 
                     <div>
@@ -253,10 +299,73 @@ export function BillsSection({ bills, wallets, onAddBill, onDeleteBill, onPayBil
                         </Button>
                         <Button
                             type="submit"
-                            disabled={!selectedWalletId}
+                            disabled={!selectedWalletId || !payAmount}
                             className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-500/20"
                         >
                             Confirm Payment
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* Edit Bill Template Modal */}
+            <Modal
+                isOpen={editModalBill !== null}
+                onClose={() => setEditModalBill(null)}
+                title="Edit Bill Template"
+                className="max-w-md"
+            >
+                <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Bill Name</label>
+                        <input
+                            type="text"
+                            value={editForm.label}
+                            onChange={e => setEditForm({ ...editForm, label: e.target.value })}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Category</label>
+                        <select
+                            value={editForm.category}
+                            onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        >
+                            {EXPENSE_CATEGORIES.map(cat => (
+                                <option key={cat.value} value={cat.value}>
+                                    {cat.emoji} {cat.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Standard Amount (₱)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            value={editForm.amount}
+                            onChange={e => setEditForm({ ...editForm, amount: e.target.value })}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            required
+                        />
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                        <Button
+                            type="button"
+                            onClick={() => setEditModalBill(null)}
+                            className="flex-1 bg-muted text-foreground hover:bg-muted/80 font-bold rounded-xl"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            className="flex-1 bg-amber-500 text-white hover:bg-amber-600 font-bold rounded-xl shadow-lg shadow-amber-500/20"
+                        >
+                            Save Changes
                         </Button>
                     </div>
                 </form>

@@ -9,7 +9,7 @@ import { motion, useScroll, useSpring } from "framer-motion"
 export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const location = useLocation()
-    const isPrivate = ["/workspace", "/requirements"].includes(location.pathname)
+    const isPrivate = ["/workspace", "/requirements", "/finances"].includes(location.pathname)
     const { scrollYProgress } = useScroll()
     const scaleX = useSpring(scrollYProgress, {
         stiffness: 100,

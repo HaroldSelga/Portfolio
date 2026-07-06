@@ -13,6 +13,7 @@ import { Contact } from "./components/Resume/Contact"
 import { ThemeProvider } from "./components/ThemeProvider"
 import Workspace from "./components/Workspace/Workspace.tsx"
 import Requirements from "./components/Requirements/Requirements.tsx"
+import FinanceTracker from "./components/Finance/FinanceTracker.tsx"
 import { Gatekeeper } from "./components/ui/Gatekeeper.tsx"
 
 function Home() {
@@ -41,6 +42,7 @@ function App() {
             <Route path="/" element={<HomeLoader />} />
             <Route path="/workspace" element={<Gatekeeper><Workspace /></Gatekeeper>} />
             <Route path="/requirements" element={<Gatekeeper><Requirements /></Gatekeeper>} />
+            <Route path="/finances" element={<Gatekeeper><FinanceTracker /></Gatekeeper>} />
           </Routes>
         </main>
         <Footer />

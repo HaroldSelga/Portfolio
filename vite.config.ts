@@ -10,7 +10,24 @@ export default defineConfig(({ mode }) => {
     base: env.GITHUB_ACTIONS === 'true' ? "/Portfolio/" : "/",
     plugins: [react()],
     build: {
-      chunkSizeWarningLimit: 1000, // Increase warning limit to 1000kB
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              // React core must be isolated — other UI libs depend on it
+              if (id.includes('react-dom') || id.includes('react-router-dom') || id.match(/\/react\//)) {
+                return 'vendor'
+              }
+              if (id.includes('@supabase')) {
+                return 'supabase'
+              }
+              // Everything else (framer-motion, lucide, etc.) stays in the default chunk
+              // to avoid circular dependencies between UI libs and React
+            }
+          }
+        }
+      }
     },
     server: {
       proxy: {

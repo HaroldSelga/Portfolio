@@ -8,6 +8,7 @@ import {
     BarChart3,
     ArrowRightLeft,
     Receipt,
+    History as HistoryIcon,
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -19,13 +20,15 @@ import { ExpenseSection } from "./ExpenseSection"
 import { DebtSection } from "./DebtSection"
 import { ReportsSection } from "./ReportsSection"
 import { BillsSection } from "./BillsSection"
+import { HistorySection } from "./HistorySection"
 import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate } from "./types"
 
-type Tab = "income" | "expenses" | "bills" | "debts" | "reports"
+type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "reports"
 
 const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[] = [
     { key: "income", label: "Income", icon: TrendingUp, color: "text-emerald-500" },
     { key: "expenses", label: "Expenses", icon: TrendingDown, color: "text-rose-500" },
+    { key: "history", label: "History", icon: HistoryIcon, color: "text-stone-400" },
     { key: "bills", label: "Bills", icon: Receipt, color: "text-amber-500" },
     { key: "debts", label: "Debts", icon: CreditCard, color: "text-orange-500" },
     { key: "reports", label: "Reports", icon: BarChart3, color: "text-primary" },
@@ -400,6 +403,13 @@ export default function FinanceTracker() {
                                     entries={entries}
                                     wallets={wallets}
                                     onAdd={handleAddEntry}
+                                    onDelete={handleDeleteEntry}
+                                />
+                            )}
+                            {activeTab === "history" && (
+                                <HistorySection
+                                    entries={entries}
+                                    wallets={wallets}
                                     onDelete={handleDeleteEntry}
                                 />
                             )}

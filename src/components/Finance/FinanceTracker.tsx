@@ -9,6 +9,8 @@ import {
     ArrowRightLeft,
     Receipt,
     History as HistoryIcon,
+    Target,
+    Settings,
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -21,9 +23,11 @@ import { DebtSection } from "./DebtSection"
 import { ReportsSection } from "./ReportsSection"
 import { BillsSection } from "./BillsSection"
 import { HistorySection } from "./HistorySection"
-import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate } from "./types"
+import { WishlistSection } from "./WishlistSection"
+import { SettingsSection } from "./SettingsSection"
+import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem } from "./types"
 
-type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "reports"
+type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "wishlist" | "reports" | "settings"
 
 const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[] = [
     { key: "income", label: "Income", icon: TrendingUp, color: "text-emerald-500" },
@@ -31,7 +35,9 @@ const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[
     { key: "history", label: "History", icon: HistoryIcon, color: "text-stone-400" },
     { key: "bills", label: "Bills", icon: Receipt, color: "text-amber-500" },
     { key: "debts", label: "Debts", icon: CreditCard, color: "text-orange-500" },
+    { key: "wishlist", label: "Wishlist", icon: Target, color: "text-sky-500" },
     { key: "reports", label: "Reports", icon: BarChart3, color: "text-primary" },
+    { key: "settings", label: "Settings", icon: Settings, color: "text-stone-400" },
 ]
 
 export default function FinanceTracker() {
@@ -42,6 +48,8 @@ export default function FinanceTracker() {
     const [debts, setDebts] = useState<Debt[]>([])
     const [payments, setPayments] = useState<DebtPayment[]>([])
     const [bills, setBills] = useState<BillTemplate[]>([])
+    const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+    const [useLocalStorageWishlist, setUseLocalStorageWishlist] = useState(false)
 
     // Transfer modal
     const [showTransfer, setShowTransfer] = useState(false)
@@ -54,12 +62,16 @@ export default function FinanceTracker() {
     // Fetch all data
     const fetchAll = useCallback(async () => {
         try {
-            const [walletsRes, entriesRes, debtsRes, paymentsRes, billsRes] = await Promise.all([
+            const [walletsRes, entriesRes, debtsRes, paymentsRes, billsRes, wishlistRes] = await Promise.all([
                 supabase.from("wallets").select("*").order("created_at"),
                 supabase.from("finance_entries").select("*").order("date", { ascending: false }),
                 supabase.from("debts").select("*").order("created_at"),
                 supabase.from("debt_payments").select("*").order("date", { ascending: false }),
                 supabase.from("bill_templates").select("*").order("created_at"),
+                supabase.from("wishlist_items").select("*").order("created_at").catch(err => {
+                    console.warn("Wishlist table not found or error, falling back to LocalStorage:", err)
+                    return { data: null, error: err }
+                })
             ])
 
             if (walletsRes.data) setWallets(walletsRes.data)
@@ -67,6 +79,17 @@ export default function FinanceTracker() {
             if (debtsRes.data) setDebts(debtsRes.data)
             if (paymentsRes.data) setPayments(paymentsRes.data)
             if (billsRes.data) setBills(billsRes.data)
+
+            if (wishlistRes && wishlistRes.data) {
+                setWishlist(wishlistRes.data)
+                setUseLocalStorageWishlist(false)
+            } else {
+                setUseLocalStorageWishlist(true)
+                const localData = localStorage.getItem("wishlist_items")
+                if (localData) {
+                    setWishlist(JSON.parse(localData))
+                }
+            }
         } catch (e) {
             console.error("Error fetching finance data:", e)
         } finally {
@@ -167,16 +190,23 @@ export default function FinanceTracker() {
     // Add debt payment
     const handleAddPayment = async (payment: Omit<DebtPayment, "id" | "created_at">) => {
         try {
+            // Standard columns only to avoid schema conflicts
             const { data, error } = await supabase
                 .from("debt_payments")
-                .insert(payment)
+                .insert({
+                    debt_id: payment.debt_id,
+                    amount: payment.amount,
+                    date: payment.date,
+                    notes: payment.notes
+                })
                 .select()
                 .single()
 
             if (error) throw error
 
-            // Update debt paid_amount
             const debt = debts.find(d => d.id === payment.debt_id)
+
+            // Update debt paid_amount
             if (debt) {
                 const newPaid = debt.paid_amount + payment.amount
                 const isSettled = newPaid >= debt.total_amount
@@ -191,9 +221,24 @@ export default function FinanceTracker() {
                         ? { ...d, paid_amount: newPaid, is_settled: isSettled }
                         : d
                 ))
+
+                // Auto-create history entry and deduct balance from wallet
+                if (payment.wallet_id) {
+                    await handleAddEntry({
+                        type: "expense",
+                        date: payment.date,
+                        category: "debt_payment",
+                        description: `Paid Debt: ${debt.label}${payment.notes ? ` (${payment.notes})` : ""}`,
+                        amount: payment.amount,
+                        wallet_id: payment.wallet_id
+                    })
+                }
             }
 
-            if (data) setPayments(prev => [data, ...prev])
+            if (data) {
+                // Ensure data in state has the wallet_id we chose
+                setPayments(prev => [{ ...data, wallet_id: payment.wallet_id }, ...prev])
+            }
         } catch (e) {
             console.error("Error adding payment:", e)
         }
@@ -291,21 +336,213 @@ export default function FinanceTracker() {
             const toWallet = wallets.find(w => w.id === to)
             if (!fromWallet || !toWallet) return
 
-            await Promise.all([
-                supabase.from("wallets").update({ balance: fromWallet.balance - amount }).eq("id", from),
-                supabase.from("wallets").update({ balance: toWallet.balance + amount }).eq("id", to),
-            ])
+            // Add expense entry for the "from" wallet
+            await handleAddEntry({
+                type: "expense",
+                date: new Date().toISOString().split("T")[0],
+                category: "transfer",
+                description: `Transfer to ${toWallet.name}`,
+                amount: amount,
+                wallet_id: from,
+            })
 
-            setWallets(prev => prev.map(w => {
-                if (w.id === from) return { ...w, balance: w.balance - amount }
-                if (w.id === to) return { ...w, balance: w.balance + amount }
-                return w
-            }))
+            // Add income entry for the "to" wallet
+            await handleAddEntry({
+                type: "income",
+                date: new Date().toISOString().split("T")[0],
+                category: "transfer",
+                description: `Transfer from ${fromWallet.name}`,
+                amount: amount,
+                wallet_id: to,
+            })
 
             setTransferData({ from: "", to: "", amount: "" })
             setShowTransfer(false)
         } catch (e) {
             console.error("Error transferring:", e)
+        }
+    }
+
+    // Add wishlist item
+    const handleAddWishlistItem = async (item: Omit<WishlistItem, "id" | "created_at" | "is_purchased" | "actual_price" | "purchased_date" | "wallet_id">) => {
+        const tempId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)
+        const newItem: WishlistItem = {
+            ...item,
+            id: tempId,
+            is_purchased: false,
+            actual_price: null,
+            purchased_date: null,
+            wallet_id: null,
+            created_at: new Date().toISOString()
+        }
+
+        if (useLocalStorageWishlist) {
+            const updated = [...wishlist, newItem]
+            setWishlist(updated)
+            localStorage.setItem("wishlist_items", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("wishlist_items")
+                    .insert({
+                        label: item.label,
+                        estimated_price: item.estimated_price,
+                        priority: item.priority,
+                        notes: item.notes,
+                        target_date: item.target_date,
+                        is_purchased: false
+                    })
+                    .select()
+                    .single()
+
+                if (error) throw error
+                if (data) setWishlist(prev => [...prev, data])
+            } catch (e) {
+                console.warn("Adding to wishlist table failed, switching to LocalStorage:", e)
+                setUseLocalStorageWishlist(true)
+                const updated = [...wishlist, newItem]
+                setWishlist(updated)
+                localStorage.setItem("wishlist_items", JSON.stringify(updated))
+            }
+        }
+    }
+
+    // Purchase wishlist item
+    const handlePurchaseWishlistItem = async (id: string, actualPrice: number, walletId: string, notes: string | null, date: string) => {
+        const item = wishlist.find(i => i.id === id)
+        if (!item) return
+
+        // 1. Create the finance entry (which will deduct wallet balance automatically!)
+        await handleAddEntry({
+            type: "expense",
+            date: date,
+            category: "wishlist",
+            description: notes || `Bought Wishlist: ${item.label}`,
+            amount: actualPrice,
+            wallet_id: walletId
+        })
+
+        // 2. Mark item as purchased
+        if (useLocalStorageWishlist) {
+            const updated = wishlist.map(i =>
+                i.id === id
+                    ? {
+                          ...i,
+                          is_purchased: true,
+                          actual_price: actualPrice,
+                          purchased_date: date,
+                          wallet_id: walletId
+                      }
+                    : i
+            )
+            setWishlist(updated)
+            localStorage.setItem("wishlist_items", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("wishlist_items")
+                    .update({
+                        is_purchased: true,
+                        actual_price: actualPrice,
+                        purchased_date: date,
+                        wallet_id: walletId
+                    })
+                    .eq("id", id)
+                    .select()
+                    .single()
+
+                if (error) throw error
+                if (data) setWishlist(prev => prev.map(i => (i.id === id ? data : i)))
+            } catch (e) {
+                console.error("Error updating wishlist in database:", e)
+                setWishlist(prev =>
+                    prev.map(i =>
+                        i.id === id
+                            ? {
+                                  ...i,
+                                  is_purchased: true,
+                                  actual_price: actualPrice,
+                                  purchased_date: date,
+                                  wallet_id: walletId
+                              }
+                            : i
+                    )
+                )
+            }
+        }
+    }
+
+    // Delete wishlist item
+    const handleDeleteWishlistItem = async (id: string) => {
+        if (useLocalStorageWishlist) {
+            const updated = wishlist.filter(i => i.id !== id)
+            setWishlist(updated)
+            localStorage.setItem("wishlist_items", JSON.stringify(updated))
+        } else {
+            try {
+                const { error } = await supabase
+                    .from("wishlist_items")
+                    .delete()
+                    .eq("id", id)
+
+                if (error) throw error
+                setWishlist(prev => prev.filter(i => i.id !== id))
+            } catch (e) {
+                console.error("Error deleting from wishlist database:", e)
+                setWishlist(prev => prev.filter(i => i.id !== id))
+            }
+        }
+    }
+
+    // Add Wallet
+    const handleAddWallet = async (wallet: Omit<Wallet, "id" | "created_at">) => {
+        try {
+            const { data, error } = await supabase
+                .from("wallets")
+                .insert(wallet)
+                .select()
+                .single()
+
+            if (error) throw error
+            if (data) setWallets(prev => [...prev, data])
+        } catch (e) {
+            console.error("Error adding wallet:", e)
+        }
+    }
+
+    // Update Wallet
+    const handleUpdateWallet = async (wallet: Wallet) => {
+        try {
+            const { data, error } = await supabase
+                .from("wallets")
+                .update({
+                    name: wallet.name,
+                    icon: wallet.icon,
+                    balance: wallet.balance
+                })
+                .eq("id", wallet.id)
+                .select()
+                .single()
+
+            if (error) throw error
+            if (data) setWallets(prev => prev.map(w => (w.id === wallet.id ? data : w)))
+        } catch (e) {
+            console.error("Error updating wallet:", e)
+        }
+    }
+
+    // Delete Wallet
+    const handleDeleteWallet = async (id: string) => {
+        try {
+            const { error } = await supabase
+                .from("wallets")
+                .delete()
+                .eq("id", id)
+
+            if (error) throw error
+            setWallets(prev => prev.filter(w => w.id !== id))
+        } catch (e) {
+            console.error("Error deleting wallet:", e)
         }
     }
 
@@ -354,7 +591,7 @@ export default function FinanceTracker() {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="flex gap-1 bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-1.5 overflow-x-auto"
+                    className="flex gap-1 bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-1.5 overflow-x-auto scrollbar-none"
                 >
                     {TABS.map(tab => {
                         const isActive = activeTab === tab.key
@@ -363,14 +600,14 @@ export default function FinanceTracker() {
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key)}
                                 className={cn(
-                                    "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex-1 justify-center",
+                                    "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 justify-center",
                                     isActive
-                                        ? "bg-background shadow-lg text-foreground"
+                                        ? "bg-background shadow-lg text-foreground font-black"
                                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                 )}
                             >
-                                <tab.icon className={cn("h-4 w-4", isActive && tab.color)} />
-                                <span className="hidden sm:inline">{tab.label}</span>
+                                <tab.icon className={cn("h-4 w-4 shrink-0", isActive && tab.color)} />
+                                <span>{tab.label}</span>
                             </button>
                         )
                     })}
@@ -427,9 +664,19 @@ export default function FinanceTracker() {
                                 <DebtSection
                                     debts={debts}
                                     payments={payments}
+                                    wallets={wallets}
                                     onAddDebt={handleAddDebt}
                                     onAddPayment={handleAddPayment}
                                     onDeleteDebt={handleDeleteDebt}
+                                />
+                            )}
+                            {activeTab === "wishlist" && (
+                                <WishlistSection
+                                    items={wishlist}
+                                    wallets={wallets}
+                                    onAddItem={handleAddWishlistItem}
+                                    onPurchaseItem={handlePurchaseWishlistItem}
+                                    onDeleteItem={handleDeleteWishlistItem}
                                 />
                             )}
                             {activeTab === "reports" && (
@@ -437,6 +684,14 @@ export default function FinanceTracker() {
                                     entries={entries}
                                     wallets={wallets}
                                     debts={debts}
+                                />
+                            )}
+                            {activeTab === "settings" && (
+                                <SettingsSection
+                                    wallets={wallets}
+                                    onAddWallet={handleAddWallet}
+                                    onUpdateWallet={handleUpdateWallet}
+                                    onDeleteWallet={handleDeleteWallet}
                                 />
                             )}
                         </motion.div>

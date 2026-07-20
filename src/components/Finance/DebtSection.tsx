@@ -1,14 +1,15 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, CreditCard, ChevronDown, ChevronUp, Check, X } from "lucide-react"
+import { Plus, CreditCard, ChevronDown, ChevronUp, Check, X, AlertTriangle } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { Debt, DebtPayment } from "./types"
+import type { Debt, DebtPayment, Wallet } from "./types"
 
 interface DebtSectionProps {
     debts: Debt[]
     payments: DebtPayment[]
+    wallets: Wallet[]
     onAddDebt: (debt: Omit<Debt, "id" | "created_at" | "paid_amount" | "is_settled">) => void
     onAddPayment: (payment: Omit<DebtPayment, "id" | "created_at">) => void
     onDeleteDebt: (id: string) => void
@@ -18,7 +19,7 @@ function formatPeso(amount: number): string {
     return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDeleteDebt }: DebtSectionProps) {
+export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment, onDeleteDebt }: DebtSectionProps) {
     const [expandedDebt, setExpandedDebt] = useState<string | null>(null)
     const [showAddDebt, setShowAddDebt] = useState(false)
     const [paymentModal, setPaymentModal] = useState<string | null>(null)
@@ -27,11 +28,20 @@ export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDelete
         date: new Date().toISOString().split("T")[0],
         amount: "",
         notes: "",
+        wallet_id: wallets[0]?.id || "",
     })
 
     const totalDebt = debts.reduce((sum, d) => sum + d.total_amount, 0)
     const totalPaid = debts.reduce((sum, d) => sum + d.paid_amount, 0)
     const totalRemaining = totalDebt - totalPaid
+
+    // Get remaining amount for the debt currently being paid
+    const currentDebt = paymentModal ? debts.find(d => d.id === paymentModal) : null
+    const currentRemaining = currentDebt ? currentDebt.total_amount - currentDebt.paid_amount : 0
+    const paymentAmount = parseFloat(newPayment.amount) || 0
+    const isOverpaying = paymentAmount > currentRemaining && currentRemaining > 0
+    const selectedWallet = wallets.find(w => w.id === newPayment.wallet_id)
+    const isOverdraft = selectedWallet ? paymentAmount > selectedWallet.balance : false
 
     const handleAddDebt = (e: React.FormEvent) => {
         e.preventDefault()
@@ -46,14 +56,24 @@ export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDelete
 
     const handleAddPayment = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!paymentModal || !newPayment.amount) return
+        if (!paymentModal || !newPayment.amount || !newPayment.wallet_id) return
+
+        // Prevent overpaying
+        const finalAmount = Math.min(paymentAmount, currentRemaining)
+
         onAddPayment({
             debt_id: paymentModal,
             date: newPayment.date,
-            amount: parseFloat(newPayment.amount),
+            amount: finalAmount,
             notes: newPayment.notes || null,
+            wallet_id: newPayment.wallet_id,
         })
-        setNewPayment({ date: new Date().toISOString().split("T")[0], amount: "", notes: "" })
+        setNewPayment({
+            date: new Date().toISOString().split("T")[0],
+            amount: "",
+            notes: "",
+            wallet_id: wallets[0]?.id || "",
+        })
         setPaymentModal(null)
     }
 
@@ -206,7 +226,15 @@ export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDelete
                                         <div className="flex items-center gap-2">
                                             {!debt.is_settled && (
                                                 <Button
-                                                    onClick={() => setPaymentModal(debt.id)}
+                                                    onClick={() => {
+                                                        setNewPayment({
+                                                            date: new Date().toISOString().split("T")[0],
+                                                            amount: "",
+                                                            notes: "",
+                                                            wallet_id: wallets[0]?.id || "",
+                                                        })
+                                                        setPaymentModal(debt.id)
+                                                    }}
                                                     size="sm"
                                                     className="font-bold rounded-lg text-xs h-7 bg-emerald-500 text-white hover:bg-emerald-600 gap-1"
                                                 >
@@ -281,19 +309,25 @@ export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDelete
                                             className="overflow-hidden border-t border-border/20"
                                         >
                                             <div className="divide-y divide-border/20">
-                                                {debtPayments.map(p => (
-                                                    <div key={p.id} className="px-4 py-2.5 flex items-center justify-between">
-                                                        <div>
-                                                            <p className="text-xs font-medium text-muted-foreground">
-                                                                {new Date(p.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
-                                                            </p>
-                                                            {p.notes && <p className="text-xs text-muted-foreground/60 mt-0.5">{p.notes}</p>}
+                                                {debtPayments.map(p => {
+                                                    const pWallet = wallets.find(w => w.id === p.wallet_id)
+                                                    return (
+                                                        <div key={p.id} className="px-4 py-2.5 flex items-center justify-between">
+                                                            <div>
+                                                                <p className="text-xs font-medium text-muted-foreground">
+                                                                    {new Date(p.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                                                                    {pWallet && (
+                                                                        <span className="ml-2 text-muted-foreground/60">via {pWallet.name}</span>
+                                                                    )}
+                                                                </p>
+                                                                {p.notes && <p className="text-xs text-muted-foreground/60 mt-0.5">{p.notes}</p>}
+                                                            </div>
+                                                            <span className="text-xs font-black tabular-nums text-emerald-500">
+                                                                -{formatPeso(p.amount)}
+                                                            </span>
                                                         </div>
-                                                        <span className="text-xs font-black tabular-nums text-emerald-500">
-                                                            -{formatPeso(p.amount)}
-                                                        </span>
-                                                    </div>
-                                                ))}
+                                                    )
+                                                })}
                                             </div>
                                         </motion.div>
                                     )}
@@ -312,6 +346,13 @@ export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDelete
                 className="max-w-md"
             >
                 <form onSubmit={handleAddPayment} className="p-6 space-y-4">
+                    {/* Remaining info */}
+                    {currentDebt && (
+                        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-3 text-center">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Remaining Balance</p>
+                            <p className="text-lg font-black tabular-nums text-orange-500 mt-0.5">{formatPeso(currentRemaining)}</p>
+                        </div>
+                    )}
                     <div>
                         <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Date</label>
                         <input
@@ -328,13 +369,45 @@ export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDelete
                             type="number"
                             step="0.01"
                             min="0.01"
+                            max={currentRemaining}
                             placeholder="0.00"
                             value={newPayment.amount}
                             onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })}
-                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            className={cn(
+                                "w-full px-3 py-2 bg-background border rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2",
+                                isOverpaying
+                                    ? "border-amber-500 focus:ring-amber-500/20 focus:border-amber-500"
+                                    : "border-border/60 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            )}
                             required
                             autoFocus
                         />
+                        {isOverpaying && (
+                            <p className="flex items-center gap-1 text-xs text-amber-500 font-bold mt-1.5">
+                                <AlertTriangle className="h-3 w-3" />
+                                Amount exceeds remaining ({formatPeso(currentRemaining)}). Will be capped automatically.
+                            </p>
+                        )}
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Deduct From Wallet</label>
+                        <select
+                            value={newPayment.wallet_id}
+                            onChange={e => setNewPayment({ ...newPayment, wallet_id: e.target.value })}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            required
+                        >
+                            <option value="">Select wallet...</option>
+                            {wallets.map(w => (
+                                <option key={w.id} value={w.id}>{w.name} ({formatPeso(w.balance)})</option>
+                            ))}
+                        </select>
+                        {isOverdraft && (
+                            <p className="flex items-center gap-1 text-xs text-amber-500 font-bold mt-1.5">
+                                <AlertTriangle className="h-3 w-3" />
+                                This will overdraft your {selectedWallet?.name} wallet.
+                            </p>
+                        )}
                     </div>
                     <div>
                         <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes (optional)</label>
@@ -348,7 +421,8 @@ export function DebtSection({ debts, payments, onAddDebt, onAddPayment, onDelete
                     </div>
                     <Button
                         type="submit"
-                        className="w-full bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-500/20"
+                        disabled={!newPayment.wallet_id}
+                        className="w-full bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                     >
                         Confirm Payment
                     </Button>

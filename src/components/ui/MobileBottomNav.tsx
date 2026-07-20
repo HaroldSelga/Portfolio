@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react"
+import { useLocation } from "react-router-dom"
 import { ArrowUp, User, Briefcase, Code2, FolderKanban, Play } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+
+const PRIVATE_ROUTES = ["/workspace", "/requirements", "/finances"]
 
 const navItems = [
     { label: "About", href: "#about", icon: User },
@@ -12,6 +15,8 @@ const navItems = [
 
 export function MobileBottomNav() {
     const [isVisible, setIsVisible] = useState(false)
+    const location = useLocation()
+    const isPrivateRoute = PRIVATE_ROUTES.includes(location.pathname)
     const [activeSection, setActiveSection] = useState("")
 
     useEffect(() => {
@@ -36,6 +41,8 @@ export function MobileBottomNav() {
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: "smooth" })
     }
+
+    if (isPrivateRoute) return null
 
     return (
         <AnimatePresence>

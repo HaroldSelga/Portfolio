@@ -735,7 +735,7 @@ export default function FinanceTracker() {
     }
 
     // Add Category Budget Limit
-    const handleAddBudget = async (budget: Omit<CategoryBudget, "id" | "created_at font-medium font-bold text-xs uppercase">) => {
+    const handleAddBudget = async (budget: Omit<CategoryBudget, "id" | "created_at">) => {
         const tempId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)
         const newBudget: CategoryBudget = {
             ...budget,

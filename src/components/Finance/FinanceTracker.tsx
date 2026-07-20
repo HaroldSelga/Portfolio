@@ -393,6 +393,7 @@ export default function FinanceTracker() {
                     category: bill.category,
                     amount: bill.amount,
                     due_day: bill.due_day,
+                    penalty_amount: bill.penalty_amount,
                 })
                 .eq("id", bill.id)
                 .select()
@@ -959,6 +960,7 @@ export default function FinanceTracker() {
                                     wallets={wallets}
                                     debts={debts}
                                     funds={funds}
+                                    bills={bills}
                                 />
                             )}
                             {activeTab === "settings" && (

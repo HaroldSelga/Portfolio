@@ -2,7 +2,7 @@ import { useState, useMemo } from "react"
 import { motion } from "framer-motion"
 import { BarChart3, PieChart, TrendingUp, TrendingDown, Target, Wallet as WalletIcon, Star, ArrowUp, ArrowDown, Minus, Calendar, ChevronLeft, ChevronRight, PiggyBank } from "lucide-react"
 import { cn } from "../../lib/utils"
-import type { FinanceEntry, Wallet, Debt, SavingsFund } from "./types"
+import type { FinanceEntry, Wallet, Debt, SavingsFund, BillTemplate } from "./types"
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "./types"
 
 interface ReportsSectionProps {
@@ -10,6 +10,7 @@ interface ReportsSectionProps {
     wallets: Wallet[]
     debts: Debt[]
     funds: SavingsFund[]
+    bills: BillTemplate[]
 }
 
 function formatPeso(amount: number): string {
@@ -28,7 +29,7 @@ function getShortMonthLabel(key: string): string {
     return new Date(key + "-01").toLocaleDateString("en-PH", { month: "short", year: "2-digit" })
 }
 
-export function ReportsSection({ entries, wallets, debts, funds }: ReportsSectionProps) {
+export function ReportsSection({ entries, wallets, debts, funds, bills }: ReportsSectionProps) {
     const now = new Date()
     const currentMonthKey = getMonthKey(now)
 
@@ -403,6 +404,119 @@ export function ReportsSection({ entries, wallets, debts, funds }: ReportsSectio
                     </div>
                 </div>
             )}
+
+            {/* ═══════════════════════════════════════════ */}
+            {/* BILLS & PENALTIES SUMMARY */}
+            {/* ═══════════════════════════════════════════ */}
+            {bills.length > 0 && (() => {
+                const currentMonthPrefix = `${new Date(selectedMonthKey + "-01").getFullYear()}-${String(new Date(selectedMonthKey + "-01").getMonth() + 1).padStart(2, "0")}`
+                const selectedDay = selectedMonthKey === currentMonthKey ? new Date().getDate() : new Date(parseInt(selectedMonthKey.split("-")[0]), parseInt(selectedMonthKey.split("-")[1]), 0).getDate()
+
+                const billsSummary = bills.map(bill => {
+                    const hasPaid = entries.some(e => {
+                        const matchesMonth = e.date.startsWith(currentMonthPrefix)
+                        const matchesType = e.type === "expense"
+                        const matchesLabel = e.description.toLowerCase().includes(bill.label.toLowerCase())
+                        const matchesCategory = e.category === bill.category && e.amount === bill.amount
+                        return matchesMonth && matchesType && (matchesLabel || matchesCategory)
+                    })
+
+                    let status: "paid" | "overdue" | "soon" | "incoming" | "unpaid" = "unpaid"
+                    if (hasPaid) {
+                        status = "paid"
+                    } else if (bill.due_day) {
+                        const daysLeft = bill.due_day - selectedDay
+                        if (daysLeft < 0) status = "overdue"
+                        else if (daysLeft <= 5) status = "soon"
+                        else status = "incoming"
+                    }
+
+                    return { bill, status, hasPaid }
+                })
+
+                const paidCount = billsSummary.filter(b => b.status === "paid").length
+                const overdueCount = billsSummary.filter(b => b.status === "overdue").length
+                const soonCount = billsSummary.filter(b => b.status === "soon").length
+                const unpaidCount = bills.length - paidCount
+
+                const totalBillObligation = bills.reduce((s, b) => s + b.amount, 0)
+                const totalPaid = billsSummary.filter(b => b.status === "paid").reduce((s, b) => s + b.bill.amount, 0)
+                const totalPenalties = billsSummary
+                    .filter(b => b.status === "overdue" && b.bill.penalty_amount && b.bill.penalty_amount > 0)
+                    .reduce((s, b) => s + (b.bill.penalty_amount || 0), 0)
+                const totalOverdueAmount = billsSummary
+                    .filter(b => b.status === "overdue")
+                    .reduce((s, b) => s + b.bill.amount + (b.bill.penalty_amount || 0), 0)
+
+                return (
+                    <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-sm">
+                        <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
+                            📋 Bills & Penalties — {getMonthLabel(selectedMonthKey)}
+                        </h3>
+
+                        {/* Status bar */}
+                        <div className="grid grid-cols-4 gap-2">
+                            <div className="text-center p-2 rounded-xl bg-emerald-500/10">
+                                <p className="text-lg font-black text-emerald-500 tabular-nums">{paidCount}</p>
+                                <p className="text-[9px] font-bold uppercase text-emerald-500/80">Paid</p>
+                            </div>
+                            <div className="text-center p-2 rounded-xl bg-rose-500/10">
+                                <p className="text-lg font-black text-rose-500 tabular-nums">{overdueCount}</p>
+                                <p className="text-[9px] font-bold uppercase text-rose-500/80">Overdue</p>
+                            </div>
+                            <div className="text-center p-2 rounded-xl bg-amber-500/10">
+                                <p className="text-lg font-black text-amber-500 tabular-nums">{soonCount}</p>
+                                <p className="text-[9px] font-bold uppercase text-amber-500/80">Due Soon</p>
+                            </div>
+                            <div className="text-center p-2 rounded-xl bg-muted">
+                                <p className="text-lg font-black text-muted-foreground tabular-nums">{unpaidCount}</p>
+                                <p className="text-[9px] font-bold uppercase text-muted-foreground/80">Remaining</p>
+                            </div>
+                        </div>
+
+                        {/* Amounts breakdown */}
+                        <div className="space-y-1.5 pt-1 border-t border-border/20">
+                            <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-muted-foreground">Total Monthly Bills</span>
+                                <span className="tabular-nums font-black">{formatPeso(totalBillObligation)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-emerald-500">✅ Paid this month</span>
+                                <span className="tabular-nums font-black text-emerald-500">{formatPeso(totalPaid)}</span>
+                            </div>
+                            {totalOverdueAmount > 0 && (
+                                <div className="flex justify-between text-xs font-semibold">
+                                    <span className="text-rose-500">🔴 Overdue balance</span>
+                                    <span className="tabular-nums font-black text-rose-500">{formatPeso(totalOverdueAmount)}</span>
+                                </div>
+                            )}
+                            {totalPenalties > 0 && (
+                                <div className="flex justify-between text-xs font-bold bg-rose-500/10 rounded-lg px-2 py-1.5">
+                                    <span className="text-rose-500">⚠️ Late Penalties Incurred</span>
+                                    <span className="tabular-nums font-black text-rose-500">+{formatPeso(totalPenalties)}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Progress bar: bills paid */}
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
+                                <span>Payment Progress</span>
+                                <span className="tabular-nums">{paidCount}/{bills.length} bills paid</span>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div
+                                    className={cn(
+                                        "h-full rounded-full transition-all duration-500",
+                                        paidCount === bills.length ? "bg-emerald-500" : overdueCount > 0 ? "bg-amber-500" : "bg-primary"
+                                    )}
+                                    style={{ width: `${bills.length > 0 ? (paidCount / bills.length) * 100 : 0}%` }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
 
             {/* ═══════════════════════════════════════════ */}
             {/* TOP 3 BIGGEST EXPENSES THIS MONTH */}

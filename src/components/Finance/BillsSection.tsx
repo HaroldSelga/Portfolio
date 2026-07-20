@@ -33,6 +33,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
         category: "bills",
         amount: "",
         due_day: "",
+        penalty_amount: "",
     })
 
     const [newBill, setNewBill] = useState({
@@ -40,6 +41,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
         category: "bills",
         amount: "",
         due_day: "",
+        penalty_amount: "",
     })
 
     // Get current calendar info
@@ -99,6 +101,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
             category: newBill.category,
             amount: parseFloat(newBill.amount),
             due_day: newBill.due_day ? parseInt(newBill.due_day) : null,
+            penalty_amount: newBill.penalty_amount ? parseFloat(newBill.penalty_amount) : null,
         })
 
         setNewBill({
@@ -106,6 +109,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
             category: "bills",
             amount: "",
             due_day: "",
+            penalty_amount: "",
         })
         setShowAddForm(false)
     }
@@ -120,6 +124,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
             category: editForm.category,
             amount: parseFloat(editForm.amount),
             due_day: editForm.due_day ? parseInt(editForm.due_day) : null,
+            penalty_amount: editForm.penalty_amount ? parseFloat(editForm.penalty_amount) : null,
         })
         setEditModalBill(null)
     }
@@ -251,6 +256,18 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                                     />
                                 </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Late Penalty Fee (₱, optional)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="e.g. 100 for ₱100 late fee"
+                                        value={newBill.penalty_amount}
+                                        onChange={e => setNewBill({ ...newBill, penalty_amount: e.target.value })}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                                    />
+                                </div>
                             </div>
                             <Button
                                 type="submit"
@@ -299,7 +316,18 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                                 </span>
                                                 <span>·</span>
                                                 <span className="font-bold tabular-nums text-foreground/80">{formatPeso(bill.amount)}</span>
+                                                {bill.penalty_amount && bill.penalty_amount > 0 && info.status === "overdue" && (
+                                                    <>
+                                                        <span>·</span>
+                                                        <span className="text-rose-500 font-black tabular-nums">+{formatPeso(bill.penalty_amount)} penalty</span>
+                                                    </>
+                                                )}
                                             </div>
+                                            {bill.penalty_amount && bill.penalty_amount > 0 && info.status === "overdue" && (
+                                                <div className="mt-1 px-2 py-1 bg-rose-500/10 rounded-lg text-[10px] font-bold text-rose-500 tabular-nums">
+                                                    ⚠️ Total with penalty: {formatPeso(bill.amount + bill.penalty_amount)}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
@@ -329,6 +357,11 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                                 Due on Day {bill.due_day}
                                             </span>
                                         )}
+                                        {bill.penalty_amount && bill.penalty_amount > 0 && info.status !== "overdue" && (
+                                            <span className="text-[10px] text-muted-foreground/60 font-medium">
+                                                Late fee: {formatPeso(bill.penalty_amount)}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between border-t border-border/10 pt-3 mt-1 w-full">
@@ -348,6 +381,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                                     category: bill.category,
                                                     amount: bill.amount.toString(),
                                                     due_day: bill.due_day ? bill.due_day.toString() : "",
+                                                    penalty_amount: bill.penalty_amount ? bill.penalty_amount.toString() : "",
                                                 })
                                             }}
                                             className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10 transition-all"
@@ -359,7 +393,9 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                             <Button
                                                 onClick={() => {
                                                     setPayModalBill(bill)
-                                                    setPayAmount(bill.amount.toString())
+                                                    const isOverdue = info.status === "overdue"
+                                                    const totalWithPenalty = isOverdue && bill.penalty_amount ? bill.amount + bill.penalty_amount : bill.amount
+                                                    setPayAmount(totalWithPenalty.toString())
                                                     setSelectedWalletId(wallets[0]?.id || "")
                                                 }}
                                                 size="sm"
@@ -396,9 +432,26 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                             className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                             required
                         />
-                        <span className="text-[10px] text-muted-foreground mt-1 block">
-                            (Modify amount if bill has increased or decreased for this month)
-                        </span>
+                        {payModalBill && payModalBill.penalty_amount && payModalBill.penalty_amount > 0 && getBillStatus(payModalBill).status === "overdue" ? (
+                            <div className="mt-2 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 space-y-1">
+                                <div className="flex justify-between text-[11px] font-semibold text-muted-foreground">
+                                    <span>Base amount</span>
+                                    <span className="tabular-nums">{formatPeso(payModalBill.amount)}</span>
+                                </div>
+                                <div className="flex justify-between text-[11px] font-bold text-rose-500">
+                                    <span>⚠️ Late penalty</span>
+                                    <span className="tabular-nums">+{formatPeso(payModalBill.penalty_amount)}</span>
+                                </div>
+                                <div className="border-t border-rose-500/20 pt-1 flex justify-between text-xs font-black text-foreground">
+                                    <span>Total due</span>
+                                    <span className="tabular-nums">{formatPeso(payModalBill.amount + payModalBill.penalty_amount)}</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <span className="text-[10px] text-muted-foreground mt-1 block">
+                                (Modify amount if bill has increased or decreased for this month)
+                            </span>
+                        )}
                     </div>
 
                     <div>
@@ -486,6 +539,18 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                             max="31"
                             value={editForm.due_day}
                             onChange={e => setEditForm({ ...editForm, due_day: e.target.value })}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Late Penalty Fee (₱, optional)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="e.g. 100"
+                            value={editForm.penalty_amount}
+                            onChange={e => setEditForm({ ...editForm, penalty_amount: e.target.value })}
                             className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         />
                     </div>

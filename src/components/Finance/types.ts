@@ -42,6 +42,7 @@ export interface BillTemplate {
     category: string
     amount: number
     due_day: number | null
+    penalty_amount: number | null
     created_at: string
 }
 

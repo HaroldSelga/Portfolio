@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { motion } from "framer-motion"
-import { BarChart3, PieChart, TrendingUp, TrendingDown, Target } from "lucide-react"
+import { BarChart3, PieChart, TrendingUp, TrendingDown, Target, Wallet as WalletIcon, Star } from "lucide-react"
 import { cn } from "../../lib/utils"
 import type { FinanceEntry, Wallet, Debt } from "./types"
 import { EXPENSE_CATEGORIES } from "./types"
@@ -16,10 +16,22 @@ function formatPeso(amount: number): string {
 }
 
 export function ReportsSection({ entries, wallets, debts }: ReportsSectionProps) {
-    // Monthly breakdown
+    // Exclude transfers from calculations so they don't bloat the reports
+    const totalIncome = useMemo(() => 
+        entries.filter(e => e.type === "income" && e.category !== "transfer").reduce((s, e) => s + e.amount, 0),
+        [entries]
+    )
+
+    const totalExpense = useMemo(() => 
+        entries.filter(e => e.type === "expense" && e.category !== "transfer").reduce((s, e) => s + e.amount, 0),
+        [entries]
+    )
+
+    // Monthly breakdown (excluding transfers)
     const monthlyData = useMemo(() => {
         const months: Record<string, { income: number; expense: number }> = {}
         entries.forEach(e => {
+            if (e.category === "transfer") return // Skip transfers
             const key = e.date.substring(0, 7) // "YYYY-MM"
             if (!months[key]) months[key] = { income: 0, expense: 0 }
             if (e.type === "income") months[key].income += e.amount
@@ -35,10 +47,10 @@ export function ReportsSection({ entries, wallets, debts }: ReportsSectionProps)
             }))
     }, [entries])
 
-    // Category breakdown (expenses only)
+    // Category breakdown (expenses only, excluding transfers)
     const categoryData = useMemo(() => {
         const cats: Record<string, number> = {}
-        entries.filter(e => e.type === "expense").forEach(e => {
+        entries.filter(e => e.type === "expense" && e.category !== "transfer").forEach(e => {
             cats[e.category] = (cats[e.category] || 0) + e.amount
         })
         const total = Object.values(cats).reduce((sum, v) => sum + v, 0)
@@ -52,60 +64,104 @@ export function ReportsSection({ entries, wallets, debts }: ReportsSectionProps)
             .sort((a, b) => b.amount - a.amount)
     }, [entries])
 
+    // Wishlist analytics
+    const wishlistStats = useMemo(() => {
+        const wishlistEntries = entries.filter(e => e.category === "wishlist")
+        const totalSpent = wishlistEntries.reduce((sum, e) => sum + e.amount, 0)
+        return {
+            count: wishlistEntries.length,
+            totalSpent,
+        }
+    }, [entries])
+
     // Totals
-    const totalIncome = entries.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0)
-    const totalExpense = entries.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0)
     const totalDebt = debts.reduce((s, d) => s + d.total_amount, 0)
     const totalDebtPaid = debts.reduce((s, d) => s + d.paid_amount, 0)
     const walletTotal = wallets.reduce((s, w) => s + w.balance, 0)
     const netWorth = walletTotal - (totalDebt - totalDebtPaid)
 
+    // Savings Rate percentage
+    const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0
+
     // Max values for bar sizing
     const maxMonthly = Math.max(...monthlyData.map(m => Math.max(m.income, m.expense)), 1)
     const maxCategory = Math.max(...categoryData.map(c => c.amount), 1)
 
+    // Complete list of beautiful tailwind colors matching all 21 categories
     const CATEGORY_COLORS: Record<string, string> = {
         food: "bg-amber-500",
-        transport: "bg-primary",
+        groceries: "bg-emerald-500",
+        transport: "bg-sky-500",
+        gas_fuel: "bg-blue-600",
         bills: "bg-orange-500",
+        rent_housing: "bg-indigo-600",
         shopping: "bg-rose-500",
-        allowance: "bg-emerald-500",
-        health: "bg-rose-400",
-        entertainment: "bg-amber-400",
-        debt_payment: "bg-orange-400",
+        clothing: "bg-pink-500",
+        allowance: "bg-teal-500",
+        health: "bg-red-500",
+        personal_care: "bg-fuchsia-500",
+        education: "bg-violet-500",
+        entertainment: "bg-yellow-500",
+        subscriptions: "bg-rose-600",
+        insurance: "bg-cyan-600",
+        gifts_given: "bg-emerald-600",
+        pets: "bg-amber-600",
+        repairs: "bg-zinc-500",
+        debt_payment: "bg-orange-600",
+        wishlist: "bg-sky-600",
+        transfer: "bg-stone-500",
         other: "bg-stone-400",
     }
 
     return (
         <div className="space-y-6">
-            {/* Summary Stats */}
+            {/* Summary Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                     { label: "Total Income", value: totalIncome, color: "text-emerald-500", icon: TrendingUp, bg: "bg-emerald-500/10" },
                     { label: "Total Expenses", value: totalExpense, color: "text-rose-500", icon: TrendingDown, bg: "bg-rose-500/10" },
-                    { label: "Debt Remaining", value: totalDebt - totalDebtPaid, color: "text-orange-500", icon: Target, bg: "bg-orange-500/10" },
+                    { label: "Savings Rate", value: savingsRate, color: savingsRate >= 20 ? "text-emerald-500" : savingsRate > 0 ? "text-amber-500" : "text-rose-500", icon: Star, bg: "bg-amber-500/10", isPercent: true },
                     { label: "Net Worth", value: netWorth, color: netWorth >= 0 ? "text-emerald-500" : "text-rose-500", icon: BarChart3, bg: "bg-primary/10" },
                 ].map((stat, i) => (
                     <motion.div
                         key={stat.label}
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.08 }}
-                        className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4"
+                        transition={{ delay: i * 0.05 }}
+                        className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 shadow-sm"
                     >
                         <div className={cn("p-2 rounded-xl w-fit mb-2", stat.bg)}>
                             <stat.icon className={cn("h-4 w-4", stat.color)} />
                         </div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{stat.label}</p>
                         <p className={cn("text-lg font-black tabular-nums tracking-tight mt-0.5", stat.color)}>
-                            {stat.value < 0 && "-"}{formatPeso(stat.value)}
+                            {stat.isPercent ? (
+                                `${Math.round(stat.value)}%`
+                            ) : (
+                                <>{stat.value < 0 && "-"}{formatPeso(stat.value)}</>
+                            )}
                         </p>
                     </motion.div>
                 ))}
             </div>
 
+            {/* Savings Rate Tip */}
+            {totalIncome > 0 && (
+                <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex items-center justify-between gap-4 text-xs font-semibold">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                        💡 Budget Advice: 
+                        <span className="text-foreground">
+                            {savingsRate >= 30 ? "Outstanding! You have a high savings rate. Consider investing your surplus." :
+                             savingsRate >= 20 ? "Excellent! You are hitting the recommended 20% savings rule." :
+                             savingsRate > 0 ? "Good start, but try to minimize shopping or subscriptions to reach 20% savings." :
+                             "Alert: You spent more than you earned this period. Review your categories below."}
+                        </span>
+                    </span>
+                </div>
+            )}
+
             {/* Monthly Breakdown */}
-            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-4">
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-4 shadow-sm">
                 <div className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-primary" />
                     <h3 className="text-sm font-black uppercase tracking-tight">Monthly Breakdown</h3>
@@ -172,7 +228,7 @@ export function ReportsSection({ entries, wallets, debts }: ReportsSectionProps)
             </div>
 
             {/* Expense Category Breakdown */}
-            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-4">
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-4 shadow-sm">
                 <div className="flex items-center gap-2">
                     <PieChart className="h-4 w-4 text-rose-500" />
                     <h3 className="text-sm font-black uppercase tracking-tight">Where Your Money Goes</h3>
@@ -190,7 +246,7 @@ export function ReportsSection({ entries, wallets, debts }: ReportsSectionProps)
                                 key={cat.category}
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.05 }}
+                                transition={{ delay: i * 0.04 }}
                                 className="flex items-center gap-3"
                             >
                                 <span className="text-base w-6 text-center">{cat.info?.emoji || "📦"}</span>
@@ -205,12 +261,12 @@ export function ReportsSection({ entries, wallets, debts }: ReportsSectionProps)
                                         <motion.div
                                             initial={{ width: 0 }}
                                             animate={{ width: `${(cat.amount / maxCategory) * 100}%` }}
-                                            transition={{ duration: 0.6, delay: i * 0.06 }}
+                                            transition={{ duration: 0.6, delay: i * 0.05 }}
                                             className={cn("h-full rounded-full", CATEGORY_COLORS[cat.category] || "bg-stone-400")}
                                         />
                                     </div>
                                 </div>
-                                <span className="text-xs font-black tabular-nums text-rose-500 w-20 text-right shrink-0">
+                                <span className="text-xs font-black tabular-nums text-rose-500 w-20 text-right shrink-0 font-sans">
                                     {formatPeso(cat.amount)}
                                 </span>
                             </motion.div>
@@ -219,58 +275,85 @@ export function ReportsSection({ entries, wallets, debts }: ReportsSectionProps)
                 )}
             </div>
 
-            {/* Wallet Balances */}
-            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
-                <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
-                    <span className="text-primary">💰</span> Wallet Balances
-                </h3>
-                {wallets.map(w => (
-                    <div key={w.id} className="flex items-center justify-between py-1">
-                        <span className="text-sm font-bold text-muted-foreground">{w.name}</span>
+            {/* Twin Columns for Wallets & Debts/Wishlist */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Wallet Balances */}
+                <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-sm">
+                    <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-foreground">
+                        <WalletIcon className="h-4.5 w-4.5 text-emerald-500" /> Wallet Balances
+                    </h3>
+                    <div className="divide-y divide-border/10 max-h-[250px] overflow-y-auto scrollbar-none pr-1">
+                        {wallets.map(w => (
+                            <div key={w.id} className="flex items-center justify-between py-2 text-xs">
+                                <span className="font-bold text-muted-foreground">{w.name}</span>
+                                <span className={cn(
+                                    "font-black tabular-nums",
+                                    w.balance >= 0 ? "text-emerald-500" : "text-rose-500"
+                                )}>
+                                    {w.balance < 0 && "-"}{formatPeso(w.balance)}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="border-t border-border/30 pt-2 flex items-center justify-between text-xs">
+                        <span className="font-black">Total Net Cash</span>
                         <span className={cn(
-                            "text-sm font-black tabular-nums",
-                            w.balance >= 0 ? "text-emerald-500" : "text-rose-500"
+                            "font-black tabular-nums",
+                            walletTotal >= 0 ? "text-emerald-500" : "text-rose-500"
                         )}>
-                            {w.balance < 0 && "-"}{formatPeso(w.balance)}
+                            {walletTotal < 0 && "-"}{formatPeso(walletTotal)}
                         </span>
                     </div>
-                ))}
-                <div className="border-t border-border/30 pt-2 flex items-center justify-between">
-                    <span className="text-sm font-black">Total</span>
-                    <span className={cn(
-                        "text-sm font-black tabular-nums",
-                        walletTotal >= 0 ? "text-emerald-500" : "text-rose-500"
-                    )}>
-                        {walletTotal < 0 && "-"}{formatPeso(walletTotal)}
-                    </span>
                 </div>
-            </div>
 
-            {/* Debt Progress Summary */}
-            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
-                <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
-                    <Target className="h-4 w-4 text-orange-500" /> Debt Payoff Progress
-                </h3>
-                {debts.map(d => {
-                    const pct = d.total_amount > 0 ? (d.paid_amount / d.total_amount) * 100 : 0
-                    return (
-                        <div key={d.id} className="space-y-1">
-                            <div className="flex items-center justify-between">
-                                <span className={cn("text-xs font-bold", d.is_settled && "text-emerald-500 line-through")}>{d.label}</span>
-                                <span className="text-[10px] font-black tabular-nums text-muted-foreground">{Math.round(pct)}%</span>
-                            </div>
-                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div
-                                    className={cn(
-                                        "h-full rounded-full transition-all duration-500",
-                                        d.is_settled ? "bg-emerald-500" : "bg-orange-500"
-                                    )}
-                                    style={{ width: `${Math.min(pct, 100)}%` }}
-                                />
+                {/* Debts & Wishlist Summary */}
+                <div className="space-y-4">
+                    {/* Debt Payoff Progress */}
+                    {debts.length > 0 && (
+                        <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-sm">
+                            <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
+                                <Target className="h-4 w-4 text-orange-500" /> Debt Payoff Progress
+                            </h3>
+                            <div className="space-y-2 max-h-[110px] overflow-y-auto scrollbar-none pr-1">
+                                {debts.map(d => {
+                                    const pct = d.total_amount > 0 ? (d.paid_amount / d.total_amount) * 100 : 0
+                                    return (
+                                        <div key={d.id} className="space-y-1">
+                                            <div className="flex items-center justify-between text-[11px]">
+                                                <span className={cn("font-bold", d.is_settled && "text-emerald-500 line-through")}>{d.label}</span>
+                                                <span className="font-black tabular-nums text-muted-foreground">{Math.round(pct)}%</span>
+                                            </div>
+                                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                                <div
+                                                    className={cn(
+                                                        "h-full rounded-full transition-all duration-500",
+                                                        d.is_settled ? "bg-emerald-500" : "bg-orange-500"
+                                                    )}
+                                                    style={{ width: `${Math.min(pct, 100)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )
+                                })}
                             </div>
                         </div>
-                    )
-                })}
+                    )}
+
+                    {/* Wishlist Tracking */}
+                    <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-sm">
+                        <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
+                            <Star className="h-4 w-4 text-sky-500" /> Wishlist Completed
+                        </h3>
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-muted-foreground">Purchased Items:</span>
+                            <span className="font-black text-sky-500">{wishlistStats.count} items</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-muted-foreground">Total Paid for Wishlist:</span>
+                            <span className="font-black text-emerald-500">{formatPeso(wishlistStats.totalSpent)}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     )

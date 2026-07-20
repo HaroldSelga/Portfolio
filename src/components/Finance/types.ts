@@ -58,6 +58,16 @@ export interface WishlistItem {
     created_at: string
 }
 
+export interface SavingsFund {
+    id: string
+    label: string
+    target_amount: number
+    current_amount: number
+    target_date: string | null
+    notes: string | null
+    created_at: string
+}
+
 export const EXPENSE_CATEGORIES = [
     { value: "food", label: "Food", emoji: "🍜" },
     { value: "groceries", label: "Groceries", emoji: "🛒" },
@@ -79,6 +89,7 @@ export const EXPENSE_CATEGORIES = [
     { value: "repairs", label: "Repairs/Maintenance", emoji: "🔧" },
     { value: "debt_payment", label: "Debt Payment", emoji: "💳" },
     { value: "wishlist", label: "Wishlist Purchase", emoji: "🎯" },
+    { value: "savings_deposit", label: "Savings Deposit", emoji: "🐷" },
     { value: "transfer", label: "Transfer", emoji: "🔄" },
     { value: "other", label: "Other", emoji: "📦" },
 ] as const
@@ -93,6 +104,7 @@ export const INCOME_CATEGORIES = [
     { value: "allowance_received", label: "Allowance Received", emoji: "👨‍👩‍👧" },
     { value: "sold_items", label: "Sold Items", emoji: "🏪" },
     { value: "refund", label: "Refund", emoji: "🔄" },
+    { value: "savings_withdraw", label: "Savings Withdrawal", emoji: "💵" },
     { value: "transfer", label: "Transfer", emoji: "🔄" },
     { value: "other", label: "Other", emoji: "📦" },
 ] as const

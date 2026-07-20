@@ -11,6 +11,7 @@ import {
     History as HistoryIcon,
     Target,
     Settings,
+    PiggyBank,
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -25,9 +26,10 @@ import { BillsSection } from "./BillsSection"
 import { HistorySection } from "./HistorySection"
 import { WishlistSection } from "./WishlistSection"
 import { SettingsSection } from "./SettingsSection"
-import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem } from "./types"
+import { FundsSection } from "./FundsSection"
+import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund } from "./types"
 
-type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "wishlist" | "reports" | "settings"
+type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "funds" | "wishlist" | "reports" | "settings"
 
 const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[] = [
     { key: "income", label: "Income", icon: TrendingUp, color: "text-emerald-500" },
@@ -35,6 +37,7 @@ const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[
     { key: "history", label: "History", icon: HistoryIcon, color: "text-stone-400" },
     { key: "bills", label: "Bills", icon: Receipt, color: "text-amber-500" },
     { key: "debts", label: "Debts", icon: CreditCard, color: "text-orange-500" },
+    { key: "funds", label: "Savings Goals", icon: PiggyBank, color: "text-emerald-400" },
     { key: "wishlist", label: "Wishlist", icon: Target, color: "text-sky-500" },
     { key: "reports", label: "Reports", icon: BarChart3, color: "text-primary" },
     { key: "settings", label: "Settings", icon: Settings, color: "text-stone-400" },
@@ -49,7 +52,9 @@ export default function FinanceTracker() {
     const [payments, setPayments] = useState<DebtPayment[]>([])
     const [bills, setBills] = useState<BillTemplate[]>([])
     const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+    const [funds, setFunds] = useState<SavingsFund[]>([])
     const [useLocalStorageWishlist, setUseLocalStorageWishlist] = useState(false)
+    const [useLocalStorageFunds, setUseLocalStorageFunds] = useState(false)
 
     // Transfer modal
     const [showTransfer, setShowTransfer] = useState(false)
@@ -76,9 +81,9 @@ export default function FinanceTracker() {
             if (paymentsRes.data) setPayments(paymentsRes.data)
             if (billsRes.data) setBills(billsRes.data)
 
+            // Wishlist fetch
             let wishlistData: WishlistItem[] | null = null
             let hasWishlistTable = false
-
             try {
                 const { data, error } = await supabase.from("wishlist_items").select("*").order("created_at")
                 if (error) throw error
@@ -100,6 +105,31 @@ export default function FinanceTracker() {
                     setWishlist(JSON.parse(localData))
                 }
             }
+
+            // Savings Funds fetch
+            let fundsData: SavingsFund[] | null = null
+            let hasFundsTable = false
+            try {
+                const { data, error } = await supabase.from("savings_funds").select("*").order("created_at")
+                if (error) throw error
+                if (data) {
+                    fundsData = data
+                    hasFundsTable = true
+                }
+            } catch (err) {
+                console.warn("Savings funds table not found or error, falling back to LocalStorage:", err)
+            }
+
+            if (hasFundsTable && fundsData) {
+                setFunds(fundsData)
+                setUseLocalStorageFunds(false)
+            } else {
+                setUseLocalStorageFunds(true)
+                const localData = localStorage.getItem("savings_funds")
+                if (localData) {
+                    setFunds(JSON.parse(localData))
+                }
+            }
         } catch (e) {
             console.error("Error fetching finance data:", e)
         } finally {
@@ -112,7 +142,7 @@ export default function FinanceTracker() {
     }, [fetchAll])
 
     // Add finance entry (income or expense)
-    const handleAddEntry = async (entry: Omit<FinanceEntry, "id" | "created_at">) => {
+    const handleAddEntry = async (entry: Omit<FinanceEntry, "id" | "created_at font-medium">) => {
         try {
             const { data, error } = await supabase
                 .from("finance_entries")
@@ -175,6 +205,37 @@ export default function FinanceTracker() {
                 ))
             }
 
+            // Also check if this deletion affects any savings goal balance
+            if (entry.category === "savings_deposit" || entry.category === "savings_withdraw") {
+                // If savings deposit deleted, we decrease savings goal balance.
+                // If savings withdrawal deleted, we increase savings goal balance.
+                // Let's locate the savings goal matching the description "Deposit to [Goal Name]"
+                const desc = entry.description
+                const isDeposit = entry.category === "savings_deposit font-medium"
+                const matchedFund = funds.find(f => desc.includes(f.label))
+                if (matchedFund) {
+                    const newCurrentAmount = isDeposit
+                        ? matchedFund.current_amount - entry.amount
+                        : matchedFund.current_amount + entry.amount
+
+                    if (useLocalStorageFunds) {
+                        const updated = funds.map(f =>
+                            f.id === matchedFund.id ? { ...f, current_amount: newCurrentAmount } : f
+                        )
+                        setFunds(updated)
+                        localStorage.setItem("savings_funds", JSON.stringify(updated))
+                    } else {
+                        await supabase
+                            .from("savings_funds")
+                            .update({ current_amount: newCurrentAmount })
+                            .eq("id", matchedFund.id)
+                        setFunds(prev => prev.map(f =>
+                            f.id === matchedFund.id ? { ...f, current_amount: newCurrentAmount } : f
+                        ))
+                    }
+                }
+            }
+
             setEntries(prev => prev.filter(e => e.id !== id))
         } catch (e) {
             console.error("Error deleting entry:", e)
@@ -200,7 +261,6 @@ export default function FinanceTracker() {
     // Add debt payment
     const handleAddPayment = async (payment: Omit<DebtPayment, "id" | "created_at">) => {
         try {
-            // Standard columns only to avoid schema conflicts
             const { data, error } = await supabase
                 .from("debt_payments")
                 .insert({
@@ -216,7 +276,6 @@ export default function FinanceTracker() {
 
             const debt = debts.find(d => d.id === payment.debt_id)
 
-            // Update debt paid_amount
             if (debt) {
                 const newPaid = debt.paid_amount + payment.amount
                 const isSettled = newPaid >= debt.total_amount
@@ -232,7 +291,6 @@ export default function FinanceTracker() {
                         : d
                 ))
 
-                // Auto-create history entry and deduct balance from wallet
                 if (payment.wallet_id) {
                     await handleAddEntry({
                         type: "expense",
@@ -246,7 +304,6 @@ export default function FinanceTracker() {
             }
 
             if (data) {
-                // Ensure data in state has the wallet_id we chose
                 setPayments(prev => [{ ...data, wallet_id: payment.wallet_id }, ...prev])
             }
         } catch (e) {
@@ -271,7 +328,7 @@ export default function FinanceTracker() {
     }
 
     // Add bill template
-    const handleAddBill = async (bill: Omit<BillTemplate, "id" | "created_at">) => {
+    const handleAddBill = async (bill: Omit<BillTemplate, "id" | "created_at font-medium">) => {
         try {
             const { data, error } = await supabase
                 .from("bill_templates")
@@ -346,7 +403,6 @@ export default function FinanceTracker() {
             const toWallet = wallets.find(w => w.id === to)
             if (!fromWallet || !toWallet) return
 
-            // Add expense entry for the "from" wallet
             await handleAddEntry({
                 type: "expense",
                 date: new Date().toISOString().split("T")[0],
@@ -356,7 +412,6 @@ export default function FinanceTracker() {
                 wallet_id: from,
             })
 
-            // Add income entry for the "to" wallet
             await handleAddEntry({
                 type: "income",
                 date: new Date().toISOString().split("T")[0],
@@ -422,7 +477,6 @@ export default function FinanceTracker() {
         const item = wishlist.find(i => i.id === id)
         if (!item) return
 
-        // 1. Create the finance entry (which will deduct wallet balance automatically!)
         await handleAddEntry({
             type: "expense",
             date: date,
@@ -432,7 +486,6 @@ export default function FinanceTracker() {
             wallet_id: walletId
         })
 
-        // 2. Mark item as purchased
         if (useLocalStorageWishlist) {
             const updated = wishlist.map(i =>
                 i.id === id
@@ -553,6 +606,106 @@ export default function FinanceTracker() {
             setWallets(prev => prev.filter(w => w.id !== id))
         } catch (e) {
             console.error("Error deleting wallet:", e)
+        }
+    }
+
+    // Add Savings Fund
+    const handleAddFund = async (fund: Omit<SavingsFund, "id" | "created_at font-medium font-bold font-sans">) => {
+        const tempId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)
+        const newFund: SavingsFund = {
+            ...fund,
+            id: tempId,
+            created_at: new Date().toISOString()
+        }
+
+        if (useLocalStorageFunds) {
+            const updated = [...funds, newFund]
+            setFunds(updated)
+            localStorage.setItem("savings_funds", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("savings_funds")
+                    .insert(fund)
+                    .select()
+                    .single()
+
+                if (error) throw error
+                if (data) setFunds(prev => [...prev, data])
+            } catch (e) {
+                console.warn("Adding savings fund to database failed, switching to LocalStorage:", e)
+                setUseLocalStorageFunds(true)
+                const updated = [...funds, newFund]
+                setFunds(updated)
+                localStorage.setItem("savings_funds", JSON.stringify(updated))
+            }
+        }
+    }
+
+    // Fund Transaction (Deposit / Withdraw)
+    const handleFundTransaction = async (id: string, amount: number, type: "deposit" | "withdraw", walletId: string, notes: string | null) => {
+        const fund = funds.find(f => f.id === id)
+        if (!fund) return
+
+        const newCurrentAmount = type === "deposit"
+            ? fund.current_amount + amount
+            : fund.current_amount - amount
+
+        // Create transaction history entry (deposit is expense, withdraw is income)
+        await handleAddEntry({
+            type: type === "deposit" ? "expense" : "income",
+            date: new Date().toISOString().split("T")[0],
+            category: type === "deposit" ? "savings_deposit" : "savings_withdraw",
+            description: notes || `${type === "deposit" ? "Deposit to" : "Withdrawal from"} ${fund.label}`,
+            amount: amount,
+            wallet_id: walletId
+        })
+
+        if (useLocalStorageFunds) {
+            const updated = funds.map(f =>
+                f.id === id ? { ...f, current_amount: newCurrentAmount } : f
+            )
+            setFunds(updated)
+            localStorage.setItem("savings_funds", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("savings_funds")
+                    .update({ current_amount: newCurrentAmount })
+                    .eq("id", id)
+                    .select()
+                    .single()
+
+                if (error) throw error
+                if (data) setFunds(prev => prev.map(f => (f.id === id ? data : f)))
+            } catch (e) {
+                console.error("Error updating savings fund:", e)
+                setFunds(prev => prev.map(f =>
+                    f.id === id ? { ...f, current_amount: newCurrentAmount } : f
+                ))
+            }
+        }
+    }
+
+    // Delete Savings Fund
+    const handleDeleteFund = async (id: string) => {
+        if (useLocalStorageFunds) {
+            const updated = funds.filter(f => f.id !== id)
+            setFunds(updated)
+            localStorage.setItem("savings_funds", JSON.stringify(updated))
+        } else {
+            try {
+                const { error } = await supabase
+                    .from("savings_funds")
+                    .delete()
+                    .eq("id", id)
+
+                if (error) throw error
+                setFunds(prev => prev.filter(f => f.id !== id))
+            } catch (e) {
+                console.error("Error deleting savings fund:", e)
+                setFunds(prev => prev.filter(f => f.id !== id))
+            }
         }
     }
 
@@ -680,6 +833,15 @@ export default function FinanceTracker() {
                                     onDeleteDebt={handleDeleteDebt}
                                 />
                             )}
+                            {activeTab === "funds" && (
+                                <FundsSection
+                                    funds={funds}
+                                    wallets={wallets}
+                                    onAddFund={handleAddFund}
+                                    onFundTransaction={handleFundTransaction}
+                                    onDeleteFund={handleDeleteFund}
+                                />
+                            )}
                             {activeTab === "wishlist" && (
                                 <WishlistSection
                                     items={wishlist}
@@ -694,6 +856,7 @@ export default function FinanceTracker() {
                                     entries={entries}
                                     wallets={wallets}
                                     debts={debts}
+                                    funds={funds}
                                 />
                             )}
                             {activeTab === "settings" && (

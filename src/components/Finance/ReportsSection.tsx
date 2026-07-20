@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { motion } from "framer-motion"
-import { BarChart3, PieChart, TrendingUp, TrendingDown, Target, Wallet as WalletIcon, Star, ArrowUp, ArrowDown, Minus, Calendar, ChevronLeft, ChevronRight, PiggyBank } from "lucide-react"
+import { BarChart3, PieChart, TrendingUp, TrendingDown, Wallet as WalletIcon, Star, ArrowUp, ArrowDown, Minus, Calendar, ChevronLeft, ChevronRight, PiggyBank } from "lucide-react"
 import { cn } from "../../lib/utils"
 import type { FinanceEntry, Wallet, Debt, SavingsFund, BillTemplate } from "./types"
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "./types"

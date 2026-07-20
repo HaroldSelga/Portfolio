@@ -1,17 +1,20 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, Check, X } from "lucide-react"
+import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, Check, X, Star } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { Wallet } from "./types"
-import { WALLET_TYPES, WALLET_PRESETS } from "./types"
+import type { Wallet, CategoryBudget } from "./types"
+import { WALLET_TYPES, WALLET_PRESETS, EXPENSE_CATEGORIES } from "./types"
 
 interface SettingsSectionProps {
     wallets: Wallet[]
+    budgets: CategoryBudget[]
     onAddWallet: (wallet: Omit<Wallet, "id" | "created_at">) => void
     onUpdateWallet: (wallet: Wallet) => void
     onDeleteWallet: (id: string) => void
+    onAddBudget: (budget: Omit<CategoryBudget, "id" | "created_at">) => void
+    onDeleteBudget: (id: string) => void
 }
 
 const WALLET_ICONS: Record<string, React.ElementType> = {
@@ -24,8 +27,9 @@ function formatPeso(amount: number): string {
     return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDeleteWallet }: SettingsSectionProps) {
+export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet, onDeleteWallet, onAddBudget, onDeleteBudget }: SettingsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
+    const [showBudgetForm, setShowBudgetForm] = useState(false)
     const [editWallet, setEditWallet] = useState<Wallet | null>(null)
     const [deleteConfirmWallet, setDeleteConfirmWallet] = useState<Wallet | null>(null)
 
@@ -35,10 +39,15 @@ export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDelete
         balance: "",
     })
 
+    const [newBudget, setNewBudget] = useState({
+        category: "food",
+        limit_amount: "",
+    })
+
     const [editForm, setEditForm] = useState({
         name: "",
         icon: "building" as "building" | "smartphone" | "banknote",
-        balance: "", // Normally edit balance isn't manual, but let's allow it in settings
+        balance: "",
     })
 
     const handleAddSubmit = (e: React.FormEvent) => {
@@ -56,7 +65,6 @@ export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDelete
     }
 
     const handleQuickAdd = (preset: { name: string; icon: string }) => {
-        // Quick add with ₱0 balance
         onAddWallet({
             name: preset.name,
             icon: preset.icon as any,
@@ -93,6 +101,19 @@ export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDelete
         setDeleteConfirmWallet(null)
     }
 
+    const handleAddBudgetSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newBudget.category || !newBudget.limit_amount) return
+
+        onAddBudget({
+            category: newBudget.category,
+            limit_amount: parseFloat(newBudget.limit_amount),
+        })
+
+        setNewBudget({ category: "food", limit_amount: "" })
+        setShowBudgetForm(false)
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -104,23 +125,38 @@ export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDelete
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Finance Settings</h3>
                         <p className="text-xs font-bold text-muted-foreground">
-                            Manage your cash, bank accounts, and e-wallets
+                            Manage accounts, bank lists, e-wallets, and monthly category budgets
                         </p>
                     </div>
                 </div>
-                <Button
-                    onClick={() => setShowAddForm(!showAddForm)}
-                    className={cn(
-                        "font-bold rounded-xl gap-2 transition-all",
-                        showAddForm
-                            ? "bg-muted text-muted-foreground hover:bg-muted/80"
-                            : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/10"
-                    )}
-                    size="sm"
-                >
-                    {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    {showAddForm ? "Cancel" : "Add Wallet"}
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => setShowBudgetForm(!showBudgetForm)}
+                        className={cn(
+                            "font-bold rounded-xl gap-2 transition-all",
+                            showBudgetForm
+                                ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                                : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"
+                        )}
+                        size="sm"
+                    >
+                        {showBudgetForm ? <X className="h-4 w-4" /> : <Star className="h-4 w-4 text-white" />}
+                        {showBudgetForm ? "Cancel" : "Set Category Budget"}
+                    </Button>
+                    <Button
+                        onClick={() => setShowAddForm(!showAddForm)}
+                        className={cn(
+                            "font-bold rounded-xl gap-2 transition-all",
+                            showAddForm
+                                ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                                : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/10"
+                        )}
+                        size="sm"
+                    >
+                        {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                        {showAddForm ? "Cancel" : "Add Wallet"}
+                    </Button>
+                </div>
             </div>
 
             {/* Add Wallet Form */}
@@ -174,7 +210,6 @@ export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDelete
                                 </div>
                             </div>
 
-                            {/* Preset Suggesions */}
                             <div className="space-y-2 border-t border-border/10 pt-3">
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quick Suggest Preset Names (₱0 start):</span>
                                 <div className="flex flex-wrap gap-1.5">
@@ -216,6 +251,58 @@ export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDelete
                                 className="w-full bg-primary text-primary-foreground hover:bg-primary/95 font-bold rounded-xl shadow-lg shadow-primary/10"
                             >
                                 Create Wallet
+                            </Button>
+                        </div>
+                    </motion.form>
+                )}
+            </AnimatePresence>
+
+            {/* Set Category Budget Form */}
+            <AnimatePresence>
+                {showBudgetForm && (
+                    <motion.form
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        onSubmit={handleAddBudgetSubmit}
+                        className="overflow-hidden"
+                    >
+                        <div className="bg-card/60 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-4 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">Expense Category</label>
+                                    <select
+                                        value={newBudget.category}
+                                        onChange={e => setNewBudget({ ...newBudget, category: e.target.value })}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                                    >
+                                        {EXPENSE_CATEGORIES.filter(c => c.value !== "transfer" && c.value !== "savings_deposit").map(cat => (
+                                            <option key={cat.value} value={cat.value}>
+                                                {cat.emoji} {cat.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">Monthly Limit Amount (₱)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="1"
+                                        placeholder="5000.00"
+                                        value={newBudget.limit_amount}
+                                        onChange={e => setNewBudget({ ...newBudget, limit_amount: e.target.value })}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <Button
+                                type="submit"
+                                className="w-full bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-500/20"
+                            >
+                                Save Budget Limit
                             </Button>
                         </div>
                     </motion.form>
@@ -265,6 +352,51 @@ export function SettingsSection({ wallets, onAddWallet, onUpdateWallet, onDelete
                         )
                     })}
                 </div>
+            </div>
+
+            {/* Category Budgets List */}
+            <div className="space-y-3">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Monthly Category Budgets ({budgets.length})</h4>
+                {budgets.length === 0 ? (
+                    <div className="bg-card/40 border border-border/20 rounded-2xl flex flex-col items-center justify-center py-6 text-center">
+                        <Star className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                        <p className="text-xs font-bold text-muted-foreground">No budgets configured</p>
+                        <p className="text-[10px] text-muted-foreground/60">Set spending limits on Food, Shopping, etc. to get overspend alerts</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {budgets.map(budget => {
+                            const catInfo = EXPENSE_CATEGORIES.find(c => c.value === budget.category)
+                            return (
+                                <div
+                                    key={budget.id}
+                                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex items-center justify-between shadow-md"
+                                >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <span className="text-lg p-1.5 bg-muted rounded-xl shrink-0">{catInfo?.emoji || "📦"}</span>
+                                        <div className="truncate">
+                                            <span className="font-bold text-xs block uppercase tracking-wider text-muted-foreground">Budget</span>
+                                            <span className="font-black text-sm uppercase tracking-tight">{catInfo?.label || budget.category}</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right flex items-center gap-3">
+                                        <div>
+                                            <span className="font-black text-sm block tabular-nums text-emerald-500">{formatPeso(budget.limit_amount)}</span>
+                                            <span className="text-[9px] text-muted-foreground font-bold">Limit / month</span>
+                                        </div>
+                                        <button
+                                            onClick={() => onDeleteBudget(budget.id)}
+                                            className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                                            title="Delete budget"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </div>
 
             {/* Quick-Add Presets Panel */}

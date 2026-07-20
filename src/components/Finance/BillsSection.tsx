@@ -1,15 +1,16 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Check, Trash2, Receipt, X, Edit2 } from "lucide-react"
+import { Plus, Check, Trash2, Receipt, X, Edit2, AlertTriangle, Clock, CalendarDays } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { BillTemplate, Wallet } from "./types"
+import type { BillTemplate, Wallet, FinanceEntry } from "./types"
 import { EXPENSE_CATEGORIES } from "./types"
 
 interface BillsSectionProps {
     bills: BillTemplate[]
     wallets: Wallet[]
+    entries: FinanceEntry[]
     onAddBill: (bill: Omit<BillTemplate, "id" | "created_at">) => void
     onUpdateBill: (bill: BillTemplate) => void
     onDeleteBill: (id: string) => void
@@ -20,7 +21,7 @@ function formatPeso(amount: number): string {
     return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDeleteBill, onPayBill }: BillsSectionProps) {
+export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill, onDeleteBill, onPayBill }: BillsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [payModalBill, setPayModalBill] = useState<BillTemplate | null>(null)
     const [selectedWalletId, setSelectedWalletId] = useState(wallets[0]?.id || "")
@@ -31,13 +32,63 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
         label: "",
         category: "bills",
         amount: "",
+        due_day: "",
     })
 
     const [newBill, setNewBill] = useState({
         label: "",
         category: "bills",
         amount: "",
+        due_day: "",
     })
+
+    // Get current calendar info
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+    const currentDay = now.getDate()
+    const currentMonthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+
+    // Calculate bill status based on transaction history of the current month
+    const getBillStatus = (bill: BillTemplate) => {
+        // Find if paid this month
+        const hasPaid = entries.some(e => {
+            const matchesMonth = e.date.startsWith(currentMonthPrefix)
+            const matchesType = e.type === "expense"
+            // Matches description or label
+            const matchesLabel = e.description.toLowerCase().includes(bill.label.toLowerCase())
+            const matchesCategory = e.category === bill.category && e.amount === bill.amount
+            return matchesMonth && matchesType && (matchesLabel || matchesCategory)
+        })
+
+        if (hasPaid) {
+            return { status: "paid" as const, daysLeft: 0 }
+        }
+
+        if (!bill.due_day) {
+            return { status: "unpaid" as const, daysLeft: null }
+        }
+
+        const daysLeft = bill.due_day - currentDay
+
+        if (daysLeft < 0) {
+            return { status: "overdue" as const, daysLeft }
+        } else if (daysLeft <= 5) {
+            return { status: "soon" as const, daysLeft }
+        } else {
+            return { status: "incoming" as const, daysLeft }
+        }
+    }
+
+    const billStatuses = useMemo(() => {
+        return bills.map(bill => ({
+            bill,
+            info: getBillStatus(bill)
+        }))
+    }, [bills, entries, currentMonthPrefix, currentDay])
+
+    const unpaidCount = billStatuses.filter(b => b.info.status !== "paid").length
+    const overdueCount = billStatuses.filter(b => b.info.status === "overdue").length
 
     const handleAddSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -47,12 +98,14 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
             label: newBill.label,
             category: newBill.category,
             amount: parseFloat(newBill.amount),
+            due_day: newBill.due_day ? parseInt(newBill.due_day) : null,
         })
 
         setNewBill({
             label: "",
             category: "bills",
             amount: "",
+            due_day: "",
         })
         setShowAddForm(false)
     }
@@ -66,6 +119,7 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
             label: editForm.label,
             category: editForm.category,
             amount: parseFloat(editForm.amount),
+            due_day: editForm.due_day ? parseInt(editForm.due_day) : null,
         })
         setEditModalBill(null)
     }
@@ -95,7 +149,14 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Saved Bills</h3>
                         <p className="text-xs font-bold text-muted-foreground">
-                            Quickly log recurring bills as expenses
+                            {unpaidCount === 0 ? (
+                                <span className="text-emerald-500">🎉 All bills paid for this month!</span>
+                            ) : (
+                                <span>
+                                    Unpaid: <span className="text-amber-500 font-black">{unpaidCount} remaining</span>
+                                    {overdueCount > 0 && <span className="text-rose-500 ml-2 font-black">({overdueCount} overdue!)</span>}
+                                </span>
+                            )}
                         </p>
                     </div>
                 </div>
@@ -114,6 +175,17 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                 </Button>
             </div>
 
+            {/* Overdue alert banner */}
+            {overdueCount > 0 && (
+                <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl p-4 flex items-center gap-3 text-xs font-semibold shadow-sm">
+                    <AlertTriangle className="h-5 w-5 shrink-0 animate-bounce" />
+                    <div>
+                        <span className="font-black uppercase tracking-wider block">Attention</span>
+                        <span>You have {overdueCount} bill{overdueCount > 1 ? "s" : ""} past due! Please pay them to avoid penalty charges.</span>
+                    </div>
+                </div>
+            )}
+
             {/* Add Bill Form */}
             <AnimatePresence>
                 {showAddForm && (
@@ -126,12 +198,12 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                         className="overflow-hidden"
                     >
                         <div className="bg-card/60 backdrop-blur-sm border border-amber-500/20 rounded-2xl p-4 space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div className="sm:col-span-2">
                                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Bill Name</label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. Internet PLDT"
+                                        placeholder="e.g. Internet PLDT, Meralco"
                                         value={newBill.label}
                                         onChange={e => setNewBill({ ...newBill, label: e.target.value })}
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
@@ -153,7 +225,7 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount (₱)</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Standard Amount (₱)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -163,6 +235,20 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                                         onChange={e => setNewBill({ ...newBill, amount: e.target.value })}
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                                         required
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Due Day of Month (1-31, optional)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="31"
+                                        placeholder="e.g. 15 for 15th of every month"
+                                        value={newBill.due_day}
+                                        onChange={e => setNewBill({ ...newBill, due_day: e.target.value })}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                                     />
                                 </div>
                             </div>
@@ -186,7 +272,7 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                         <p className="text-xs text-muted-foreground/60 mt-1">Create bill templates to pay them easily</p>
                     </div>
                 ) : (
-                    bills.map((bill, i) => {
+                    billStatuses.map(({ bill, info }, i) => {
                         const catInfo = EXPENSE_CATEGORIES.find(c => c.value === bill.category)
 
                         return (
@@ -195,55 +281,95 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.05 }}
-                                className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex items-center justify-between hover:border-amber-500/30 transition-all group"
+                                className={cn(
+                                    "bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col justify-between hover:border-amber-500/30 transition-all group gap-3 shadow-md",
+                                    info.status === "overdue" && "border-l-4 border-l-rose-500 border-rose-500/20",
+                                    info.status === "soon" && "border-l-4 border-l-amber-500 border-amber-500/20",
+                                    info.status === "paid" && "border-l-4 border-l-emerald-500 border-emerald-500/20 opacity-75"
+                                )}
                             >
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xl p-2 bg-muted rounded-xl">{catInfo?.emoji || "📱"}</span>
-                                    <div>
-                                        <p className="text-sm font-black uppercase tracking-tight">{bill.label}</p>
-                                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground font-medium">
-                                            <span className="px-1.5 py-0.5 bg-muted rounded-md text-[10px] font-bold uppercase">
-                                                {catInfo?.label || bill.category}
-                                            </span>
-                                            <span>·</span>
-                                            <span className="font-bold tabular-nums text-foreground/80">{formatPeso(bill.amount)}</span>
+                                <div className="flex items-start justify-between w-full">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xl p-2 bg-muted rounded-xl">{catInfo?.emoji || "📱"}</span>
+                                        <div>
+                                            <p className="text-sm font-black uppercase tracking-tight text-foreground">{bill.label}</p>
+                                            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground font-semibold">
+                                                <span className="px-1.5 py-0.5 bg-muted rounded-md text-[9px] font-black uppercase">
+                                                    {catInfo?.label || bill.category}
+                                                </span>
+                                                <span>·</span>
+                                                <span className="font-bold tabular-nums text-foreground/80">{formatPeso(bill.amount)}</span>
+                                            </div>
                                         </div>
                                     </div>
+                                    <div className="flex flex-col items-end gap-1">
+                                        {/* Status Badge */}
+                                        {info.status === "paid" && (
+                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-500 flex items-center gap-0.5">
+                                                <Check className="h-2.5 w-2.5" /> PAID
+                                            </span>
+                                        )}
+                                        {info.status === "overdue" && (
+                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-500/10 text-rose-500 flex items-center gap-0.5">
+                                                <AlertTriangle className="h-2.5 w-2.5" /> OVERDUE
+                                            </span>
+                                        )}
+                                        {info.status === "soon" && (
+                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-500/10 text-amber-500 flex items-center gap-0.5">
+                                                <Clock className="h-2.5 w-2.5" /> DUE SOON
+                                            </span>
+                                        )}
+                                        {info.status === "incoming" && (
+                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-muted text-muted-foreground flex items-center gap-0.5">
+                                                <CalendarDays className="h-2.5 w-2.5" /> INCOMING
+                                            </span>
+                                        )}
+                                        {bill.due_day && (
+                                            <span className="text-[10px] text-muted-foreground font-bold">
+                                                Due on Day {bill.due_day}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        onClick={() => {
-                                            setPayModalBill(bill)
-                                            setPayAmount(bill.amount.toString())
-                                            setSelectedWalletId(wallets[0]?.id || "")
-                                        }}
-                                        size="sm"
-                                        className="h-8 rounded-lg text-xs font-black uppercase bg-emerald-500 hover:bg-emerald-600 text-white gap-1"
-                                    >
-                                        <Check className="h-3 w-3" />
-                                        Pay
-                                    </Button>
-                                    <button
-                                        onClick={() => {
-                                            setEditModalBill(bill)
-                                            setEditForm({
-                                                label: bill.label,
-                                                category: bill.category,
-                                                amount: bill.amount.toString(),
-                                            })
-                                        }}
-                                        className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10 transition-all opacity-0 group-hover:opacity-100"
-                                        title="Edit bill template"
-                                    >
-                                        <Edit2 className="h-4 w-4" />
-                                    </button>
+                                <div className="flex items-center justify-between border-t border-border/10 pt-3 mt-1 w-full">
                                     <button
                                         onClick={() => onDeleteBill(bill.id)}
-                                        className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                        className="p-1 rounded-md text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
                                         title="Remove bill template"
                                     >
-                                        <Trash2 className="h-4 w-4" />
+                                        <Trash2 className="h-3.5 w-3.5" />
                                     </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => {
+                                                setEditModalBill(bill)
+                                                setEditForm({
+                                                    label: bill.label,
+                                                    category: bill.category,
+                                                    amount: bill.amount.toString(),
+                                                    due_day: bill.due_day ? bill.due_day.toString() : "",
+                                                })
+                                            }}
+                                            className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10 transition-all"
+                                            title="Edit bill template"
+                                        >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                        </button>
+                                        {info.status !== "paid" && (
+                                            <Button
+                                                onClick={() => {
+                                                    setPayModalBill(bill)
+                                                    setPayAmount(bill.amount.toString())
+                                                    setSelectedWalletId(wallets[0]?.id || "")
+                                                }}
+                                                size="sm"
+                                                className="h-8 rounded-xl text-xs font-black uppercase bg-emerald-500 hover:bg-emerald-600 text-white gap-1"
+                                            >
+                                                <Check className="h-3 w-3" />
+                                                Pay
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             </motion.div>
                         )
@@ -350,6 +476,17 @@ export function BillsSection({ bills, wallets, onAddBill, onUpdateBill, onDelete
                             onChange={e => setEditForm({ ...editForm, amount: e.target.value })}
                             className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                             required
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Due Day of Month (1-31, optional)</label>
+                        <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            value={editForm.due_day}
+                            onChange={e => setEditForm({ ...editForm, due_day: e.target.value })}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         />
                     </div>
 

@@ -41,6 +41,7 @@ export interface BillTemplate {
     label: string
     category: string
     amount: number
+    due_day: number | null
     created_at: string
 }
 
@@ -65,6 +66,13 @@ export interface SavingsFund {
     current_amount: number
     target_date: string | null
     notes: string | null
+    created_at: string
+}
+
+export interface CategoryBudget {
+    id: string
+    category: string
+    limit_amount: number
     created_at: string
 }
 

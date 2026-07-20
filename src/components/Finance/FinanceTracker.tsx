@@ -27,7 +27,7 @@ import { HistorySection } from "./HistorySection"
 import { WishlistSection } from "./WishlistSection"
 import { SettingsSection } from "./SettingsSection"
 import { FundsSection } from "./FundsSection"
-import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund } from "./types"
+import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, CategoryBudget } from "./types"
 
 type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "funds" | "wishlist" | "reports" | "settings"
 
@@ -53,8 +53,11 @@ export default function FinanceTracker() {
     const [bills, setBills] = useState<BillTemplate[]>([])
     const [wishlist, setWishlist] = useState<WishlistItem[]>([])
     const [funds, setFunds] = useState<SavingsFund[]>([])
+    const [budgets, setBudgets] = useState<CategoryBudget[]>([])
+    
     const [useLocalStorageWishlist, setUseLocalStorageWishlist] = useState(false)
     const [useLocalStorageFunds, setUseLocalStorageFunds] = useState(false)
+    const [useLocalStorageBudgets, setUseLocalStorageBudgets] = useState(false)
 
     // Transfer modal
     const [showTransfer, setShowTransfer] = useState(false)
@@ -130,6 +133,31 @@ export default function FinanceTracker() {
                     setFunds(JSON.parse(localData))
                 }
             }
+
+            // Category Budgets fetch
+            let budgetsData: CategoryBudget[] | null = null
+            let hasBudgetsTable = false
+            try {
+                const { data, error } = await supabase.from("category_budgets").select("*").order("created_at")
+                if (error) throw error
+                if (data) {
+                    budgetsData = data
+                    hasBudgetsTable = true
+                }
+            } catch (err) {
+                console.warn("Category budgets table not found or error, falling back to LocalStorage:", err)
+            }
+
+            if (hasBudgetsTable && budgetsData) {
+                setBudgets(budgetsData)
+                setUseLocalStorageBudgets(false)
+            } else {
+                setUseLocalStorageBudgets(true)
+                const localData = localStorage.getItem("category_budgets")
+                if (localData) {
+                    setBudgets(JSON.parse(localData))
+                }
+            }
         } catch (e) {
             console.error("Error fetching finance data:", e)
         } finally {
@@ -142,7 +170,7 @@ export default function FinanceTracker() {
     }, [fetchAll])
 
     // Add finance entry (income or expense)
-    const handleAddEntry = async (entry: Omit<FinanceEntry, "id" | "created_at font-medium">) => {
+    const handleAddEntry = async (entry: Omit<FinanceEntry, "id" | "created_at">) => {
         try {
             const { data, error } = await supabase
                 .from("finance_entries")
@@ -207,11 +235,8 @@ export default function FinanceTracker() {
 
             // Also check if this deletion affects any savings goal balance
             if (entry.category === "savings_deposit" || entry.category === "savings_withdraw") {
-                // If savings deposit deleted, we decrease savings goal balance.
-                // If savings withdrawal deleted, we increase savings goal balance.
-                // Let's locate the savings goal matching the description "Deposit to [Goal Name]"
                 const desc = entry.description
-                const isDeposit = entry.category === "savings_deposit font-medium"
+                const isDeposit = entry.category === "savings_deposit"
                 const matchedFund = funds.find(f => desc.includes(f.label))
                 if (matchedFund) {
                     const newCurrentAmount = isDeposit
@@ -328,7 +353,7 @@ export default function FinanceTracker() {
     }
 
     // Add bill template
-    const handleAddBill = async (bill: Omit<BillTemplate, "id" | "created_at font-medium">) => {
+    const handleAddBill = async (bill: Omit<BillTemplate, "id" | "created_at">) => {
         try {
             const { data, error } = await supabase
                 .from("bill_templates")
@@ -367,6 +392,7 @@ export default function FinanceTracker() {
                     label: bill.label,
                     category: bill.category,
                     amount: bill.amount,
+                    due_day: bill.due_day,
                 })
                 .eq("id", bill.id)
                 .select()
@@ -385,7 +411,7 @@ export default function FinanceTracker() {
             type: "expense",
             date: new Date().toISOString().split("T")[0],
             category: bill.category,
-            description: `Paid ${bill.label}`,
+            description: `Paid Bill: ${bill.label}`,
             amount: bill.amount,
             wallet_id: walletId,
         })
@@ -610,7 +636,7 @@ export default function FinanceTracker() {
     }
 
     // Add Savings Fund
-    const handleAddFund = async (fund: Omit<SavingsFund, "id" | "created_at font-medium font-bold font-sans">) => {
+    const handleAddFund = async (fund: Omit<SavingsFund, "id" | "created_at">) => {
         const tempId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)
         const newFund: SavingsFund = {
             ...fund,
@@ -651,7 +677,6 @@ export default function FinanceTracker() {
             ? fund.current_amount + amount
             : fund.current_amount - amount
 
-        // Create transaction history entry (deposit is expense, withdraw is income)
         await handleAddEntry({
             type: type === "deposit" ? "expense" : "income",
             date: new Date().toISOString().split("T")[0],
@@ -705,6 +730,81 @@ export default function FinanceTracker() {
             } catch (e) {
                 console.error("Error deleting savings fund:", e)
                 setFunds(prev => prev.filter(f => f.id !== id))
+            }
+        }
+    }
+
+    // Add Category Budget Limit
+    const handleAddBudget = async (budget: Omit<CategoryBudget, "id" | "created_at font-medium font-bold text-xs uppercase">) => {
+        const tempId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)
+        const newBudget: CategoryBudget = {
+            ...budget,
+            id: tempId,
+            created_at: new Date().toISOString()
+        }
+
+        if (useLocalStorageBudgets) {
+            // Overwrite existing category budget if it exists, otherwise append
+            const existingIdx = budgets.findIndex(b => b.category === budget.category)
+            let updated: CategoryBudget[] = []
+            if (existingIdx !== -1) {
+                updated = budgets.map((b, i) => (i === existingIdx ? { ...b, limit_amount: budget.limit_amount } : b))
+            } else {
+                updated = [...budgets, newBudget]
+            }
+            setBudgets(updated)
+            localStorage.setItem("category_budgets", JSON.stringify(updated))
+        } else {
+            try {
+                const existing = budgets.find(b => b.category === budget.category)
+                if (existing) {
+                    const { data, error } = await supabase
+                        .from("category_budgets")
+                        .update({ limit_amount: budget.limit_amount })
+                        .eq("id", existing.id)
+                        .select()
+                        .single()
+
+                    if (error) throw error
+                    if (data) setBudgets(prev => prev.map(b => (b.id === existing.id ? data : b)))
+                } else {
+                    const { data, error } = await supabase
+                        .from("category_budgets")
+                        .insert(budget)
+                        .select()
+                        .single()
+
+                    if (error) throw error
+                    if (data) setBudgets(prev => [...prev, data])
+                }
+            } catch (e) {
+                console.warn("Adding category budget to database failed, switching to LocalStorage:", e)
+                setUseLocalStorageBudgets(true)
+                const updated = [...budgets, newBudget]
+                setBudgets(updated)
+                localStorage.setItem("category_budgets", JSON.stringify(updated))
+            }
+        }
+    }
+
+    // Delete Category Budget Limit
+    const handleDeleteBudget = async (id: string) => {
+        if (useLocalStorageBudgets) {
+            const updated = budgets.filter(b => b.id !== id)
+            setBudgets(updated)
+            localStorage.setItem("category_budgets", JSON.stringify(updated))
+        } else {
+            try {
+                const { error } = await supabase
+                    .from("category_budgets")
+                    .delete()
+                    .eq("id", id)
+
+                if (error) throw error
+                setBudgets(prev => prev.filter(b => b.id !== id))
+            } catch (e) {
+                console.error("Error deleting category budget from database:", e)
+                setBudgets(prev => prev.filter(b => b.id !== id))
             }
         }
     }
@@ -802,6 +902,7 @@ export default function FinanceTracker() {
                                 <ExpenseSection
                                     entries={entries}
                                     wallets={wallets}
+                                    budgets={budgets}
                                     onAdd={handleAddEntry}
                                     onDelete={handleDeleteEntry}
                                 />
@@ -817,6 +918,7 @@ export default function FinanceTracker() {
                                 <BillsSection
                                     bills={bills}
                                     wallets={wallets}
+                                    entries={entries}
                                     onAddBill={handleAddBill}
                                     onUpdateBill={handleUpdateBill}
                                     onDeleteBill={handleDeleteBill}
@@ -862,9 +964,12 @@ export default function FinanceTracker() {
                             {activeTab === "settings" && (
                                 <SettingsSection
                                     wallets={wallets}
+                                    budgets={budgets}
                                     onAddWallet={handleAddWallet}
                                     onUpdateWallet={handleUpdateWallet}
                                     onDeleteWallet={handleDeleteWallet}
+                                    onAddBudget={handleAddBudget}
+                                    onDeleteBudget={handleDeleteBudget}
                                 />
                             )}
                         </motion.div>

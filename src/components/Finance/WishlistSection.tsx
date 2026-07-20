@@ -275,7 +275,9 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
 
                 {/* Purchased Items */}
                 <div className="space-y-3">
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Bought / Completed ({purchasedItems.length})</h4>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                        Bought / Completed ({purchasedItems.length}) — Spent: <span className="text-emerald-500">{formatPeso(totalActualPurchased)}</span>
+                    </h4>
                     {purchasedItems.length === 0 ? (
                         <div className="bg-card/40 border border-border/20 rounded-2xl flex flex-col items-center justify-center py-10 text-center">
                             <Check className="h-8 w-8 text-muted-foreground/20 mb-2" />

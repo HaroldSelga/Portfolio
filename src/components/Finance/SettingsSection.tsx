@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, Check } from "lucide-react"
+import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, Check, X } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"

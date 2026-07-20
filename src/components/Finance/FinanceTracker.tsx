@@ -62,16 +62,12 @@ export default function FinanceTracker() {
     // Fetch all data
     const fetchAll = useCallback(async () => {
         try {
-            const [walletsRes, entriesRes, debtsRes, paymentsRes, billsRes, wishlistRes] = await Promise.all([
+            const [walletsRes, entriesRes, debtsRes, paymentsRes, billsRes] = await Promise.all([
                 supabase.from("wallets").select("*").order("created_at"),
                 supabase.from("finance_entries").select("*").order("date", { ascending: false }),
                 supabase.from("debts").select("*").order("created_at"),
                 supabase.from("debt_payments").select("*").order("date", { ascending: false }),
                 supabase.from("bill_templates").select("*").order("created_at"),
-                supabase.from("wishlist_items").select("*").order("created_at").catch(err => {
-                    console.warn("Wishlist table not found or error, falling back to LocalStorage:", err)
-                    return { data: null, error: err }
-                })
             ])
 
             if (walletsRes.data) setWallets(walletsRes.data)
@@ -80,8 +76,22 @@ export default function FinanceTracker() {
             if (paymentsRes.data) setPayments(paymentsRes.data)
             if (billsRes.data) setBills(billsRes.data)
 
-            if (wishlistRes && wishlistRes.data) {
-                setWishlist(wishlistRes.data)
+            let wishlistData: WishlistItem[] | null = null
+            let hasWishlistTable = false
+
+            try {
+                const { data, error } = await supabase.from("wishlist_items").select("*").order("created_at")
+                if (error) throw error
+                if (data) {
+                    wishlistData = data
+                    hasWishlistTable = true
+                }
+            } catch (err) {
+                console.warn("Wishlist table not found or error, falling back to LocalStorage:", err)
+            }
+
+            if (hasWishlistTable && wishlistData) {
+                setWishlist(wishlistData)
                 setUseLocalStorageWishlist(false)
             } else {
                 setUseLocalStorageWishlist(true)

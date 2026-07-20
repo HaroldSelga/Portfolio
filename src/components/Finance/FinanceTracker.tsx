@@ -406,13 +406,18 @@ export default function FinanceTracker() {
         }
     }
 
-    // Pay bill template
+    // Pay bill template (bill.amount is overridden by BillsSection with the user-entered payAmount including penalty)
     const handlePayBill = async (bill: BillTemplate, walletId: string) => {
+        const hasPenalty = bill.penalty_amount && bill.amount > (bills.find(b => b.id === bill.id)?.amount || 0)
+        const description = hasPenalty
+            ? `Paid Bill: ${bill.label} (includes late penalty)`
+            : `Paid Bill: ${bill.label}`
+
         await handleAddEntry({
             type: "expense",
             date: new Date().toISOString().split("T")[0],
             category: bill.category,
-            description: `Paid Bill: ${bill.label}`,
+            description,
             amount: bill.amount,
             wallet_id: walletId,
         })

@@ -385,7 +385,11 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                                             <span className="text-[9px] text-muted-foreground font-bold">Limit / month</span>
                                         </div>
                                         <button
-                                            onClick={() => onDeleteBudget(budget.id)}
+                                            onClick={() => {
+                                                if (confirm(`Are you sure you want to delete the budget limit for "${catInfo?.label || budget.category}"?`)) {
+                                                    onDeleteBudget(budget.id)
+                                                }
+                                            }}
                                             className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
                                             title="Delete budget"
                                         >

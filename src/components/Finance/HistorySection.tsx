@@ -19,6 +19,7 @@ export function HistorySection({ entries, wallets, onDelete }: HistorySectionPro
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedWallet, setSelectedWallet] = useState("all")
     const [selectedType, setSelectedType] = useState("all") // "all" | "income" | "expense"
+    const [visibleCount, setVisibleCount] = useState(25)
 
     // Filtered and sorted entries
     const filteredEntries = useMemo(() => {
@@ -34,6 +35,15 @@ export function HistorySection({ entries, wallets, onDelete }: HistorySectionPro
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     }, [entries, searchQuery, selectedWallet, selectedType])
+
+    // Reset pagination when filter settings change
+    useMemo(() => {
+        setVisibleCount(25)
+    }, [searchQuery, selectedWallet, selectedType])
+
+    const visibleEntries = useMemo(() => {
+        return filteredEntries.slice(0, visibleCount)
+    }, [filteredEntries, visibleCount])
 
     return (
         <div className="space-y-4">
@@ -89,7 +99,7 @@ export function HistorySection({ entries, wallets, onDelete }: HistorySectionPro
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {filteredEntries.map((entry, i) => {
+                        {visibleEntries.map((entry, i) => {
                             const isIncome = entry.type === "income"
                             const wallet = wallets.find(w => w.id === entry.wallet_id)
                             
@@ -162,6 +172,17 @@ export function HistorySection({ entries, wallets, onDelete }: HistorySectionPro
                     </div>
                 )}
             </div>
+
+            {filteredEntries.length > visibleCount && (
+                <div className="flex justify-center pt-2">
+                    <button
+                        onClick={() => setVisibleCount(prev => prev + 25)}
+                        className="px-4 py-2 bg-card/60 hover:bg-card border border-border/30 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all shadow-sm"
+                    >
+                        Load More Transactions ({filteredEntries.length - visibleCount} remaining)
+                    </button>
+                </div>
+            )}
         </div>
     )
 }

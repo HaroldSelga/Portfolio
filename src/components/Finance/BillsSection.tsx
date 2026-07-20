@@ -366,7 +366,11 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                 </div>
                                 <div className="flex items-center justify-between border-t border-border/10 pt-3 mt-1 w-full">
                                     <button
-                                        onClick={() => onDeleteBill(bill.id)}
+                                        onClick={() => {
+                                            if (confirm(`Are you sure you want to delete the bill template "${bill.label}"?`)) {
+                                                onDeleteBill(bill.id)
+                                            }
+                                        }}
                                         className="p-1 rounded-md text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
                                         title="Remove bill template"
                                     >

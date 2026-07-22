@@ -2,9 +2,11 @@ import { Award } from "lucide-react"
 import { Badge } from "../ui/Badge"
 import { LocationLink } from "../ui/LocationLink"
 import { motion } from "framer-motion"
-import { educationData } from "../../data/education"
+import { usePortfolio } from "../../context/PortfolioContext"
 
 export function Education() {
+    const { education } = usePortfolio()
+
     return (
         <section id="education" className="w-full py-12 md:py-24 lg:py-32 bg-muted/20">
             <div className="container px-4 md:px-6 mx-auto">
@@ -15,19 +17,19 @@ export function Education() {
                     className="flex flex-col items-center justify-center space-y-4 text-center mb-12"
                 >
                     <div className="space-y-2">
-                        <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl inline-block bg-gradient-to-r from-primary to-primary/60 text-transparent bg-clip-text">
+                        <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl inline-block bg-gradient-to-r from-primary to-primary/60 text-transparent bg-clip-text uppercase">
                             Educational Background
                         </h2>
                     </div>
                 </motion.div>
 
-                <div className="max-w-3xl mx-auto space-y-12">
+                <div className="max-w-4xl mx-auto space-y-12">
                     {/* Education Timeline */}
                     <div className="relative pl-8 md:pl-0 space-y-6">
                         {/* Timeline line for desktop */}
                         <div className="hidden md:block absolute left-[21px] top-8 bottom-8 w-0.5 bg-border z-0"></div>
 
-                        {educationData.map((item, index) => (
+                        {education.map((item, index) => (
                             <motion.div
                                 key={index}
                                 initial={{ opacity: 0, x: -50 }}

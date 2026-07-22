@@ -2,10 +2,12 @@ import { ExternalLink, Github, ChevronLeft, ChevronRight, Maximize2, X } from "l
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useEffect } from "react"
 import { Badge } from "../ui/Badge"
-import { projects, type ProjectItem } from "../../data/projects"
+import type { ProjectItem } from "../../data/projects"
 import { Modal } from "../ui/Modal"
+import { usePortfolio } from "../../context/PortfolioContext"
 
 export function Projects() {
+    const { projects } = usePortfolio()
     const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null)
 
     return (

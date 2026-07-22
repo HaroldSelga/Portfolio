@@ -52,9 +52,9 @@ export function MobileBottomNav() {
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: 100, opacity: 0 }}
                     transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
+                    className="fixed bottom-0 left-0 right-0 z-50 md:hidden pb-[env(safe-area-inset-bottom,0px)]"
                 >
-                    <div className="mx-3 mb-3 px-2 py-2 rounded-2xl bg-background/80 backdrop-blur-xl border border-border/50 shadow-2xl flex items-center justify-around gap-1">
+                    <div className="mx-3 mb-3 px-2 py-2 rounded-2xl bg-background/90 backdrop-blur-xl border border-border/60 shadow-2xl flex items-center justify-around gap-1">
                         {navItems.map((item) => {
                             const isActive = activeSection === item.href.replace("#", "")
                             return (

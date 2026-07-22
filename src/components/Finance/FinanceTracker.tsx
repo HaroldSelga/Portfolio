@@ -12,6 +12,8 @@ import {
     Target,
     Settings,
     PiggyBank,
+    Eye,
+    EyeOff
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -46,6 +48,9 @@ const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[
 export default function FinanceTracker() {
     const [activeTab, setActiveTab] = useState<Tab>("income")
     const [isLoading, setIsLoading] = useState(true)
+    const [showAmounts, setShowAmounts] = useState(() => {
+        return localStorage.getItem("finance_show_amounts") !== "false"
+    })
     const [wallets, setWallets] = useState<Wallet[]>([])
     const [entries, setEntries] = useState<FinanceEntry[]>([])
     const [debts, setDebts] = useState<Debt[]>([])
@@ -58,6 +63,14 @@ export default function FinanceTracker() {
     const [useLocalStorageWishlist, setUseLocalStorageWishlist] = useState(false)
     const [useLocalStorageFunds, setUseLocalStorageFunds] = useState(false)
     const [useLocalStorageBudgets, setUseLocalStorageBudgets] = useState(false)
+
+    const togglePrivacyMode = () => {
+        setShowAmounts(prev => {
+            const next = !prev
+            localStorage.setItem("finance_show_amounts", String(next))
+            return next
+        })
+    }
 
     // Transfer modal
     const [showTransfer, setShowTransfer] = useState(false)
@@ -836,14 +849,30 @@ export default function FinanceTracker() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="space-y-2"
+                    className="flex items-start justify-between gap-4"
                 >
-                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase">
-                        Finance <span className="text-primary">Tracker</span>
-                    </h1>
-                    <p className="text-muted-foreground font-medium max-w-xl">
-                        Track your salary, expenses, and debts in one place.
-                    </p>
+                    <div className="space-y-2">
+                        <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase">
+                            Finance <span className="text-primary">Tracker</span>
+                        </h1>
+                        <p className="text-muted-foreground font-medium max-w-xl">
+                            Track your salary, expenses, and debts in one place.
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={togglePrivacyMode}
+                        className={cn(
+                            "flex items-center gap-2 px-3.5 py-2 rounded-2xl border text-xs font-bold transition-all shadow-sm shrink-0",
+                            showAmounts 
+                                ? "bg-card hover:bg-muted text-muted-foreground border-border/60"
+                                : "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                        )}
+                        title={showAmounts ? "Hide amounts (Privacy Mode)" : "Show amounts"}
+                    >
+                        {showAmounts ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        <span className="hidden sm:inline">{showAmounts ? "Hide Amounts" : "Privacy Mode"}</span>
+                    </button>
                 </motion.div>
 
                 {/* Wallet Cards */}
@@ -852,7 +881,7 @@ export default function FinanceTracker() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.1 }}
                 >
-                    <WalletCards wallets={wallets} onTransfer={() => setShowTransfer(true)} />
+                    <WalletCards wallets={wallets} onTransfer={() => setShowTransfer(true)} showAmounts={showAmounts} />
                 </motion.div>
 
                 {/* Tab Navigation */}

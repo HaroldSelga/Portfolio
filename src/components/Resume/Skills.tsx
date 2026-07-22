@@ -3,9 +3,13 @@ import { Badge } from "../ui/Badge"
 import { motion, AnimatePresence } from "framer-motion"
 import { Layers } from "lucide-react"
 import { allSkills, categoryTitles, filters, type Skill } from "../../data/skills"
+import { usePortfolio } from "../../context/PortfolioContext"
 
 export function Skills() {
+    const { skills: userSkills } = usePortfolio()
     const [activeFilter, setActiveFilter] = useState<string>("All")
+
+    const activeSkillsList = userSkills && userSkills.length > 0 ? userSkills : allSkills
 
     const categoriesToRender = activeFilter === "All"
         ? filters.filter((f: string) => f !== "All")
@@ -54,7 +58,7 @@ export function Skills() {
                 <div className="flex flex-col gap-10 max-w-6xl mx-auto w-full min-h-[300px] items-center">
                     <AnimatePresence mode="popLayout">
                         {categoriesToRender.map((category) => {
-                            const skillsInCat = allSkills.filter((s: Skill) => s.category === category)
+                            const skillsInCat = activeSkillsList.filter((s: Skill) => s.category === category)
                             if (skillsInCat.length === 0) return null
 
                             // Group by subcategory

@@ -181,3 +181,65 @@ export const defaultFamilyMembers: FamilyMember[] = [
     { id: "3", name: "Hanna Mae Selga Alfonso", relationship: "Sister", birthday: "July 02, 1996", contact: "09917753390 or 09362090237" },
     { id: "4", name: "Jhana Claire Eugenio Selga", relationship: "Sister", birthday: "November 08, 2004", contact: "09060964339" },
 ]
+
+// ── Expiration Helpers ──────────────────────────────────────────────────
+
+export interface ExpirationInfo {
+    status: "expired" | "expiring_soon" | "valid" | "no_expiration"
+    daysRemaining: number | null
+    label: string
+}
+
+export function parseExpirationDate(dateStr: string): Date | null {
+    if (!dateStr || dateStr === "—" || dateStr.toLowerCase().includes("no exp") || dateStr.toLowerCase().includes("lifetime")) {
+        return null
+    }
+
+    // Try MM/YY or MM/YYYY format (e.g. 01/32 or 04/29)
+    if (/^\d{1,2}\/\d{2,4}$/.test(dateStr.trim())) {
+        const [month, yearStr] = dateStr.trim().split("/")
+        let year = parseInt(yearStr, 10)
+        if (year < 100) year += 2000
+        const m = parseInt(month, 10) - 1
+        // Set to end of month
+        return new Date(year, m + 1, 0, 23, 59, 59)
+    }
+
+    const parsed = new Date(dateStr)
+    if (!isNaN(parsed.getTime())) {
+        return parsed
+    }
+
+    return null
+}
+
+export function getExpirationInfo(expirationDateStr: string): ExpirationInfo {
+    const expDate = parseExpirationDate(expirationDateStr)
+    if (!expDate) {
+        return { status: "no_expiration", daysRemaining: null, label: "No Expiration" }
+    }
+
+    const now = new Date()
+    const diffMs = expDate.getTime() - now.getTime()
+    const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+
+    if (daysRemaining < 0) {
+        return {
+            status: "expired",
+            daysRemaining,
+            label: `Expired ${Math.abs(daysRemaining)} days ago`
+        }
+    } else if (daysRemaining <= 90) {
+        return {
+            status: "expiring_soon",
+            daysRemaining,
+            label: `Expires in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+        }
+    } else {
+        return {
+            status: "valid",
+            daysRemaining,
+            label: `Valid (${daysRemaining} days remaining)`
+        }
+    }
+}

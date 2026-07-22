@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
-import { X, Save, Loader2 } from "lucide-react"
+import { X, Save, Loader2, Upload, Link as LinkIcon } from "lucide-react"
 import type { ValidID } from "./types"
+import { supabase } from "../../lib/supabase"
 
 interface ValidIDModalProps {
     isOpen: boolean
@@ -22,6 +23,10 @@ export default function ValidIDModal({ isOpen, onClose, onSave, editingId, perso
     const [remarks, setRemarks] = useState("—")
     const [frontLink, setFrontLink] = useState("")
     const [backLink, setBackLink] = useState("")
+    const [frontFile, setFrontFile] = useState<File | null>(null)
+    const [backFile, setBackFile] = useState<File | null>(null)
+    const [frontPreview, setFrontPreview] = useState<string>("")
+    const [backPreview, setBackPreview] = useState<string>("")
     const [isSaving, setIsSaving] = useState(false)
 
     useEffect(() => {
@@ -37,6 +42,10 @@ export default function ValidIDModal({ isOpen, onClose, onSave, editingId, perso
             setRemarks(editingId.remarks)
             setFrontLink(editingId.front_link)
             setBackLink(editingId.back_link)
+            setFrontPreview(editingId.front_link)
+            setBackPreview(editingId.back_link)
+            setFrontFile(null)
+            setBackFile(null)
         } else {
             setName("")
             setPrinted(false)
@@ -49,8 +58,47 @@ export default function ValidIDModal({ isOpen, onClose, onSave, editingId, perso
             setRemarks("—")
             setFrontLink("")
             setBackLink("")
+            setFrontPreview("")
+            setBackPreview("")
+            setFrontFile(null)
+            setBackFile(null)
         }
     }, [editingId, isOpen])
+
+    const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>, side: "front" | "back") => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        const previewUrl = URL.createObjectURL(file)
+        if (side === "front") {
+            setFrontFile(file)
+            setFrontPreview(previewUrl)
+        } else {
+            setBackFile(file)
+            setBackPreview(previewUrl)
+        }
+    }
+
+    const uploadImageFile = async (file: File, sideLabel: string): Promise<string> => {
+        try {
+            const ext = file.name.split(".").pop() || "jpg"
+            const filename = `${personId}/id_${sideLabel}_${Date.now()}.${ext}`
+            const { error: uploadErr } = await supabase.storage.from("requirements").upload(filename, file, { upsert: true })
+            if (!uploadErr) {
+                const { data } = supabase.storage.from("requirements").getPublicUrl(filename)
+                if (data?.publicUrl) return data.publicUrl
+            }
+        } catch (err) {
+            console.warn("Storage upload fallback to data URL:", err)
+        }
+
+        // Fallback to Base64 Data URL if Supabase bucket isn't initialized
+        return new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(file)
+        })
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -58,6 +106,16 @@ export default function ValidIDModal({ isOpen, onClose, onSave, editingId, perso
 
         try {
             setIsSaving(true)
+            let finalFront = frontLink
+            let finalBack = backLink
+
+            if (frontFile) {
+                finalFront = await uploadImageFile(frontFile, "front")
+            }
+            if (backFile) {
+                finalBack = await uploadImageFile(backFile, "back")
+            }
+
             const idData: ValidID = {
                 id: editingId?.id,
                 person_id: personId,
@@ -70,8 +128,8 @@ export default function ValidIDModal({ isOpen, onClose, onSave, editingId, perso
                 user_id: userId.trim() || "—",
                 password: password.trim() || "—",
                 remarks: remarks.trim() || "—",
-                front_link: frontLink.trim(),
-                back_link: backLink.trim()
+                front_link: finalFront.trim(),
+                back_link: finalBack.trim()
             }
             await onSave(idData)
             onClose()
@@ -215,28 +273,92 @@ export default function ValidIDModal({ isOpen, onClose, onSave, editingId, perso
                             />
                         </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Front Scan URL</label>
-                            <input
-                                type="url"
-                                disabled={isSaving}
-                                value={frontLink}
-                                onChange={(e) => setFrontLink(e.target.value)}
-                                placeholder="Google Drive Link for Front Side"
-                                className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60 text-foreground"
-                            />
+                        {/* Front Image Uploader & Link */}
+                        <div className="space-y-1.5 md:col-span-2 border-t border-border/30 pt-3">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                                <span>Front ID Scan</span>
+                                <span className="text-[10px] text-primary lowercase">Image upload or link</span>
+                            </label>
+
+                            <div className="flex flex-col md:flex-row items-center gap-3">
+                                <label className="flex-1 w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-border/60 hover:border-primary rounded-xl cursor-pointer bg-background transition-all">
+                                    <Upload className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-xs font-bold text-muted-foreground">
+                                        {frontFile ? frontFile.name : "Upload Front Image File"}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        disabled={isSaving}
+                                        onChange={(e) => handleImageFileChange(e, "front")}
+                                    />
+                                </label>
+                                {frontPreview && (
+                                    <div className="h-12 w-20 rounded-lg overflow-hidden border border-border/60 relative shrink-0 bg-muted/40 flex items-center justify-center">
+                                        <img src={frontPreview} alt="Front preview" className="w-full h-full object-cover" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="relative">
+                                <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <input
+                                    type="url"
+                                    disabled={isSaving}
+                                    value={frontLink}
+                                    onChange={(e) => {
+                                        setFrontLink(e.target.value)
+                                        if (!frontFile) setFrontPreview(e.target.value)
+                                    }}
+                                    placeholder="Or paste image/Drive URL"
+                                    className="w-full pl-9 pr-4 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-semibold transition-colors disabled:opacity-60 text-foreground"
+                                />
+                            </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Back Scan URL</label>
-                            <input
-                                type="url"
-                                disabled={isSaving}
-                                value={backLink}
-                                onChange={(e) => setBackLink(e.target.value)}
-                                placeholder="Google Drive Link for Back Side"
-                                className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60 text-foreground"
-                            />
+                        {/* Back Image Uploader & Link */}
+                        <div className="space-y-1.5 md:col-span-2 border-t border-border/30 pt-3">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                                <span>Back ID Scan</span>
+                                <span className="text-[10px] text-primary lowercase">Image upload or link</span>
+                            </label>
+
+                            <div className="flex flex-col md:flex-row items-center gap-3">
+                                <label className="flex-1 w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-border/60 hover:border-primary rounded-xl cursor-pointer bg-background transition-all">
+                                    <Upload className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-xs font-bold text-muted-foreground">
+                                        {backFile ? backFile.name : "Upload Back Image File"}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        disabled={isSaving}
+                                        onChange={(e) => handleImageFileChange(e, "back")}
+                                    />
+                                </label>
+                                {backPreview && (
+                                    <div className="h-12 w-20 rounded-lg overflow-hidden border border-border/60 relative shrink-0 bg-muted/40 flex items-center justify-center">
+                                        <img src={backPreview} alt="Back preview" className="w-full h-full object-cover" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="relative">
+                                <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <input
+                                    type="url"
+                                    disabled={isSaving}
+                                    value={backLink}
+                                    onChange={(e) => {
+                                        setBackLink(e.target.value)
+                                        if (!backFile) setBackPreview(e.target.value)
+                                    }}
+                                    placeholder="Or paste image/Drive URL"
+                                    className="w-full pl-9 pr-4 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-semibold transition-colors disabled:opacity-60 text-foreground"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -272,3 +394,4 @@ export default function ValidIDModal({ isOpen, onClose, onSave, editingId, perso
         </div>
     )
 }
+

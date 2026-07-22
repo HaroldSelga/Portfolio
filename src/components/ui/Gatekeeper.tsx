@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { Lock, Unlock, Eye, EyeOff, ArrowLeft } from "lucide-react"
+import { Lock, Unlock, Eye, EyeOff, ArrowLeft, ShieldCheck } from "lucide-react"
 import { Button } from "./Button"
 import { Link } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
@@ -10,9 +10,11 @@ interface GatekeeperProps {
 
 export function Gatekeeper({ children }: GatekeeperProps) {
     const [isUnlocked, setIsUnlocked] = useState(() => {
-        return sessionStorage.getItem("portfolio_unlocked") === "true"
+        return sessionStorage.getItem("portfolio_unlocked") === "true" ||
+            localStorage.getItem("portfolio_unlocked") === "true"
     })
     const [password, setPassword] = useState("")
+    const [rememberDevice, setRememberDevice] = useState(false)
     const [error, setError] = useState("")
     const [showPassword, setShowPassword] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -25,6 +27,9 @@ export function Gatekeeper({ children }: GatekeeperProps) {
         // Simulate a slight delay for verification feel
         setTimeout(() => {
             if (password === "selgaharold") {
+                if (rememberDevice) {
+                    localStorage.setItem("portfolio_unlocked", "true")
+                }
                 sessionStorage.setItem("portfolio_unlocked", "true")
                 setIsUnlocked(true)
             } else {
@@ -43,8 +48,11 @@ export function Gatekeeper({ children }: GatekeeperProps) {
             if (timeoutId) window.clearTimeout(timeoutId)
             timeoutId = window.setTimeout(() => {
                 sessionStorage.removeItem("portfolio_unlocked")
-                setIsUnlocked(false)
-            }, 15 * 60 * 1000) // 15 minutes of inactivity
+                // Only clear lock if not explicitly remembered on device
+                if (localStorage.getItem("portfolio_unlocked") !== "true") {
+                    setIsUnlocked(false)
+                }
+            }, 30 * 60 * 1000) // 30 minutes of inactivity
         }
 
         const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"]
@@ -119,6 +127,21 @@ export function Gatekeeper({ children }: GatekeeperProps) {
                             </button>
                         </div>
 
+                        <div className="flex items-center justify-between px-1">
+                            <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={rememberDevice}
+                                    onChange={(e) => setRememberDevice(e.target.checked)}
+                                    className="h-4 w-4 rounded border-border/60 text-primary focus:ring-primary/20 cursor-pointer"
+                                />
+                                <span className="flex items-center gap-1">
+                                    <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                                    Remember on this device
+                                </span>
+                            </label>
+                        </div>
+
                         <AnimatePresence>
                             {error && (
                                 <motion.p
@@ -155,3 +178,4 @@ export function Gatekeeper({ children }: GatekeeperProps) {
         </div>
     )
 }
+

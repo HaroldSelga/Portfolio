@@ -1,15 +1,18 @@
 import { socialLinks } from "../../data/social"
+import { usePortfolio } from "../../context/PortfolioContext"
 
 export function Footer() {
+    const { footer } = usePortfolio()
+
     return (
         <footer className="w-full border-t py-6 md:py-8 bg-background relative z-10">
             <div className="container px-4 md:px-6 mx-auto flex flex-col items-center justify-between gap-6 md:flex-row">
                 <div className="flex flex-col items-center gap-2 md:items-start">
                     <p className="text-sm font-medium text-foreground/80">
-                        © {new Date().getFullYear()} John Harold Selga.
+                        {footer.copyrightText || `© ${new Date().getFullYear()} John Harold Selga.`}
                     </p>
                     <p className="text-xs text-muted-foreground transition-opacity hover:opacity-80">
-                        Built with React 19, Vite, Tailwind & Framer Motion.
+                        {footer.subheadline || "Built with React 19, Vite, Tailwind & Framer Motion."}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">

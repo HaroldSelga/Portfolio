@@ -6,6 +6,7 @@ import type { Wallet as WalletType } from "./types"
 interface WalletCardsProps {
     wallets: WalletType[]
     onTransfer: () => void
+    showAmounts?: boolean
 }
 
 const WALLET_ICONS: Record<string, React.ElementType> = {
@@ -102,11 +103,12 @@ function getWalletTheme(name: string, icon: string) {
     }
 }
 
-function formatPeso(amount: number): string {
+function formatPeso(amount: number, showAmounts = true): string {
+    if (!showAmounts) return "₱ ••••••"
     return `₱${Math.abs(amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-export function WalletCards({ wallets, onTransfer }: WalletCardsProps) {
+export function WalletCards({ wallets, onTransfer, showAmounts = true }: WalletCardsProps) {
     const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0)
 
     return (
@@ -123,7 +125,7 @@ export function WalletCards({ wallets, onTransfer }: WalletCardsProps) {
                             "text-2xl font-black tabular-nums tracking-tight",
                             totalBalance >= 0 ? "text-emerald-500" : "text-rose-500"
                         )}>
-                            {totalBalance < 0 && "-"}{formatPeso(totalBalance)}
+                            {totalBalance < 0 && showAmounts && "-"}{formatPeso(totalBalance, showAmounts)}
                         </p>
                     </div>
                 </div>
@@ -171,7 +173,7 @@ export function WalletCards({ wallets, onTransfer }: WalletCardsProps) {
                                         "text-lg font-black tabular-nums tracking-tight",
                                         wallet.balance >= 0 ? "text-foreground" : "text-rose-500"
                                     )}>
-                                        {wallet.balance < 0 && "-"}{formatPeso(wallet.balance)}
+                                        {wallet.balance < 0 && showAmounts && "-"}{formatPeso(wallet.balance, showAmounts)}
                                     </p>
                                 </div>
                             </div>
@@ -182,3 +184,4 @@ export function WalletCards({ wallets, onTransfer }: WalletCardsProps) {
         </div>
     )
 }
+

@@ -83,6 +83,11 @@ export function Header() {
                     <div className="flex items-center bg-muted/30 rounded-full px-2 py-1 border border-border/40 hover:border-primary/30 transition-all duration-300 group">
                         <ThemeToggle />
                         <div className="w-[1px] h-4 bg-border/60 mx-1 hidden sm:block" />
+                        <Link to="/resume-settings" className="hidden sm:inline-block">
+                            <Button size="sm" variant="ghost" className="font-bold h-8 rounded-full text-xs text-muted-foreground hover:text-foreground">
+                                Settings
+                            </Button>
+                        </Link>
                         <a href={isPrivate ? "/#contact" : "#contact"} className="ml-1 hidden sm:block">
                             <Button size="sm" className="font-bold h-8 rounded-full shadow-sm transition-all hover:shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2">
                                 <Send className="h-3.5 w-3.5" />

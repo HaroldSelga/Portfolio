@@ -3,9 +3,10 @@ import { useState } from "react"
 import { Badge } from "../ui/Badge"
 import { motion, AnimatePresence } from "framer-motion"
 import { LocationLink } from "../ui/LocationLink"
-import { experiences } from "../../data/experience"
+import { usePortfolio } from "../../context/PortfolioContext"
 
 export function Experience() {
+    const { experiences } = usePortfolio()
     const [activeFilter, setActiveFilter] = useState<string>("ALL")
     const filters = ["ALL", "WORK EXPERIENCE", "OJT", "WORK IMMERSION"]
 

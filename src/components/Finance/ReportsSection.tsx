@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { motion } from "framer-motion"
-import { BarChart3, PieChart, TrendingUp, TrendingDown, Wallet as WalletIcon, Star, ArrowUp, ArrowDown, Minus, Calendar, ChevronLeft, ChevronRight, PiggyBank } from "lucide-react"
+import { BarChart3, PieChart, TrendingUp, TrendingDown, Wallet as WalletIcon, Star, ArrowUp, ArrowDown, Minus, Calendar, ChevronLeft, ChevronRight, PiggyBank, Download } from "lucide-react"
 import { cn } from "../../lib/utils"
 import type { FinanceEntry, Wallet, Debt, SavingsFund, BillTemplate } from "./types"
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "./types"
@@ -35,6 +35,33 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
 
     // Selected month for detailed view (default: current month)
     const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey)
+
+    const downloadCSV = () => {
+        const monthEntries = entries.filter(e => e.date.startsWith(selectedMonthKey))
+        if (monthEntries.length === 0) {
+            alert("No transaction entries found for this month.")
+            return
+        }
+
+        const headers = ["Date", "Type", "Category", "Description", "Amount (PHP)", "Wallet ID"]
+        const rows = monthEntries.map(e => [
+            `"${e.date}"`,
+            `"${e.type}"`,
+            `"${e.category}"`,
+            `"${(e.description || "").replace(/"/g, '""')}"`,
+            e.amount,
+            `"${e.wallet_id}"`
+        ])
+
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n")
+        const encodedUri = encodeURI(csvContent)
+        const link = document.createElement("a")
+        link.setAttribute("href", encodedUri)
+        link.setAttribute("download", `Finance_Report_${selectedMonthKey}.csv`)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
 
     // All unique months sorted descending
     const allMonths = useMemo(() => {
@@ -268,14 +295,24 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
             {/* ═══════════════════════════════════════════ */}
             {/* MONTH SELECTOR */}
             {/* ═══════════════════════════════════════════ */}
-            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3 flex items-center justify-between shadow-sm">
-                <button
-                    onClick={goOlder}
-                    disabled={!canGoOlder}
-                    className="p-2 rounded-xl hover:bg-muted disabled:opacity-20 transition-all"
-                >
-                    <ChevronLeft className="h-4 w-4" />
-                </button>
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3 flex items-center justify-between shadow-sm gap-2">
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={goOlder}
+                        disabled={!canGoOlder}
+                        className="p-2 rounded-xl hover:bg-muted disabled:opacity-20 transition-all"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                        onClick={goNewer}
+                        disabled={!canGoNewer}
+                        className="p-2 rounded-xl hover:bg-muted disabled:opacity-20 transition-all"
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </button>
+                </div>
+
                 <div className="text-center">
                     <div className="flex items-center gap-2 justify-center">
                         <Calendar className="h-4 w-4 text-primary" />
@@ -285,12 +322,14 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         comparing trends vs {getMonthLabel(prevMonthKey)}
                     </p>
                 </div>
+
                 <button
-                    onClick={goNewer}
-                    disabled={!canGoNewer}
-                    className="p-2 rounded-xl hover:bg-muted disabled:opacity-20 transition-all"
+                    onClick={downloadCSV}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-all text-xs font-bold shadow-sm"
+                    title="Export CSV Report"
                 >
-                    <ChevronRight className="h-4 w-4" />
+                    <Download className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Export CSV</span>
                 </button>
             </div>
 

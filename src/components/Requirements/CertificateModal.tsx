@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
-import { X, Save, Loader2 } from "lucide-react"
+import { X, Save, Loader2, Upload, Link as LinkIcon } from "lucide-react"
 import type { Certificate } from "./types"
+import { supabase } from "../../lib/supabase"
 
 interface CertificateModalProps {
     isOpen: boolean
@@ -21,6 +22,8 @@ export default function CertificateModal({ isOpen, onClose, onSave, editingCert,
     const [password, setPassword] = useState("—")
     const [remarks, setRemarks] = useState("—")
     const [link, setLink] = useState("")
+    const [certFile, setCertFile] = useState<File | null>(null)
+    const [previewUrl, setPreviewUrl] = useState<string>("")
     const [isSaving, setIsSaving] = useState(false)
 
     useEffect(() => {
@@ -35,6 +38,8 @@ export default function CertificateModal({ isOpen, onClose, onSave, editingCert,
             setPassword(editingCert.password)
             setRemarks(editingCert.remarks)
             setLink(editingCert.link)
+            setPreviewUrl(editingCert.link)
+            setCertFile(null)
         } else {
             setName("")
             setPrinted(false)
@@ -46,8 +51,38 @@ export default function CertificateModal({ isOpen, onClose, onSave, editingCert,
             setPassword("—")
             setRemarks("—")
             setLink("")
+            setPreviewUrl("")
+            setCertFile(null)
         }
     }, [editingCert, isOpen])
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setCertFile(file)
+        setPreviewUrl(URL.createObjectURL(file))
+    }
+
+    const uploadCertFile = async (file: File): Promise<string> => {
+        try {
+            const ext = file.name.split(".").pop() || "jpg"
+            const filename = `${personId}/cert_${Date.now()}.${ext}`
+            const { error: uploadErr } = await supabase.storage.from("requirements").upload(filename, file, { upsert: true })
+            if (!uploadErr) {
+                const { data } = supabase.storage.from("requirements").getPublicUrl(filename)
+                if (data?.publicUrl) return data.publicUrl
+            }
+        } catch (err) {
+            console.warn("Storage upload fallback to data URL:", err)
+        }
+
+        return new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(file)
+        })
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -55,6 +90,12 @@ export default function CertificateModal({ isOpen, onClose, onSave, editingCert,
 
         try {
             setIsSaving(true)
+            let finalLink = link
+
+            if (certFile) {
+                finalLink = await uploadCertFile(certFile)
+            }
+
             const certData: Certificate = {
                 id: editingCert?.id,
                 person_id: personId,
@@ -67,7 +108,7 @@ export default function CertificateModal({ isOpen, onClose, onSave, editingCert,
                 user_id: userId.trim() || "—",
                 password: password.trim() || "—",
                 remarks: remarks.trim() || "—",
-                link: link.trim()
+                link: finalLink.trim()
             }
             await onSave(certData)
             onClose()
@@ -211,16 +252,48 @@ export default function CertificateModal({ isOpen, onClose, onSave, editingCert,
                             />
                         </div>
 
-                        <div className="space-y-1.5 md:col-span-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Certificate Scan Link</label>
-                            <input
-                                type="url"
-                                disabled={isSaving}
-                                value={link}
-                                onChange={(e) => setLink(e.target.value)}
-                                placeholder="Google Drive Link for Certificate Copy"
-                                className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60 text-foreground"
-                            />
+                        {/* Certificate File Uploader & Link */}
+                        <div className="space-y-1.5 md:col-span-2 border-t border-border/30 pt-3">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                                <span>Certificate Image / File</span>
+                                <span className="text-[10px] text-primary lowercase">Upload image file or link</span>
+                            </label>
+
+                            <div className="flex flex-col md:flex-row items-center gap-3">
+                                <label className="flex-1 w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-border/60 hover:border-primary rounded-xl cursor-pointer bg-background transition-all">
+                                    <Upload className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-xs font-bold text-muted-foreground">
+                                        {certFile ? certFile.name : "Upload Image File"}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        className="hidden"
+                                        disabled={isSaving}
+                                        onChange={handleFileChange}
+                                    />
+                                </label>
+                                {previewUrl && (
+                                    <div className="h-12 w-20 rounded-lg overflow-hidden border border-border/60 relative shrink-0 bg-muted/40 flex items-center justify-center">
+                                        <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="relative">
+                                <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <input
+                                    type="url"
+                                    disabled={isSaving}
+                                    value={link}
+                                    onChange={(e) => {
+                                        setLink(e.target.value)
+                                        if (!certFile) setPreviewUrl(e.target.value)
+                                    }}
+                                    placeholder="Or paste image/Drive URL"
+                                    className="w-full pl-9 pr-4 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-semibold transition-colors disabled:opacity-60 text-foreground"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -256,3 +329,4 @@ export default function CertificateModal({ isOpen, onClose, onSave, editingCert,
         </div>
     )
 }
+

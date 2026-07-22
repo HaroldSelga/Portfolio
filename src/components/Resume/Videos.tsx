@@ -2,12 +2,14 @@ import { Play, Clapperboard, Film, ExternalLink } from "lucide-react"
 import { useState } from "react"
 import { Badge } from "../ui/Badge"
 import { motion, AnimatePresence } from "framer-motion"
-import { videoData, videoFilters } from "../../data/videos"
+import { videoFilters } from "../../data/videos"
+import { usePortfolio } from "../../context/PortfolioContext"
 
 export function Videos() {
+    const { videos } = usePortfolio()
     const [activeFilter, setActiveFilter] = useState<string>("ALL")
 
-    const filteredVideos = videoData.filter(
+    const filteredVideos = videos.filter(
         (vid) => activeFilter === "ALL" || vid.category === activeFilter
     )
 

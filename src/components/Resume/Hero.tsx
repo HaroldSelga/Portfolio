@@ -6,8 +6,10 @@ import { useState, useEffect } from "react"
 import { LocationLink } from "../ui/LocationLink"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { socialLinks } from "../../data/social"
+import { usePortfolio } from "../../context/PortfolioContext"
 
 export default function Hero() {
+    const { hero } = usePortfolio()
     const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null)
     const [imageError, setImageError] = useState(false)
     const { scrollY } = useScroll()
@@ -34,58 +36,37 @@ export default function Hero() {
         }
     }
 
-    const roles = ["Web Developer", "IT Professional", "Infrastructure", "Mobile Developer"]
+    const roles = ["Web Developer", "IT Professional", "ERP Architect", "Infrastructure", "Mobile Developer"]
     const [roleIndex, setRoleIndex] = useState(0)
     const [currentText, setCurrentText] = useState("")
     const [isDeleting, setIsDeleting] = useState(false)
-    const [typingSpeed, setTypingSpeed] = useState(150)
 
     useEffect(() => {
-        const handleTyping = () => {
-            const currentRole = roles[roleIndex]
-            if (isDeleting) {
-                setCurrentText(currentRole.substring(0, currentText.length - 1))
-                setTypingSpeed(50)
-            } else {
-                setCurrentText(currentRole.substring(0, currentText.length + 1))
-                setTypingSpeed(150)
-            }
+        const fullText = roles[roleIndex]
+        const speed = isDeleting ? 40 : 80
 
-            if (!isDeleting && currentText === currentRole) {
-                setTimeout(() => setIsDeleting(true), 1500)
+        const handleTyping = () => {
+            if (!isDeleting && currentText === fullText) {
+                setTimeout(() => setIsDeleting(true), 2000)
             } else if (isDeleting && currentText === "") {
                 setIsDeleting(false)
                 setRoleIndex((prev) => (prev + 1) % roles.length)
+            } else {
+                setCurrentText(
+                    fullText.substring(0, currentText.length + (isDeleting ? -1 : 1))
+                )
             }
         }
 
-        const timer = setTimeout(handleTyping, typingSpeed)
+        const timer = setTimeout(handleTyping, speed)
         return () => clearTimeout(timer)
-    }, [currentText, isDeleting, roleIndex, typingSpeed, roles])
+    }, [currentText, isDeleting, roleIndex])
 
     return (
-        <section id="about" className="relative w-full min-h-screen flex items-center justify-center py-20 overflow-hidden bg-background">
-            {/* Dynamic Background Blobs */}
-            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-                <motion.div
-                    style={{ y: y1 }}
-                    animate={{
-                        scale: [1, 1.2, 1],
-                        rotate: [0, 90, 0],
-                    }}
-                    transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                    className="absolute -top-[10%] -left-[10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[120px]"
-                />
-                <motion.div
-                    style={{ y: y2 }}
-                    animate={{
-                        scale: [1.2, 1, 1.2],
-                        rotate: [0, -90, 0],
-                    }}
-                    transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-                    className="absolute -bottom-[10%] -right-[10%] w-[60%] h-[60%] bg-purple-500/10 rounded-full blur-[140px]"
-                />
-            </div>
+        <section id="hero" className="w-full pt-32 pb-20 md:pt-40 md:pb-28 relative overflow-hidden bg-background">
+            {/* Background Parallax Shapes */}
+            <motion.div style={{ y: y1 }} className="absolute top-10 left-10 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+            <motion.div style={{ y: y2 }} className="absolute bottom-10 right-10 w-[30rem] h-[30rem] bg-purple-500/10 rounded-full blur-[140px] pointer-events-none" />
 
             <div className="container max-w-6xl mx-auto px-4 md:px-6 relative z-10">
                 <motion.div
@@ -95,22 +76,19 @@ export default function Hero() {
                     viewport={{ once: true }}
                     className="bg-background/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden p-8 md:p-14 lg:p-16 relative"
                 >
-
-
                     <div className="flex flex-col lg:flex-row items-center lg:items-start justify-between gap-12 lg:gap-16">
-
                         {/* Left Side: Content */}
                         <div className="flex-1 space-y-8 text-center lg:text-left order-2 lg:order-1">
                             <motion.div variants={itemVariants} className="space-y-4">
                                 <Badge variant="outline" className="px-4 py-1.5 border-primary/30 text-primary bg-primary/5 rounded-full text-xs font-bold tracking-widest uppercase h-8 flex items-center justify-center lg:justify-start w-fit mx-auto lg:mx-0">
-                                    <span className="min-w-[120px]">{currentText}</span>
+                                    <span className="min-w-[120px]">{currentText || hero.title}</span>
                                     <span className="w-1 h-4 bg-primary ml-1 animate-pulse" />
                                 </Badge>
                                 <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[1.1]">
-                                    <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/60 bg-clip-text text-transparent uppercase">John Harold E. Selga</span>
+                                    <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/60 bg-clip-text text-transparent uppercase">{hero.name}</span>
                                 </h1>
                                 <p className="max-w-[600px] text-muted-foreground md:text-xl font-medium leading-relaxed mx-auto lg:mx-0">
-                                    Building seamless digital experiences with a focus on modern web ecosystems and infrastructure.
+                                    {hero.bio}
                                 </p>
                             </motion.div>
 
@@ -118,7 +96,7 @@ export default function Hero() {
                                 {/* Resume Group */}
                                 <div className="flex items-center shadow-lg hover:shadow-primary/20 transition-all rounded-full overflow-hidden border border-primary/20">
                                     <Button asChild className="rounded-none border-none bg-primary hover:bg-primary/90 px-6 h-12 font-bold group">
-                                        <a href="/documents/Resume.pdf" download="John_Harold_Selga_Resume.pdf">
+                                        <a href={hero.resumeUrl} download={`${hero.name.replace(/\s+/g, "_")}_Resume.pdf`}>
                                             <Download className="mr-2 h-4 w-4 transition-transform group-hover:-translate-y-1" />
                                             Resume
                                         </a>
@@ -127,7 +105,7 @@ export default function Hero() {
                                         className="h-12 px-4 bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-center border-l border-primary/20 group"
                                         title="View Resume"
                                         aria-label="View Resume PDF in modal"
-                                        onClick={() => setPreviewDoc({ title: "Resume Preview", url: "/documents/Resume.pdf" })}
+                                        onClick={() => setPreviewDoc({ title: "Resume Preview", url: hero.resumeUrl })}
                                     >
                                         <Eye className="h-4 w-4 text-primary transition-transform group-hover:scale-125" />
                                     </button>

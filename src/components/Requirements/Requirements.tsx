@@ -50,6 +50,7 @@ import DocumentModal from "./DocumentModal"
 import ChecklistModal from "./ChecklistModal"
 import ValidIDModal from "./ValidIDModal"
 import CertificateModal from "./CertificateModal"
+import { ConfirmDialog, ToastContainer } from "./ConfirmDialog"
 
 
 export default function Requirements() {
@@ -103,6 +104,33 @@ export default function Requirements() {
     const [formRelationship, setFormRelationship] = useState<FamilyMember["relationship"]>("Sister")
     const [formBirthday, setFormBirthday] = useState("")
     const [formContact, setFormContact] = useState("")
+
+    // Confirm Dialog State
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean
+        title: string
+        message: string
+        confirmLabel?: string
+        variant?: "danger" | "warning" | "info"
+        onConfirm: () => void
+    }>({ isOpen: false, title: "", message: "", onConfirm: () => {} })
+
+    // Toast Notification State
+    const [toasts, setToasts] = useState<{ id: string; message: string; type: "success" | "error" | "info" }[]>([])
+
+    const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+        const id = Date.now().toString()
+        setToasts((prev) => [...prev, { id, message, type }])
+        setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000)
+    }
+
+    const dismissToast = (id: string) => {
+        setToasts((prev) => prev.filter((t) => t.id !== id))
+    }
+
+    const showConfirm = (title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger", confirmLabel = "Delete") => {
+        setConfirmDialog({ isOpen: true, title, message, confirmLabel, variant, onConfirm })
+    }
 
 
     // Fetch family list and anniversary metadata on mount
@@ -406,6 +434,76 @@ export default function Requirements() {
         }
     }
 
+    const getBirthdayCountdown = (birthdayStr: string) => {
+        if (!birthdayStr) return null
+        try {
+            const cleaned = birthdayStr.replace("February 016", "February 16")
+            const parsed = Date.parse(cleaned)
+            if (isNaN(parsed)) return null
+            
+            const birthDate = new Date(parsed)
+            const today = new Date()
+            
+            const birthThisYear = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate())
+            
+            if (birthThisYear.getTime() < today.getTime() && 
+                (today.getDate() !== birthThisYear.getDate() || today.getMonth() !== birthThisYear.getMonth())) {
+                birthThisYear.setFullYear(today.getFullYear() + 1)
+            }
+            
+            const timeDiff = birthThisYear.getTime() - today.getTime()
+            const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24))
+            
+            if (today.getDate() === birthDate.getDate() && today.getMonth() === birthDate.getMonth()) {
+                return 0
+            }
+            
+            return daysDiff
+        } catch (e) {
+            return null
+        }
+    }
+
+    const getExpirationStatus = (expiryStr: string) => {
+        if (!expiryStr || expiryStr === "—") return null
+        try {
+            let parsed = Date.parse(expiryStr)
+            
+            if (isNaN(parsed) && expiryStr.includes("/")) {
+                const parts = expiryStr.split("/")
+                if (parts.length === 2) {
+                    const month = parseInt(parts[0], 10)
+                    let year = parseInt(parts[1], 10)
+                    if (year < 100) year += 2000
+                    parsed = new Date(year, month - 1, 1).getTime()
+                }
+            }
+            
+            if (isNaN(parsed)) return null
+            
+            const expiryDate = new Date(parsed)
+            const today = new Date()
+            
+            today.setHours(0, 0, 0, 0)
+            expiryDate.setHours(0, 0, 0, 0)
+            
+            if (expiryDate.getTime() < today.getTime()) {
+                return "expired"
+            }
+            
+            const timeDiff = expiryDate.getTime() - today.getTime()
+            const daysDiff = timeDiff / (1000 * 3600 * 24)
+            if (daysDiff <= 60) {
+                return "expiring_soon"
+            }
+            
+            return "valid"
+        } catch (e) {
+            return null
+        }
+    }
+
+
 
     const handleSaveMember = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -440,7 +538,7 @@ export default function Requirements() {
             setIsFamilyModalOpen(false)
         } catch (err) {
             console.error("Error saving family member to Supabase, updating locally only:", err)
-            alert("Failed to save to cloud. Ensure you have run the SQL setup in Supabase. Saving to Local Storage instead.")
+            showToast("Failed to save to cloud. Saved locally instead.", "error")
             setUseLocalStorageFallback(true)
 
             let updated: FamilyMember[]
@@ -458,7 +556,7 @@ export default function Requirements() {
     }
 
     const handleDeleteMember = async (id: string, name: string) => {
-        if (confirm(`Are you sure you want to delete ${name}?`)) {
+        showConfirm("Delete Family Member", `Are you sure you want to delete ${name}? This action cannot be undone.`, async () => {
             try {
                 setIsFamilySaving(true)
                 if (!useLocalStorageFallback) {
@@ -473,9 +571,10 @@ export default function Requirements() {
                 const updated = familyMembers.filter((m) => m.id !== id)
                 setFamilyMembers(updated)
                 localStorage.setItem("family_members", JSON.stringify(updated))
+                showToast(`${name} has been removed`, "success")
             } catch (err) {
                 console.error("Error deleting family member from Supabase, updating locally only:", err)
-                alert("Failed to delete from cloud. Deleting from Local Storage instead.")
+                showToast("Failed to delete from cloud. Saved locally.", "error")
                 setUseLocalStorageFallback(true)
                 
                 const updated = familyMembers.filter((m) => m.id !== id)
@@ -483,8 +582,9 @@ export default function Requirements() {
                 localStorage.setItem("family_members", JSON.stringify(updated))
             } finally {
                 setIsFamilySaving(false)
+                setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
             }
-        }
+        })
     }
 
     const handleSaveMarriageDate = async () => {
@@ -504,7 +604,7 @@ export default function Requirements() {
             setIsEditingMarriageDate(false)
         } catch (err) {
             console.error("Error saving marriage date to Supabase, updating locally only:", err)
-            alert("Failed to save marriage date to cloud. Saving to Local Storage instead.")
+            showToast("Failed to save marriage date. Saved locally.", "error")
             setUseLocalStorageFallback(true)
             
             setMarriageDate(marriageDateInput)
@@ -550,38 +650,43 @@ export default function Requirements() {
     }
 
     const handleDeleteDocument = async (id: number, path: string, name: string) => {
-        if (!confirm(`Are you sure you want to delete ${name}?`)) return
-        try {
-            const { error } = await supabase
-                .from("req_documents")
-                .delete()
-                .eq("id", id)
+        showConfirm("Delete Document", `Are you sure you want to delete "${name}"? This action cannot be undone.`, async () => {
+            try {
+                const { error } = await supabase
+                    .from("req_documents")
+                    .delete()
+                    .eq("id", id)
 
-            if (error) throw error
+                if (error) throw error
 
-            // Remove file from storage if uploaded to Supabase Storage
-            if (path.includes("supabase.co/storage")) {
-                try {
-                    const parts = path.split("/requirements/")
-                    if (parts.length > 1) {
-                        const storagePath = parts[1]
-                        await supabase.storage.from("requirements").remove([storagePath])
+                if (path.includes("supabase.co/storage")) {
+                    try {
+                        const parts = path.split("/requirements/")
+                        if (parts.length > 1) {
+                            const storagePath = parts[1]
+                            await supabase.storage.from("requirements").remove([storagePath])
+                        }
+                    } catch (storageErr) {
+                        console.warn("Could not delete physical file from storage:", storageErr)
                     }
-                } catch (storageErr) {
-                    console.warn("Could not delete physical file from storage:", storageErr)
                 }
-            }
 
-            const updatedDocs = documents.filter(d => d.id !== id)
-            setDocuments(updatedDocs)
-            localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
-        } catch (e) {
-            console.warn("Failed to delete doc, removing locally:", e)
-            const updatedDocs = documents.filter(d => d.id !== id)
-            setDocuments(updatedDocs)
-            localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
-        }
+                const updatedDocs = documents.filter(d => d.id !== id)
+                setDocuments(updatedDocs)
+                localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
+                showToast("Document deleted successfully", "success")
+            } catch (e) {
+                console.warn("Failed to delete doc, removing locally:", e)
+                const updatedDocs = documents.filter(d => d.id !== id)
+                setDocuments(updatedDocs)
+                localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
+                showToast("Deleted locally (offline)", "info")
+            } finally {
+                setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+            }
+        })
     }
+
 
     // Checklist CRUD
     const handleSaveChecklistItem = async (item: ChecklistItem) => {
@@ -618,25 +723,31 @@ export default function Requirements() {
     }
 
     const handleDeleteChecklistItem = async (id: number, title: string) => {
-        if (!confirm(`Are you sure you want to delete "${title}" checklist item?`)) return
-        try {
-            const { error } = await supabase
-                .from("req_checklist")
-                .delete()
-                .eq("id", id)
+        showConfirm("Delete Checklist Item", `Are you sure you want to delete "${title}"? This action cannot be undone.`, async () => {
+            try {
+                const { error } = await supabase
+                    .from("req_checklist")
+                    .delete()
+                    .eq("id", id)
 
-            if (error) throw error
+                if (error) throw error
 
-            const updatedItems = checklistItems.filter(c => c.id !== id)
-            setChecklistItems(updatedItems)
-            localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
-        } catch (e) {
-            console.warn("Failed to delete checklist item, removing locally:", e)
-            const updatedItems = checklistItems.filter(c => c.id !== id)
-            setChecklistItems(updatedItems)
-            localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
-        }
+                const updatedItems = checklistItems.filter(c => c.id !== id)
+                setChecklistItems(updatedItems)
+                localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
+                showToast("Checklist item deleted", "success")
+            } catch (e) {
+                console.warn("Failed to delete checklist item, removing locally:", e)
+                const updatedItems = checklistItems.filter(c => c.id !== id)
+                setChecklistItems(updatedItems)
+                localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
+                showToast("Deleted locally (offline)", "info")
+            } finally {
+                setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+            }
+        })
     }
+
 
     // Valid IDs CRUD
     const handleSaveValidID = async (validID: ValidID) => {
@@ -673,25 +784,31 @@ export default function Requirements() {
     }
 
     const handleDeleteValidID = async (id: number, name: string) => {
-        if (!confirm(`Are you sure you want to delete Valid ID: ${name}?`)) return
-        try {
-            const { error } = await supabase
-                .from("req_valid_ids")
-                .delete()
-                .eq("id", id)
+        showConfirm("Delete Valid ID", `Are you sure you want to delete "${name}"? This action cannot be undone.`, async () => {
+            try {
+                const { error } = await supabase
+                    .from("req_valid_ids")
+                    .delete()
+                    .eq("id", id)
 
-            if (error) throw error
+                if (error) throw error
 
-            const updatedIDs = validIDs.filter(v => v.id !== id)
-            setValidIDs(updatedIDs)
-            localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
-        } catch (e) {
-            console.warn("Failed to delete Valid ID, removing locally:", e)
-            const updatedIDs = validIDs.filter(v => v.id !== id)
-            setValidIDs(updatedIDs)
-            localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
-        }
+                const updatedIDs = validIDs.filter(v => v.id !== id)
+                setValidIDs(updatedIDs)
+                localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
+                showToast("Valid ID deleted successfully", "success")
+            } catch (e) {
+                console.warn("Failed to delete Valid ID, removing locally:", e)
+                const updatedIDs = validIDs.filter(v => v.id !== id)
+                setValidIDs(updatedIDs)
+                localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
+                showToast("Deleted locally (offline)", "info")
+            } finally {
+                setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+            }
+        })
     }
+
 
     // Certificates CRUD
     const handleSaveCertificate = async (cert: Certificate) => {
@@ -728,25 +845,31 @@ export default function Requirements() {
     }
 
     const handleDeleteCertificate = async (id: number, name: string) => {
-        if (!confirm(`Are you sure you want to delete Certificate: ${name}?`)) return
-        try {
-            const { error } = await supabase
-                .from("req_certificates")
-                .delete()
-                .eq("id", id)
+        showConfirm("Delete Certificate", `Are you sure you want to delete "${name}"? This action cannot be undone.`, async () => {
+            try {
+                const { error } = await supabase
+                    .from("req_certificates")
+                    .delete()
+                    .eq("id", id)
 
-            if (error) throw error
+                if (error) throw error
 
-            const updatedCerts = certificates.filter(c => c.id !== id)
-            setCertificates(updatedCerts)
-            localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
-        } catch (e) {
-            console.warn("Failed to delete Certificate, removing locally:", e)
-            const updatedCerts = certificates.filter(c => c.id !== id)
-            setCertificates(updatedCerts)
-            localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
-        }
+                const updatedCerts = certificates.filter(c => c.id !== id)
+                setCertificates(updatedCerts)
+                localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
+                showToast("Certificate deleted successfully", "success")
+            } catch (e) {
+                console.warn("Failed to delete Certificate, removing locally:", e)
+                const updatedCerts = certificates.filter(c => c.id !== id)
+                setCertificates(updatedCerts)
+                localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
+                showToast("Deleted locally (offline)", "info")
+            } finally {
+                setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+            }
+        })
     }
+
 
     const categories = ["All", "IDs & Clearances", "Birth & Baptism", "School & Credentials", "Employment & Contributions", "Photos", "Checklist", "Credentials", "Family"]
 
@@ -922,6 +1045,7 @@ export default function Requirements() {
                                 }}
                                 onDeleteCert={(id, name) => handleDeleteCertificate(id, name)}
                                 onPreviewLink={handlePreviewLink}
+                                getExpirationStatus={getExpirationStatus}
                             />
 
                         )
@@ -1143,11 +1267,30 @@ export default function Requirements() {
 
                                                         <div className="border-t border-border/30 pt-4 space-y-2.5">
                                                             {/* Birthday */}
-                                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
-                                                                <Calendar className="h-4 w-4 text-primary/70 shrink-0" />
-                                                                <span>Birthday: <strong className="text-foreground">{member.birthday}</strong></span>
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
+                                                                    <Calendar className="h-4 w-4 text-primary/70 shrink-0" />
+                                                                    <span>Birthday: <strong className="text-foreground">{member.birthday}</strong></span>
+                                                                </div>
+                                                                {(() => {
+                                                                    const days = getBirthdayCountdown(member.birthday)
+                                                                    if (days === 0) {
+                                                                        return (
+                                                                            <span className="inline-flex items-center gap-1 self-start mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                                                🎉 Birthday is Today! 🎂
+                                                                            </span>
+                                                                        )
+                                                                    }
+                                                                    if (days !== null && days <= 30) {
+                                                                        return (
+                                                                            <span className="inline-flex items-center gap-1 self-start mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                                                                                🎂 Birthday in {days} days
+                                                                            </span>
+                                                                        )
+                                                                    }
+                                                                    return null
+                                                                })()}
                                                             </div>
-
                                                             {/* Contact */}
                                                             <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
                                                                 <Phone className="h-4 w-4 text-primary/70 shrink-0" />
@@ -1635,6 +1778,20 @@ export default function Requirements() {
                     editingCert={editingCert}
                     personId={selectedPerson}
                 />
+
+                {/* Styled Confirm Dialog */}
+                <ConfirmDialog
+                    isOpen={confirmDialog.isOpen}
+                    title={confirmDialog.title}
+                    message={confirmDialog.message}
+                    confirmLabel={confirmDialog.confirmLabel}
+                    variant={confirmDialog.variant}
+                    onConfirm={confirmDialog.onConfirm}
+                    onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                />
+
+                {/* Styled Toast Notifications */}
+                <ToastContainer toasts={toasts} onDismiss={dismissToast} />
             </div>
         </div>
     )
@@ -1652,7 +1809,8 @@ function CredentialsView({
     onAddCert,
     onEditCert,
     onDeleteCert,
-    onPreviewLink
+    onPreviewLink,
+    getExpirationStatus
 }: {
     showSensitive: boolean
     maskValue: (v: string) => string
@@ -1665,6 +1823,7 @@ function CredentialsView({
     onEditCert: (cert: Certificate) => void
     onDeleteCert: (id: number, name: string) => void
     onPreviewLink: (name: string, url: string) => void
+    getExpirationStatus: (expiryStr: string) => "expired" | "expiring_soon" | "valid" | null
 }) {
     return (
         <motion.div
@@ -1729,7 +1888,37 @@ function CredentialsView({
                                     </td>
                                     <td className="px-4 py-3 font-mono text-xs text-foreground/80 whitespace-nowrap">{id.id_number}</td>
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.issued_date}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.expiration}</td>
+                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
+                                        <div className="flex flex-col gap-1">
+                                            <span>{id.expiration}</span>
+                                            {(() => {
+                                                const status = getExpirationStatus(id.expiration)
+                                                if (status === "expired") {
+                                                    return (
+                                                        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                                                            <AlertCircle className="h-2.5 w-2.5" /> Expired
+                                                        </span>
+                                                    )
+                                                }
+                                                if (status === "expiring_soon") {
+                                                    return (
+                                                        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
+                                                            <Clock className="h-2.5 w-2.5" /> Expiring Soon
+                                                        </span>
+                                                    )
+                                                }
+                                                if (status === "valid") {
+                                                    return (
+                                                        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                                            <CheckCircle2 className="h-2.5 w-2.5" /> Active
+                                                        </span>
+                                                    )
+                                                }
+                                                return null
+                                            })()}
+                                        </div>
+                                    </td>
+
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.date_created}</td>
                                     <td className="px-4 py-3 text-xs whitespace-nowrap font-mono">
                                         <span className={!showSensitive && id.user_id !== "—" ? "select-none" : ""}>
@@ -1846,7 +2035,37 @@ function CredentialsView({
                                     </td>
                                     <td className="px-4 py-3 font-mono text-xs text-foreground/80 whitespace-nowrap">{cert.id_number}</td>
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.issued_date}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.expiration}</td>
+                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
+                                        <div className="flex flex-col gap-1">
+                                            <span>{cert.expiration}</span>
+                                            {(() => {
+                                                const status = getExpirationStatus(cert.expiration)
+                                                if (status === "expired") {
+                                                    return (
+                                                        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                                                            <AlertCircle className="h-2.5 w-2.5" /> Expired
+                                                        </span>
+                                                    )
+                                                }
+                                                if (status === "expiring_soon") {
+                                                    return (
+                                                        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
+                                                            <Clock className="h-2.5 w-2.5" /> Expiring Soon
+                                                        </span>
+                                                    )
+                                                }
+                                                if (status === "valid") {
+                                                    return (
+                                                        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                                            <CheckCircle2 className="h-2.5 w-2.5" /> Active
+                                                        </span>
+                                                    )
+                                                }
+                                                return null
+                                            })()}
+                                        </div>
+                                    </td>
+
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.date_created}</td>
                                     <td className="px-4 py-3 text-xs whitespace-nowrap font-mono">
                                         <span className={!showSensitive && cert.user_id !== "—" ? "select-none" : ""}>

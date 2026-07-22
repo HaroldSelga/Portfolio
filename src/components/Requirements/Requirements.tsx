@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
     FileText, 
@@ -19,143 +19,39 @@ import {
     Shield,
     CreditCard,
     GraduationCap,
-    ExternalLink
+    ExternalLink,
+    Users,
+    Heart,
+    Calendar,
+    Phone,
+    Plus,
+    Trash2,
+    Edit2,
+    Save,
+    Loader2
 } from "lucide-react"
+import { supabase } from "../../lib/supabase"
+import type { 
+    ReqDocument, 
+    ChecklistItem, 
+    ValidID, 
+    Certificate, 
+    FamilyMember
+} from "./types"
+import {
+    defaultDocuments,
+    defaultChecklist,
+    defaultValidIDs,
+    defaultCertificates,
+    defaultFamilyMembers
+} from "./types"
 
-interface ReqDocument {
-    name: string
-    path: string
-    category: "IDs & Clearances" | "Birth & Baptism" | "School & Credentials" | "Employment & Contributions" | "Photos"
-    type: "pdf" | "jpg" | "xlsx" | "docx" | "html"
-    size: string
-}
+import PersonFilter from "./PersonFilter"
+import DocumentModal from "./DocumentModal"
+import ChecklistModal from "./ChecklistModal"
+import ValidIDModal from "./ValidIDModal"
+import CertificateModal from "./CertificateModal"
 
-const rawDocuments: ReqDocument[] = [
-    // IDs & Clearances
-    { name: "Passport", path: "/documents/requirements/PASSPORT.pdf", category: "IDs & Clearances", type: "pdf", size: "1.01 MB" },
-    { name: "Voter's Certificate", path: "/documents/requirements/Voters Certficate.jpg", category: "IDs & Clearances", type: "jpg", size: "5.24 MB" },
-    { name: "Barangay Clearance", path: "/documents/requirements/need to print/Barangay Clearance.jpg", category: "IDs & Clearances", type: "jpg", size: "4.94 MB" },
-    { name: "NBI Clearance", path: "/documents/requirements/NBI.jpg", category: "IDs & Clearances", type: "jpg", size: "10.43 MB" },
-    { name: "Vaccine Certificate", path: "/documents/requirements/VAC CERT.pdf", category: "IDs & Clearances", type: "pdf", size: "849 KB" },
-    { name: "PEOS Certificate", path: "/documents/requirements/PEOS CERTFICATE.pdf", category: "IDs & Clearances", type: "pdf", size: "61.3 KB" },
-    { name: "Personal Data Sheet (PDS 2025)", path: "/documents/requirements/JOHN-HAROLD-E.-SELGA-PDS 2025.xlsx", category: "IDs & Clearances", type: "xlsx", size: "85.8 KB" },
-    
-    // Birth & Baptism
-    { name: "Certificate of Live Birth (LCR)", path: "/documents/requirements/PSA/CERTIFICATE OF LIVE BIRTH.pdf", category: "Birth & Baptism", type: "pdf", size: "1.95 MB" },
-    { name: "Local Birth Certificate Form 102", path: "/documents/requirements/PSA/Form 102 _ Local Certficate.jpg", category: "Birth & Baptism", type: "jpg", size: "5.36 MB" },
-    { name: "PSA Birth Certificate (Scanned)", path: "/documents/requirements/PSA/Scanned PSA.jpg", category: "Birth & Baptism", type: "jpg", size: "296 KB" },
-    { name: "PSA Birth Certificate (New)", path: "/documents/requirements/PSA/NEW PSA.jpg", category: "Birth & Baptism", type: "jpg", size: "4.46 MB" },
-    { name: "Certificate of Baptism", path: "/documents/requirements/CERTIFICATE OF BAPTISM.pdf", category: "Birth & Baptism", type: "pdf", size: "501 KB" },
-
-    // School & Credentials
-    { name: "Diploma", path: "/documents/requirements/School Documents/DIPLOMA.pdf", category: "School & Credentials", type: "pdf", size: "1.11 MB" },
-    { name: "Transcript of Records (TOR)", path: "/documents/requirements/School Documents/TOR.pdf", category: "School & Credentials", type: "pdf", size: "3.76 MB" },
-    { name: "Transcript of Records (TOR Copy)", path: "/documents/requirements/School Documents/TOR (1).pdf", category: "School & Credentials", type: "pdf", size: "3.76 MB" },
-    { name: "National Certificate II: Computer System Services", path: "/documents/requirements/Certificate/NATIONAL CERT - COMPUTER SYSTEMS SERVICING.pdf", category: "School & Credentials", type: "pdf", size: "1.62 MB" },
-    { name: "National Certificate III: Events Management Services", path: "/documents/requirements/Certificate/NATIONAL CERT - EVENTS MANAGEMENT SERVICES.pdf", category: "School & Credentials", type: "pdf", size: "1.71 MB" },
-
-    // Employment & Contributions
-    { name: "Certificate of Employment (Old Capitol)", path: "/documents/requirements/COE/COE OLD CAP.jpg", category: "Employment & Contributions", type: "jpg", size: "4.27 MB" },
-    { name: "Certificate of Employment (TRB Express)", path: "/documents/requirements/COE/John Harold SELGA.docx.pdf", category: "Employment & Contributions", type: "pdf", size: "266 KB" },
-    { name: "SSS Contribution Form", path: "/documents/requirements/need to print/SSS.docx", category: "Employment & Contributions", type: "docx", size: "159 KB" },
-    { name: "ID List and Notes", path: "/documents/requirements/id.docx", category: "Employment & Contributions", type: "docx", size: "2.26 MB" },
-    { name: "SSS/Philhealth Contribution List", path: "/documents/requirements/hulog.docx", category: "Employment & Contributions", type: "docx", size: "254 KB" },
-    { name: "Resume (DOCX)", path: "/documents/requirements/need to print/resume final harold (1).docx", category: "Employment & Contributions", type: "docx", size: "40 KB" },
-    { name: "Resume (PDF)", path: "/documents/requirements/need to print/resume final harold (1).pdf", category: "Employment & Contributions", type: "pdf", size: "113 KB" },
-    { name: "E-Registration Printout (DOCX)", path: "/documents/requirements/need to print/PrintResume.aspx.docx", category: "Employment & Contributions", type: "docx", size: "19 KB" },
-    { name: "E-Registration Printout (HTML)", path: "/documents/requirements/need to print/PrintResume.aspx.html", category: "Employment & Contributions", type: "html", size: "19 KB" },
-
-    // Photos
-    { name: "2x2 Photo (1)", path: "/documents/requirements/pic/2x2 (1)_095802.jpg", category: "Photos", type: "jpg", size: "134 KB" },
-    { name: "2x2 Photo (2)", path: "/documents/requirements/pic/2x2 (2)_095755.jpg", category: "Photos", type: "jpg", size: "135 KB" },
-    { name: "CSC Custom Size Photo", path: "/documents/requirements/pic/Csc_095800.jpg", category: "Photos", type: "jpg", size: "106 KB" },
-    { name: "Passport Size Photo", path: "/documents/requirements/pic/Passport Size_095801.jpg", category: "Photos", type: "jpg", size: "104 KB" },
-]
-
-interface NoteItem {
-    id: number
-    title: string
-    status: "claimed" | "printing" | "completed" | "error" | "info"
-    statusText: string
-}
-
-const checklistNotes: NoteItem[] = [
-    { id: 1, title: "Voters Certificate", status: "claimed", statusText: "To claim / Kukunin na lang" },
-    { id: 2, title: "Barangay Clearance", status: "claimed", statusText: "To claim / Kukunin na lang" },
-    { id: 3, title: "NBI Clearance", status: "claimed", statusText: "To claim / Kukunin na lang" },
-    { id: 4, title: "PSA Birth Certificate (QR Scan)", status: "error", statusText: "Barcode scans mismatch / QR not matching" },
-    { id: 5, title: "Local Civil Registrar (LCR Form 1A & OR Form 102 with receipt)", status: "info", statusText: "Local certificate match confirmed" },
-    { id: 7, title: "PEOS Certificate", status: "completed", statusText: "Completed / Meron na" },
-    { id: 8, title: "E-Registration Certificate", status: "printing", statusText: "To print / Print na lang" },
-    { id: 9, title: "E-Reg Details (All ID numbers & past experience list)", status: "completed", statusText: "Included & verified" },
-    { id: 11, title: "National ID Card", status: "completed", statusText: "Printed / Printed na" },
-    { id: 12, title: "TIN ID Card", status: "completed", statusText: "Printed / Printed na" },
-    { id: 13, title: "Driver's License", status: "completed", statusText: "Printed / Printed na" },
-    { id: 14, title: "Passport Book", status: "completed", statusText: "Printed / Printed na" },
-    { id: 16, title: "Philhealth ID & Contribution History", status: "printing", statusText: "ID available, contribution ledger needs printing" },
-    { id: 17, title: "Pag-IBIG ID & Contribution History", status: "printing", statusText: "ID available, contribution ledger needs printing" },
-    { id: 18, title: "SSS ID & Contribution History", status: "printing", statusText: "Contribution ledger needs printing" },
-    { id: 20, title: "College Transcript of Records (TOR)", status: "completed", statusText: "Printed / Printed na" },
-    { id: 21, title: "College Diploma", status: "completed", statusText: "Printed / Printed na" },
-    { id: 22, title: "NCII Computer System Services Certificate", status: "completed", statusText: "Printed / Printed na" },
-    { id: 23, title: "NCIII Events Management Services Certificate", status: "completed", statusText: "Printed / Printed na" },
-    { id: 25, title: "Updated Application Resume", status: "completed", statusText: "Printed / Printed na" },
-    { id: 27, title: "TRB Certificate", status: "completed", statusText: "Printed & confirmed / Meron na" },
-    { id: 28, title: "Old Capitol COE (Provincial Assessor's)", status: "claimed", statusText: "To claim / Kukunin pa lang" },
-]
-
-// ── Credentials Data ──────────────────────────────────────────────────
-interface CredentialID {
-    name: string
-    printed: boolean
-    idNumber: string
-    issuedDate: string
-    expiration: string
-    dateCreated: string
-    userId: string
-    password: string
-    remarks: string
-    frontLink: string
-    backLink: string
-}
-
-interface CredentialCert {
-    name: string
-    printed: boolean
-    idNumber: string
-    issuedDate: string
-    expiration: string
-    dateCreated: string
-    userId: string
-    password: string
-    remarks: string
-    link: string
-}
-
-const validIDs: CredentialID[] = [
-    { name: "Pag-IBIG RTN", printed: false, idNumber: "922243382509", issuedDate: "—", expiration: "—", dateCreated: "2023", userId: "johnselga18@gmail.com", password: "AManword18@", remarks: "—", frontLink: "", backLink: "" },
-    { name: "Pag-IBIG MID No.", printed: false, idNumber: "121306475308", issuedDate: "—", expiration: "—", dateCreated: "2023", userId: "johnselga18@gmail.com", password: "AManWord18@", remarks: "—", frontLink: "", backLink: "" },
-    { name: "SSS UMID", printed: false, idNumber: "02-4734797-9", issuedDate: "—", expiration: "—", dateCreated: "2023", userId: "SAGIED18", password: "Selgaharold18@", remarks: "Number only", frontLink: "", backLink: "" },
-    { name: "PhilHealth", printed: true, idNumber: "21-251027063-8", issuedDate: "—", expiration: "—", dateCreated: "2023", userId: "21-251027063-8", password: "AManWord18@", remarks: "—", frontLink: "https://drive.google.com/file/d/1gfKvtFq0ewCwdgdF2C7wa3c7vqI3tJAf/view", backLink: "https://drive.google.com/file/d/1_LmHPlDhj6k847m6CJ6Yy3j-lWEF0ERF/view" },
-    { name: "TIN", printed: true, idNumber: "606-410-641-00000", issuedDate: "—", expiration: "—", dateCreated: "2023", userId: "—", password: "—", remarks: "—", frontLink: "https://drive.google.com/file/d/1eQmK0ZRWDH-Ux486FpVtmH6GDlhaTQo2/view", backLink: "https://drive.google.com/file/d/1p025J1wur2DaCJkl3Afic_6yaHD3S_Zl/view" },
-    { name: "Voter ID", printed: false, idNumber: "—", issuedDate: "—", expiration: "—", dateCreated: "—", userId: "—", password: "—", remarks: "—", frontLink: "", backLink: "" },
-    { name: "National ID", printed: true, idNumber: "5810-9328-0591-4517", issuedDate: "—", expiration: "—", dateCreated: "2024", userId: "—", password: "—", remarks: "—", frontLink: "https://drive.google.com/file/d/1r9kCps_1BY7kSKn5b7DuPh5e3vaZ38yx/view", backLink: "https://drive.google.com/file/d/1gbA2OUQ1-JqfnlJAsu5UpPDRxTof0EMk/view" },
-    { name: "Passport", printed: true, idNumber: "P8011691C", issuedDate: "September 19, 2024", expiration: "September 18, 2034", dateCreated: "2024", userId: "—", password: "—", remarks: "—", frontLink: "", backLink: "" },
-    { name: "EastWest Bank", printed: true, idNumber: "4375 0701 1731 8495", issuedDate: "—", expiration: "01/32", dateCreated: "2026", userId: "—", password: "—", remarks: "—", frontLink: "", backLink: "" },
-    { name: "DBP", printed: true, idNumber: "4553 6651 6004 0112", issuedDate: "—", expiration: "04/29", dateCreated: "2024", userId: "—", password: "—", remarks: "—", frontLink: "", backLink: "" },
-    { name: "Driver's License", printed: true, idNumber: "C05-25-01100J", issuedDate: "July 21, 2025", expiration: "March 18, 2030", dateCreated: "2024", userId: "—", password: "—", remarks: "Condition: C05", frontLink: "https://drive.google.com/file/d/1nWtBSXF1ppYzqhWSjAa1RoeGuezeAGVG/view", backLink: "https://drive.google.com/file/d/1nfTI1ZPGONYYmfcHWmutq63GyO-dDl1z/view" },
-    { name: "NBI Clearance", printed: false, idNumber: "—", issuedDate: "—", expiration: "—", dateCreated: "—", userId: "johnselga18@gmail.com", password: "AManWord18@", remarks: "—", frontLink: "", backLink: "" },
-]
-
-const certificates: CredentialCert[] = [
-    { name: "Transcript of Records (TOR)", printed: true, idNumber: "CRT", issuedDate: "—", expiration: "—", dateCreated: "—", userId: "—", password: "—", remarks: "—", link: "" },
-    { name: "Diploma", printed: true, idNumber: "CRT", issuedDate: "July 2, 2022", expiration: "—", dateCreated: "—", userId: "—", password: "—", remarks: "—", link: "" },
-    { name: "Certificate of Employment (COE)", printed: true, idNumber: "TRB EXPRESS INC", issuedDate: "June 2025", expiration: "—", dateCreated: "—", userId: "2024082152978", password: "Selga John Harold", remarks: "Supervisor IT Jr.", link: "https://drive.google.com/file/d/1IPrksP4kfHS2dqnJTIF7_i560DbbzQgk/view" },
-    { name: "PEOS Certificate", printed: false, idNumber: "2974206", issuedDate: "—", expiration: "—", dateCreated: "August 26, 2024", userId: "jharoldselga18@gmail.com", password: "AManWord18@", remarks: "—", link: "https://drive.google.com/file/d/1pS7MKjxwUVswWVOPrGxmI224SydtM6ZA/view" },
-    { name: "E-Registration Certificate", printed: false, idNumber: "2024082152978", issuedDate: "—", expiration: "—", dateCreated: "August 26, 2024", userId: "—", password: "—", remarks: "—", link: "https://drive.google.com/file/d/1RhhGCOUu4_QyK1Sf2btrvwUYJX1Wirw6/view" },
-    { name: "NC II - Computer System Services", printed: true, idNumber: "210349022116611", issuedDate: "June 1, 2021", expiration: "May 31, 2026", dateCreated: "—", userId: "—", password: "—", remarks: "TESDA", link: "" },
-    { name: "NC II - Events Management Services", printed: true, idNumber: "22034039109", issuedDate: "October 20, 2022", expiration: "October 19, 2027", dateCreated: "—", userId: "—", password: "—", remarks: "TESDA", link: "" },
-]
 
 export default function Requirements() {
     const [searchQuery, setSearchQuery] = useState("")
@@ -163,9 +59,226 @@ export default function Requirements() {
     const [previewDoc, setPreviewDoc] = useState<{ name: string; path: string; type: string } | null>(null)
     const [showSensitive, setShowSensitive] = useState(false)
 
+    // Person Ownership State
+    const [selectedPerson, setSelectedPerson] = useState<string>("self")
+
+    // Requirement Datasets
+    const [documents, setDocuments] = useState<ReqDocument[]>([])
+    const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
+    const [validIDs, setValidIDs] = useState<ValidID[]>([])
+    const [certificates, setCertificates] = useState<Certificate[]>([])
+
+    // Loading states per dataset
+    const [isDocsLoading, setIsDocsLoading] = useState(true)
+    const [isChecklistLoading, setIsChecklistLoading] = useState(true)
+    const [isCredentialsLoading, setIsCredentialsLoading] = useState(true)
+
+    // CRUD Modal triggers and active edit items
+    const [isDocModalOpen, setIsDocModalOpen] = useState(false)
+    const [editingDoc, setEditingDoc] = useState<ReqDocument | null>(null)
+
+    const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false)
+    const [editingChecklistItem, setEditingChecklistItem] = useState<ChecklistItem | null>(null)
+
+    const [isValidIDModalOpen, setIsValidIDModalOpen] = useState(false)
+    const [editingValidID, setEditingValidID] = useState<ValidID | null>(null)
+
+    const [isCertModalOpen, setIsCertModalOpen] = useState(false)
+    const [editingCert, setEditingCert] = useState<Certificate | null>(null)
+
+    // Family states
+    const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
+    const [marriageDate, setMarriageDate] = useState<string>("November 26, 1995")
+    const [isFamilyLoading, setIsFamilyLoading] = useState(true)
+    const [isFamilySaving, setIsFamilySaving] = useState(false)
+    const [useLocalStorageFallback, setUseLocalStorageFallback] = useState(false)
+
+    // Inline editing for parents' marriage date
+    const [isEditingMarriageDate, setIsEditingMarriageDate] = useState(false)
+    const [marriageDateInput, setMarriageDateInput] = useState(marriageDate)
+
+    // Family Member Add/Edit Form Modal State
+    const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false)
+    const [editingMember, setEditingMember] = useState<FamilyMember | null>(null)
+    const [formName, setFormName] = useState("")
+    const [formRelationship, setFormRelationship] = useState<FamilyMember["relationship"]>("Sister")
+    const [formBirthday, setFormBirthday] = useState("")
+    const [formContact, setFormContact] = useState("")
+
+
+    // Fetch family list and anniversary metadata on mount
+    useEffect(() => {
+        async function fetchInitialFamilyAndMeta() {
+            try {
+                setIsFamilyLoading(true)
+                const { data: members, error: membersError } = await supabase
+                    .from("family_members")
+                    .select("*")
+
+                if (membersError) throw membersError
+
+                const { data: meta, error: metaError } = await supabase
+                    .from("family_metadata")
+                    .select("value")
+                    .eq("key", "parents_marriage_date")
+                    .maybeSingle()
+
+                if (metaError) throw metaError
+
+                if (members) {
+                    setFamilyMembers(members)
+                }
+                if (meta?.value) {
+                    setMarriageDate(meta.value)
+                    setMarriageDateInput(meta.value)
+                }
+                setUseLocalStorageFallback(false)
+            } catch (e) {
+                console.warn("Error fetching initial family data from Supabase, switching to LocalStorage fallback:", e)
+                setUseLocalStorageFallback(true)
+                
+                const savedMembers = localStorage.getItem("family_members")
+                if (savedMembers) {
+                    setFamilyMembers(JSON.parse(savedMembers))
+                } else {
+                    setFamilyMembers(defaultFamilyMembers)
+                }
+                
+                const savedMarriage = localStorage.getItem("parents_marriage_date")
+                if (savedMarriage) {
+                    setMarriageDate(savedMarriage)
+                    setMarriageDateInput(savedMarriage)
+                }
+            } finally {
+                setIsFamilyLoading(false)
+            }
+        }
+        fetchInitialFamilyAndMeta()
+    }, [])
+
+    // Sync tab data depending on selected tab & selected person
+    useEffect(() => {
+        async function fetchDocumentsData() {
+            try {
+                setIsDocsLoading(true)
+                const { data, error } = await supabase
+                    .from("req_documents")
+                    .select("*")
+                    .eq("person_id", selectedPerson)
+                    .order("id", { ascending: true })
+
+                if (error) throw error
+                if (data) setDocuments(data)
+            } catch (e) {
+                console.warn("Error fetching documents, switching to localStorage fallback:", e)
+                const key = `req_documents_${selectedPerson}`
+                const saved = localStorage.getItem(key)
+                if (saved) {
+                    setDocuments(JSON.parse(saved))
+                } else {
+                    const fallback = selectedPerson === "self"
+                        ? defaultDocuments.map((d, i) => ({ ...d, id: i + 1, person_id: "self" } as ReqDocument))
+                        : []
+                    setDocuments(fallback)
+                    localStorage.setItem(key, JSON.stringify(fallback))
+                }
+            } finally {
+                setIsDocsLoading(false)
+            }
+        }
+
+        async function fetchChecklistData() {
+            try {
+                setIsChecklistLoading(true)
+                const { data, error } = await supabase
+                    .from("req_checklist")
+                    .select("*")
+                    .eq("person_id", selectedPerson)
+                    .order("id", { ascending: true })
+
+                if (error) throw error
+                if (data) setChecklistItems(data)
+            } catch (e) {
+                console.warn("Error fetching checklist, switching to localStorage fallback:", e)
+                const key = `req_checklist_${selectedPerson}`
+                const saved = localStorage.getItem(key)
+                if (saved) {
+                    setChecklistItems(JSON.parse(saved))
+                } else {
+                    const fallback = selectedPerson === "self"
+                        ? defaultChecklist.map((c, i) => ({ ...c, id: i + 1, person_id: "self" } as ChecklistItem))
+                        : []
+                    setChecklistItems(fallback)
+                    localStorage.setItem(key, JSON.stringify(fallback))
+                }
+            } finally {
+                setIsChecklistLoading(false)
+            }
+        }
+
+        async function fetchCredentialsData() {
+            try {
+                setIsCredentialsLoading(true)
+                const { data: ids, error: idsError } = await supabase
+                    .from("req_valid_ids")
+                    .select("*")
+                    .eq("person_id", selectedPerson)
+                    .order("id", { ascending: true })
+
+                if (idsError) throw idsError
+
+                const { data: certs, error: certsError } = await supabase
+                    .from("req_certificates")
+                    .select("*")
+                    .eq("person_id", selectedPerson)
+                    .order("id", { ascending: true })
+
+                if (certsError) throw certsError
+
+                if (ids) setValidIDs(ids)
+                if (certs) setCertificates(certs)
+            } catch (e) {
+                console.warn("Error fetching credentials, switching to localStorage fallback:", e)
+                const idsKey = `req_valid_ids_${selectedPerson}`
+                const certsKey = `req_certificates_${selectedPerson}`
+
+                const savedIds = localStorage.getItem(idsKey)
+                const savedCerts = localStorage.getItem(certsKey)
+
+                if (savedIds) setValidIDs(JSON.parse(savedIds))
+                else {
+                    const fallback = selectedPerson === "self"
+                        ? defaultValidIDs.map((v, i) => ({ ...v, id: i + 1, person_id: "self" } as ValidID))
+                        : []
+                    setValidIDs(fallback)
+                    localStorage.setItem(idsKey, JSON.stringify(fallback))
+                }
+
+                if (savedCerts) setCertificates(JSON.parse(savedCerts))
+                else {
+                    const fallback = selectedPerson === "self"
+                        ? defaultCertificates.map((c, i) => ({ ...c, id: i + 1, person_id: "self" } as Certificate))
+                        : []
+                    setCertificates(fallback)
+                    localStorage.setItem(certsKey, JSON.stringify(fallback))
+                }
+            } finally {
+                setIsCredentialsLoading(false)
+            }
+        }
+
+        if (selectedCategory === "Checklist") {
+            fetchChecklistData()
+        } else if (selectedCategory === "Credentials") {
+            fetchCredentialsData()
+        } else if (selectedCategory !== "Family") {
+            fetchDocumentsData()
+        }
+    }, [selectedCategory, selectedPerson])
+
     // Programmatically sort files alphabetically within each category (or overall)
     const filteredDocuments = useMemo(() => {
-        const matchingDocs = rawDocuments.filter((doc) => {
+        const matchingDocs = documents.filter((doc) => {
             const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase())
             const matchesCategory = selectedCategory === "All" || doc.category === selectedCategory
             return matchesSearch && matchesCategory
@@ -173,13 +286,14 @@ export default function Requirements() {
 
         // Sort alphabetically
         return [...matchingDocs].sort((a, b) => a.name.localeCompare(b.name))
-    }, [searchQuery, selectedCategory])
+    }, [searchQuery, selectedCategory, documents])
 
     const getIcon = (type: string) => {
         switch (type) {
             case "pdf":
                 return <FileText className="h-6 w-6 text-rose-500" />
             case "jpg":
+            case "png":
                 return <Image className="h-6 w-6 text-emerald-500" />
             case "xlsx":
                 return <FileSpreadsheet className="h-6 w-6 text-emerald-600" />
@@ -232,13 +346,394 @@ export default function Requirements() {
         return showSensitive ? value : "••••••••"
     }
 
-    const categories = ["All", "IDs & Clearances", "Birth & Baptism", "School & Credentials", "Employment & Contributions", "Photos", "Checklist", "Credentials"]
+    const calculateAge = (birthdayStr: string) => {
+        if (!birthdayStr) return null
+        try {
+            // Clean up common typo cases
+            const cleaned = birthdayStr.replace("February 016", "February 16")
+            const parsed = Date.parse(cleaned)
+            if (isNaN(parsed)) return null
+            const birthday = new Date(parsed)
+            const today = new Date()
+            let age = today.getFullYear() - birthday.getFullYear()
+            const monthDiff = today.getMonth() - birthday.getMonth()
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthday.getDate())) {
+                age--
+            }
+            return age
+        } catch (e) {
+            return null
+        }
+    }
+
+    const getYearsOfMarriage = (dateStr: string) => {
+        if (!dateStr) return null
+        try {
+            const parsed = Date.parse(dateStr)
+            if (isNaN(parsed)) return null
+            const marriage = new Date(parsed)
+            const today = new Date()
+            let years = today.getFullYear() - marriage.getFullYear()
+            const monthDiff = today.getMonth() - marriage.getMonth()
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < marriage.getDate())) {
+                years--
+            }
+            return years
+        } catch (e) {
+            return null
+        }
+    }
+
+
+    const handleSaveMember = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!formName.trim() || !formBirthday.trim() || !formContact.trim()) return
+
+        const payload: FamilyMember = {
+            id: editingMember ? editingMember.id : Date.now().toString(),
+            name: formName,
+            relationship: formRelationship,
+            birthday: formBirthday,
+            contact: formContact
+        }
+
+        try {
+            setIsFamilySaving(true)
+            if (!useLocalStorageFallback) {
+                const { error } = await supabase
+                    .from("family_members")
+                    .upsert([payload])
+
+                if (error) throw error
+            }
+
+            let updated: FamilyMember[]
+            if (editingMember) {
+                updated = familyMembers.map((m) => m.id === editingMember.id ? payload : m)
+            } else {
+                updated = [...familyMembers, payload]
+            }
+            setFamilyMembers(updated)
+            localStorage.setItem("family_members", JSON.stringify(updated))
+            setIsFamilyModalOpen(false)
+        } catch (err) {
+            console.error("Error saving family member to Supabase, updating locally only:", err)
+            alert("Failed to save to cloud. Ensure you have run the SQL setup in Supabase. Saving to Local Storage instead.")
+            setUseLocalStorageFallback(true)
+
+            let updated: FamilyMember[]
+            if (editingMember) {
+                updated = familyMembers.map((m) => m.id === editingMember.id ? payload : m)
+            } else {
+                updated = [...familyMembers, payload]
+            }
+            setFamilyMembers(updated)
+            localStorage.setItem("family_members", JSON.stringify(updated))
+            setIsFamilyModalOpen(false)
+        } finally {
+            setIsFamilySaving(false)
+        }
+    }
+
+    const handleDeleteMember = async (id: string, name: string) => {
+        if (confirm(`Are you sure you want to delete ${name}?`)) {
+            try {
+                setIsFamilySaving(true)
+                if (!useLocalStorageFallback) {
+                    const { error } = await supabase
+                        .from("family_members")
+                        .delete()
+                        .eq("id", id)
+
+                    if (error) throw error
+                }
+
+                const updated = familyMembers.filter((m) => m.id !== id)
+                setFamilyMembers(updated)
+                localStorage.setItem("family_members", JSON.stringify(updated))
+            } catch (err) {
+                console.error("Error deleting family member from Supabase, updating locally only:", err)
+                alert("Failed to delete from cloud. Deleting from Local Storage instead.")
+                setUseLocalStorageFallback(true)
+                
+                const updated = familyMembers.filter((m) => m.id !== id)
+                setFamilyMembers(updated)
+                localStorage.setItem("family_members", JSON.stringify(updated))
+            } finally {
+                setIsFamilySaving(false)
+            }
+        }
+    }
+
+    const handleSaveMarriageDate = async () => {
+        if (!marriageDateInput.trim()) return
+        try {
+            setIsFamilySaving(true)
+            if (!useLocalStorageFallback) {
+                const { error } = await supabase
+                    .from("family_metadata")
+                    .upsert({ key: "parents_marriage_date", value: marriageDateInput })
+
+                if (error) throw error
+            }
+
+            setMarriageDate(marriageDateInput)
+            localStorage.setItem("parents_marriage_date", marriageDateInput)
+            setIsEditingMarriageDate(false)
+        } catch (err) {
+            console.error("Error saving marriage date to Supabase, updating locally only:", err)
+            alert("Failed to save marriage date to cloud. Saving to Local Storage instead.")
+            setUseLocalStorageFallback(true)
+            
+            setMarriageDate(marriageDateInput)
+            localStorage.setItem("parents_marriage_date", marriageDateInput)
+            setIsEditingMarriageDate(false)
+        } finally {
+            setIsFamilySaving(false)
+        }
+    }
+
+    // Document CRUD
+    const handleSaveDocument = async (doc: ReqDocument) => {
+        const isEdit = !!doc.id
+        try {
+            const { data, error } = await supabase
+                .from("req_documents")
+                .upsert([doc])
+                .select()
+
+            if (error) throw error
+
+            const savedDoc = data?.[0] || doc
+            let updatedDocs: ReqDocument[]
+            if (isEdit) {
+                updatedDocs = documents.map(d => d.id === doc.id ? savedDoc : d)
+            } else {
+                updatedDocs = [...documents, savedDoc]
+            }
+            setDocuments(updatedDocs)
+            localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
+        } catch (e) {
+            console.warn("Failed to save doc to Supabase, using localStorage fallback:", e)
+            const mockDoc = { ...doc, id: doc.id || Date.now() }
+            let updatedDocs: ReqDocument[]
+            if (isEdit) {
+                updatedDocs = documents.map(d => d.id === doc.id ? mockDoc : d)
+            } else {
+                updatedDocs = [...documents, mockDoc]
+            }
+            setDocuments(updatedDocs)
+            localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
+        }
+    }
+
+    const handleDeleteDocument = async (id: number, path: string, name: string) => {
+        if (!confirm(`Are you sure you want to delete ${name}?`)) return
+        try {
+            const { error } = await supabase
+                .from("req_documents")
+                .delete()
+                .eq("id", id)
+
+            if (error) throw error
+
+            // Remove file from storage if uploaded to Supabase Storage
+            if (path.includes("supabase.co/storage")) {
+                try {
+                    const parts = path.split("/requirements/")
+                    if (parts.length > 1) {
+                        const storagePath = parts[1]
+                        await supabase.storage.from("requirements").remove([storagePath])
+                    }
+                } catch (storageErr) {
+                    console.warn("Could not delete physical file from storage:", storageErr)
+                }
+            }
+
+            const updatedDocs = documents.filter(d => d.id !== id)
+            setDocuments(updatedDocs)
+            localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
+        } catch (e) {
+            console.warn("Failed to delete doc, removing locally:", e)
+            const updatedDocs = documents.filter(d => d.id !== id)
+            setDocuments(updatedDocs)
+            localStorage.setItem(`req_documents_${selectedPerson}`, JSON.stringify(updatedDocs))
+        }
+    }
+
+    // Checklist CRUD
+    const handleSaveChecklistItem = async (item: ChecklistItem) => {
+        const isEdit = !!item.id
+        try {
+            const { data, error } = await supabase
+                .from("req_checklist")
+                .upsert([item])
+                .select()
+
+            if (error) throw error
+
+            const savedItem = data?.[0] || item
+            let updatedItems: ChecklistItem[]
+            if (isEdit) {
+                updatedItems = checklistItems.map(c => c.id === item.id ? savedItem : c)
+            } else {
+                updatedItems = [...checklistItems, savedItem]
+            }
+            setChecklistItems(updatedItems)
+            localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
+        } catch (e) {
+            console.warn("Failed to save checklist to Supabase, saving locally:", e)
+            const mockItem = { ...item, id: item.id || Date.now() }
+            let updatedItems: ChecklistItem[]
+            if (isEdit) {
+                updatedItems = checklistItems.map(c => c.id === item.id ? mockItem : c)
+            } else {
+                updatedItems = [...checklistItems, mockItem]
+            }
+            setChecklistItems(updatedItems)
+            localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
+        }
+    }
+
+    const handleDeleteChecklistItem = async (id: number, title: string) => {
+        if (!confirm(`Are you sure you want to delete "${title}" checklist item?`)) return
+        try {
+            const { error } = await supabase
+                .from("req_checklist")
+                .delete()
+                .eq("id", id)
+
+            if (error) throw error
+
+            const updatedItems = checklistItems.filter(c => c.id !== id)
+            setChecklistItems(updatedItems)
+            localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
+        } catch (e) {
+            console.warn("Failed to delete checklist item, removing locally:", e)
+            const updatedItems = checklistItems.filter(c => c.id !== id)
+            setChecklistItems(updatedItems)
+            localStorage.setItem(`req_checklist_${selectedPerson}`, JSON.stringify(updatedItems))
+        }
+    }
+
+    // Valid IDs CRUD
+    const handleSaveValidID = async (validID: ValidID) => {
+        const isEdit = !!validID.id
+        try {
+            const { data, error } = await supabase
+                .from("req_valid_ids")
+                .upsert([validID])
+                .select()
+
+            if (error) throw error
+
+            const savedID = data?.[0] || validID
+            let updatedIDs: ValidID[]
+            if (isEdit) {
+                updatedIDs = validIDs.map(v => v.id === validID.id ? savedID : v)
+            } else {
+                updatedIDs = [...validIDs, savedID]
+            }
+            setValidIDs(updatedIDs)
+            localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
+        } catch (e) {
+            console.warn("Failed to save Valid ID, saving locally:", e)
+            const mockID = { ...validID, id: validID.id || Date.now() }
+            let updatedIDs: ValidID[]
+            if (isEdit) {
+                updatedIDs = validIDs.map(v => v.id === validID.id ? mockID : v)
+            } else {
+                updatedIDs = [...validIDs, mockID]
+            }
+            setValidIDs(updatedIDs)
+            localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
+        }
+    }
+
+    const handleDeleteValidID = async (id: number, name: string) => {
+        if (!confirm(`Are you sure you want to delete Valid ID: ${name}?`)) return
+        try {
+            const { error } = await supabase
+                .from("req_valid_ids")
+                .delete()
+                .eq("id", id)
+
+            if (error) throw error
+
+            const updatedIDs = validIDs.filter(v => v.id !== id)
+            setValidIDs(updatedIDs)
+            localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
+        } catch (e) {
+            console.warn("Failed to delete Valid ID, removing locally:", e)
+            const updatedIDs = validIDs.filter(v => v.id !== id)
+            setValidIDs(updatedIDs)
+            localStorage.setItem(`req_valid_ids_${selectedPerson}`, JSON.stringify(updatedIDs))
+        }
+    }
+
+    // Certificates CRUD
+    const handleSaveCertificate = async (cert: Certificate) => {
+        const isEdit = !!cert.id
+        try {
+            const { data, error } = await supabase
+                .from("req_certificates")
+                .upsert([cert])
+                .select()
+
+            if (error) throw error
+
+            const savedCert = data?.[0] || cert
+            let updatedCerts: Certificate[]
+            if (isEdit) {
+                updatedCerts = certificates.map(c => c.id === cert.id ? savedCert : c)
+            } else {
+                updatedCerts = [...certificates, savedCert]
+            }
+            setCertificates(updatedCerts)
+            localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
+        } catch (e) {
+            console.warn("Failed to save Certificate, saving locally:", e)
+            const mockCert = { ...cert, id: cert.id || Date.now() }
+            let updatedCerts: Certificate[]
+            if (isEdit) {
+                updatedCerts = certificates.map(c => c.id === cert.id ? mockCert : c)
+            } else {
+                updatedCerts = [...certificates, mockCert]
+            }
+            setCertificates(updatedCerts)
+            localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
+        }
+    }
+
+    const handleDeleteCertificate = async (id: number, name: string) => {
+        if (!confirm(`Are you sure you want to delete Certificate: ${name}?`)) return
+        try {
+            const { error } = await supabase
+                .from("req_certificates")
+                .delete()
+                .eq("id", id)
+
+            if (error) throw error
+
+            const updatedCerts = certificates.filter(c => c.id !== id)
+            setCertificates(updatedCerts)
+            localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
+        } catch (e) {
+            console.warn("Failed to delete Certificate, removing locally:", e)
+            const updatedCerts = certificates.filter(c => c.id !== id)
+            setCertificates(updatedCerts)
+            localStorage.setItem(`req_certificates_${selectedPerson}`, JSON.stringify(updatedCerts))
+        }
+    }
+
+    const categories = ["All", "IDs & Clearances", "Birth & Baptism", "School & Credentials", "Employment & Contributions", "Photos", "Checklist", "Credentials", "Family"]
 
     const getCategoryCount = (category: string) => {
-        if (category === "All") return rawDocuments.length
-        if (category === "Checklist") return checklistNotes.length
+        if (category === "All") return documents.length
+        if (category === "Checklist") return checklistItems.length
         if (category === "Credentials") return validIDs.length + certificates.length
-        return rawDocuments.filter((doc) => doc.category === category).length
+        if (category === "Family") return familyMembers.length
+        return documents.filter((doc) => doc.category === category).length
     }
 
     const handleDownloadAll = () => {
@@ -256,13 +751,14 @@ export default function Requirements() {
 
     const getDocForNote = (title: string) => {
         const normalizedNote = title.toLowerCase().replace(/[^a-z0-9]/g, "")
-        return rawDocuments.find((doc) => {
+        return documents.find((doc) => {
             const normalizedDocName = doc.name.toLowerCase().replace(/[^a-z0-9]/g, "")
             return normalizedDocName.includes(normalizedNote) || normalizedNote.includes(normalizedDocName)
         })
     }
 
-    const isDocumentView = selectedCategory !== "Checklist" && selectedCategory !== "Credentials"
+    const isDocumentView = selectedCategory !== "Checklist" && selectedCategory !== "Credentials" && selectedCategory !== "Family"
+
 
     return (
         <div className="min-h-screen bg-background pt-24 pb-20 px-4 md:px-8">
@@ -329,14 +825,295 @@ export default function Requirements() {
                     ))}
                 </div>
 
+                {/* Person Filter (not shown on Family tab since that tab manages the family list itself) */}
+                {selectedCategory !== "Family" && (
+                    <PersonFilter
+                        familyMembers={familyMembers}
+                        selectedPerson={selectedPerson}
+                        onChange={setSelectedPerson}
+                    />
+                )}
+
                 {/* Main Content Area */}
                 <AnimatePresence mode="wait">
                     {selectedCategory === "Credentials" ? (
-                        <CredentialsView
-                            showSensitive={showSensitive}
-                            setShowSensitive={setShowSensitive}
-                            maskValue={maskValue}
-                        />
+                        isCredentialsLoading ? (
+                            <div className="flex flex-col items-center justify-center py-20 bg-card border border-border/40 rounded-3xl space-y-4 shadow-xl">
+                                <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                <p className="text-sm text-muted-foreground font-semibold">Loading credentials...</p>
+                            </div>
+                        ) : (
+                            <CredentialsView
+                                showSensitive={showSensitive}
+                                setShowSensitive={setShowSensitive}
+                                maskValue={maskValue}
+                                validIDs={validIDs}
+                                certificates={certificates}
+                                onAddId={() => {
+                                    setEditingValidID(null)
+                                    setIsValidIDModalOpen(true)
+                                }}
+                                onEditId={(id) => {
+                                    setEditingValidID(id)
+                                    setIsValidIDModalOpen(true)
+                                }}
+                                onDeleteId={(id, name) => handleDeleteValidID(id, name)}
+                                onAddCert={() => {
+                                    setEditingCert(null)
+                                    setIsCertModalOpen(true)
+                                }}
+                                onEditCert={(cert) => {
+                                    setEditingCert(cert)
+                                    setIsCertModalOpen(true)
+                                }}
+                                onDeleteCert={(id, name) => handleDeleteCertificate(id, name)}
+                            />
+                        )
+                    ) : selectedCategory === "Family" ? (
+                        <motion.div
+                            key="family"
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            className="space-y-8"
+                        >
+                            {isFamilyLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 bg-card border border-border/40 rounded-3xl space-y-4">
+                                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                    <p className="text-sm text-muted-foreground font-semibold">Synchronizing with Supabase database...</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Parents' Marriage Anniversary banner */}
+                                    <div className="bg-card border border-border/40 rounded-3xl p-6 md:p-8 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-8 translate-x-8 pointer-events-none"></div>
+                                        <div className="flex items-center gap-4.5 z-10">
+                                            <div className="p-4 rounded-2xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-500">
+                                                <Heart className="h-8 w-8 fill-rose-500 animate-pulse" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h2 className="text-xl font-bold tracking-tight">Parents' Marriage</h2>
+                                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md border bg-rose-500/10 text-rose-500 border-rose-500/20">
+                                                        Anniversary
+                                                    </span>
+                                                </div>
+                                                {isEditingMarriageDate ? (
+                                                    <div className="flex items-center gap-2 mt-2">
+                                                        <input
+                                                            type="text"
+                                                            value={marriageDateInput}
+                                                            onChange={(e) => setMarriageDateInput(e.target.value)}
+                                                            placeholder="November 26, 1995"
+                                                            className="px-3 py-1 bg-background border border-border/60 rounded-lg text-xs font-semibold focus:outline-none focus:border-primary"
+                                                        />
+                                                        <button
+                                                            onClick={handleSaveMarriageDate}
+                                                            className="p-1 rounded bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all"
+                                                            title="Save Date"
+                                                        >
+                                                            <CheckCircle2 className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsEditingMarriageDate(false)
+                                                                setMarriageDateInput(marriageDate)
+                                                            }}
+                                                            className="p-1 rounded bg-stone-500/10 text-stone-400 hover:bg-stone-500/20 border border-stone-500/20 transition-all"
+                                                            title="Cancel"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-muted-foreground font-medium mt-1">
+                                                        Date of Marriage: <span className="text-foreground font-bold">{marriageDate}</span>
+                                                        {(() => {
+                                                            const years = getYearsOfMarriage(marriageDate)
+                                                            if (years !== null) {
+                                                                return (
+                                                                    <span className="ml-2 text-xs text-rose-500 font-bold bg-rose-500/5 px-2 py-0.5 rounded border border-rose-500/10">
+                                                                        {years} Years of Love ❤️
+                                                                    </span>
+                                                                )
+                                                            }
+                                                            return null
+                                                        })()}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {!isEditingMarriageDate && (
+                                            <button
+                                                onClick={() => {
+                                                    setIsEditingMarriageDate(true)
+                                                    setMarriageDateInput(marriageDate)
+                                                }}
+                                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border/40 font-bold text-xs rounded-xl shadow-sm transition-all z-10"
+                                            >
+                                                <Edit2 className="h-3.5 w-3.5" />
+                                                <span>Edit Marriage Date</span>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Family Members Header & Add Action */}
+                                    <div className="flex items-center justify-between border-b border-border/30 pb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                                                <Users className="h-6 w-6" />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-bold tracking-tight">Family Members</h2>
+                                                <p className="text-xs text-muted-foreground font-medium">Keep track of important family contact information and birthdays</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setEditingMember(null)
+                                                setFormName("")
+                                                setFormRelationship("Sister")
+                                                setFormBirthday("")
+                                                setFormContact("")
+                                                setIsFamilyModalOpen(true)
+                                            }}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            <span>Add Member</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Family Members Grid */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {familyMembers.map((member) => {
+                                            const age = calculateAge(member.birthday)
+                                            const initials = member.name
+                                                .split(" ")
+                                                .map((n) => n[0])
+                                                .join("")
+                                                .slice(0, 2)
+                                                .toUpperCase()
+
+                                            const getGradient = (rel: typeof member.relationship) => {
+                                                switch (rel) {
+                                                    case "Mother":
+                                                        return "from-rose-400 to-pink-600 dark:from-rose-500/20 dark:to-pink-600/30 text-rose-600 dark:text-rose-400"
+                                                    case "Father":
+                                                        return "from-sky-400 to-blue-600 dark:from-sky-500/20 dark:to-blue-600/30 text-blue-600 dark:text-blue-400"
+                                                    case "Sister":
+                                                        return "from-purple-400 to-indigo-600 dark:from-purple-500/20 dark:to-indigo-600/30 text-indigo-600 dark:text-indigo-400"
+                                                    case "Brother":
+                                                        return "from-amber-400 to-orange-600 dark:from-amber-500/20 dark:to-orange-600/30 text-orange-600 dark:text-orange-400"
+                                                    default:
+                                                        return "from-teal-400 to-emerald-600 dark:from-teal-500/20 dark:to-emerald-600/30 text-emerald-600 dark:text-emerald-400"
+                                                }
+                                            }
+
+                                            const getBadge = (rel: typeof member.relationship) => {
+                                                switch (rel) {
+                                                    case "Mother":
+                                                        return "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                                    case "Father":
+                                                        return "bg-sky-500/10 text-sky-500 border-sky-500/20"
+                                                    case "Sister":
+                                                        return "bg-purple-500/10 text-purple-500 border-purple-500/20"
+                                                    case "Brother":
+                                                        return "bg-orange-500/10 text-orange-500 border-orange-500/20"
+                                                    default:
+                                                        return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                }
+                                            }
+
+                                            return (
+                                                <div 
+                                                    key={member.id}
+                                                    className="bg-card border border-border/40 rounded-3xl p-6 shadow-xl relative overflow-hidden transition-all hover:border-primary/20 hover:shadow-2xl flex flex-col justify-between"
+                                                >
+                                                    <div className="space-y-4">
+                                                        {/* Member Card Header */}
+                                                        <div className="flex items-start justify-between gap-4">
+                                                            <div className="flex items-center gap-3.5">
+                                                                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br flex items-center justify-center font-bold text-base shadow-sm shrink-0 ${getGradient(member.relationship)}`}>
+                                                                    {initials}
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="font-bold text-base text-foreground leading-snug break-words pr-12">
+                                                                        {member.name}
+                                                                    </h3>
+                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border shrink-0 ${getBadge(member.relationship)}`}>
+                                                                            {member.relationship}
+                                                                        </span>
+                                                                        {age !== null && (
+                                                                            <span className="text-[10px] text-muted-foreground font-medium">
+                                                                                {age} years old
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Action Buttons */}
+                                                            <div className="flex items-center gap-1.5 shrink-0 absolute top-4 right-4">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditingMember(member)
+                                                                        setFormName(member.name)
+                                                                        setFormRelationship(member.relationship)
+                                                                        setFormBirthday(member.birthday)
+                                                                        setFormContact(member.contact)
+                                                                        setIsFamilyModalOpen(true)
+                                                                    }}
+                                                                    className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-all"
+                                                                    title="Edit Member"
+                                                                >
+                                                                    <Edit2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteMember(member.id, member.name)}
+                                                                    className="p-2 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 text-rose-500/80 hover:text-rose-500 transition-all border border-rose-500/10"
+                                                                    title="Delete Member"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="border-t border-border/30 pt-4 space-y-2.5">
+                                                            {/* Birthday */}
+                                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
+                                                                <Calendar className="h-4 w-4 text-primary/70 shrink-0" />
+                                                                <span>Birthday: <strong className="text-foreground">{member.birthday}</strong></span>
+                                                            </div>
+
+                                                            {/* Contact */}
+                                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
+                                                                <Phone className="h-4 w-4 text-primary/70 shrink-0" />
+                                                                <span>
+                                                                    Contact:{" "}
+                                                                    <strong className="text-foreground font-mono">
+                                                                        {maskValue(member.contact)}
+                                                                    </strong>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                        {familyMembers.length === 0 && (
+                                            <div className="col-span-full py-12 text-center bg-card border border-border/40 rounded-3xl">
+                                                <Users className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                                                <h3 className="font-bold text-lg">No family members</h3>
+                                                <p className="text-muted-foreground text-sm mt-1">Add details of your family members to display them here.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </motion.div>
                     ) : selectedCategory === "Checklist" ? (
                         <motion.div
                             key="checklist"
@@ -345,56 +1122,108 @@ export default function Requirements() {
                             exit={{ opacity: 0, y: -15 }}
                             className="bg-card border border-border/40 rounded-3xl p-6 md:p-8 shadow-xl space-y-6"
                         >
-                            <div className="flex items-center gap-3 border-b border-border/30 pb-4">
-                                <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                                    <ClipboardList className="h-6 w-6" />
+                            {isChecklistLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                    <p className="text-sm text-muted-foreground font-semibold">Loading checklist items...</p>
                                 </div>
-                                <div>
-                                    <h2 className="text-xl font-bold tracking-tight">Status Checklist</h2>
-                                    <p className="text-xs text-muted-foreground font-medium">Tracking file completions and outstanding tasks from NOTES.txt</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {checklistNotes.map((note) => (
-                                    <div 
-                                        key={note.id}
-                                        className="flex items-start gap-3.5 p-4 bg-background border border-border/30 rounded-2xl transition-all hover:border-primary/20 hover:shadow-md"
-                                    >
-                                        {getStatusIcon(note.status)}
-                                        <div className="space-y-1.5 min-w-0">
-                                            <h3 className="font-bold text-sm text-foreground leading-snug break-words">
-                                                {note.title}
-                                            </h3>
-                                            <div className="flex items-center gap-2 flex-wrap w-full">
-                                                {getStatusBadge(note.status)}
-                                                <span className="text-[11px] text-muted-foreground font-medium leading-none">
-                                                    {note.statusText}
-                                                </span>
-                                                {(() => {
-                                                    const matchingDoc = getDocForNote(note.title)
-                                                    if (matchingDoc && (matchingDoc.type === "pdf" || matchingDoc.type === "jpg")) {
-                                                        return (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    setPreviewDoc({ name: matchingDoc.name, path: matchingDoc.path, type: matchingDoc.type })
-                                                                }}
-                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors ml-auto bg-primary/5 hover:bg-primary/10 px-2 py-0.5 rounded border border-primary/10"
-                                                                title={`View ${matchingDoc.name}`}
-                                                            >
-                                                                <Eye className="h-3 w-3" />
-                                                                <span>View File</span>
-                                                            </button>
-                                                        )
-                                                    }
-                                                    return null
-                                                })()}
+                            ) : (
+                                <>
+                                    <div className="flex items-center justify-between border-b border-border/30 pb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                                                <ClipboardList className="h-6 w-6" />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-bold tracking-tight">Status Checklist</h2>
+                                                <p className="text-xs text-muted-foreground font-medium">Tracking file completions and outstanding tasks</p>
                                             </div>
                                         </div>
+                                        <button
+                                            onClick={() => {
+                                                setEditingChecklistItem(null)
+                                                setIsChecklistModalOpen(true)
+                                            }}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            <span>Add Item</span>
+                                        </button>
                                     </div>
-                                ))}
-                            </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {checklistItems.map((note) => (
+                                            <div 
+                                                key={note.id}
+                                                className="flex items-start justify-between gap-3.5 p-4 bg-background border border-border/30 rounded-2xl transition-all hover:border-primary/20 hover:shadow-md relative group"
+                                            >
+                                                <div className="flex items-start gap-3.5 min-w-0 pr-16">
+                                                    {getStatusIcon(note.status)}
+                                                    <div className="space-y-1.5 min-w-0">
+                                                        <h3 className="font-bold text-sm text-foreground leading-snug break-words">
+                                                            {note.title}
+                                                        </h3>
+                                                        <div className="flex items-center gap-2 flex-wrap w-full">
+                                                            {getStatusBadge(note.status)}
+                                                            <span className="text-[11px] text-muted-foreground font-medium leading-none">
+                                                                {note.status_text}
+                                                            </span>
+                                                            {(() => {
+                                                                const matchingDoc = getDocForNote(note.title)
+                                                                if (matchingDoc && (matchingDoc.type === "pdf" || matchingDoc.type === "jpg")) {
+                                                                    return (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setPreviewDoc({ name: matchingDoc.name, path: matchingDoc.path, type: matchingDoc.type })
+                                                                            }}
+                                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors ml-2 bg-primary/5 hover:bg-primary/10 px-2 py-0.5 rounded border border-primary/10"
+                                                                            title={`View ${matchingDoc.name}`}
+                                                                        >
+                                                                            <Eye className="h-3 w-3" />
+                                                                            <span>View File</span>
+                                                                        </button>
+                                                                    )
+                                                                }
+                                                                return null
+                                                            })()}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Action buttons */}
+                                                <div className="flex items-center gap-1 absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingChecklistItem(note)
+                                                            setIsChecklistModalOpen(true)
+                                                        }}
+                                                        className="p-1.5 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-all"
+                                                        title="Edit Item"
+                                                    >
+                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteChecklistItem(note.id!, note.title)}
+                                                        className="p-1.5 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 transition-all border border-rose-500/10"
+                                                        title="Delete Item"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {checklistItems.length === 0 && (
+                                            <div className="col-span-full py-12 text-center">
+                                                <ClipboardList className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                                                <h3 className="font-bold text-lg">No checklist items</h3>
+                                                <p className="text-muted-foreground text-sm mt-1">Add items to track tasks and file completions.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </motion.div>
                     ) : (
                         <motion.div
@@ -402,79 +1231,123 @@ export default function Requirements() {
                             initial={{ opacity: 0, y: 15 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -15 }}
-                            className="bg-card border border-border/40 rounded-3xl overflow-hidden shadow-xl"
+                            className="space-y-4"
                         >
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="bg-stone-900 text-white text-left">
-                                            <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Document Name</th>
-                                            <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Category</th>
-                                            <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Size & Type</th>
-                                            <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/30">
-                                        {filteredDocuments.length > 0 ? (
-                                            filteredDocuments.map((doc) => (
-                                                <tr key={doc.name} className="hover:bg-muted/50 transition-colors">
-                                                    <td className="px-6 py-4 font-bold text-foreground whitespace-nowrap">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="p-2 bg-muted rounded-lg shrink-0">
-                                                                {getIcon(doc.type)}
-                                                            </div>
-                                                            <span>{doc.name}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className="text-[11px] text-primary/70 font-semibold truncate bg-primary/5 border border-primary/10 rounded-full px-2.5 py-0.5 w-fit">
-                                                            {doc.category}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-xs text-muted-foreground font-mono">
-                                                        <span className="uppercase font-bold">{doc.type}</span> • {doc.size}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {(doc.type === "pdf" || doc.type === "jpg") ? (
-                                                                <button
-                                                                    onClick={() => setPreviewDoc({ name: doc.name, path: doc.path, type: doc.type })}
-                                                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-colors"
-                                                                >
-                                                                    <Eye className="h-3.5 w-3.5" />
-                                                                    <span>View</span>
-                                                                </button>
-                                                            ) : (
-                                                                <span className="px-3 py-1.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider bg-background/50 border border-border/20 rounded-lg">
-                                                                    Download Only
-                                                                </span>
-                                                            )}
-                                                            <a
-                                                                href={doc.path}
-                                                                download={doc.name + "." + doc.type}
-                                                                className="inline-flex items-center justify-center p-2 rounded-lg bg-card border border-border hover:bg-muted text-foreground transition-all hover:scale-105"
-                                                                title={`Download ${doc.name}`}
-                                                            >
-                                                                <Download className="h-3.5 w-3.5" />
-                                                            </a>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        ) : (
-                                            <tr>
-                                                <td colSpan={4} className="py-16 text-center">
-                                                    <div className="flex flex-col items-center justify-center text-center">
-                                                        <Folder className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                                                        <h3 className="font-bold text-lg">No requirements found</h3>
-                                                        <p className="text-muted-foreground text-sm max-w-xs mt-1">Please try modifying your search filter or active category.</p>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                            {/* Document header with Add button */}
+                            <div className="flex items-center justify-between bg-card border border-border/40 rounded-2xl px-6 py-4 shadow-sm">
+                                <div>
+                                    <h3 className="font-bold text-sm">Category: <span className="text-primary">{selectedCategory}</span></h3>
+                                    <p className="text-xs text-muted-foreground">Manage your documents and preview files</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setEditingDoc(null)
+                                        setIsDocModalOpen(true)
+                                    }}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    <span>Add Document</span>
+                                </button>
                             </div>
+
+                            {isDocsLoading ? (
+                                <div className="bg-card border border-border/40 rounded-3xl py-20 flex flex-col items-center justify-center space-y-4 shadow-xl">
+                                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                    <p className="text-sm text-muted-foreground font-semibold">Loading documents...</p>
+                                </div>
+                            ) : (
+                                <div className="bg-card border border-border/40 rounded-3xl overflow-hidden shadow-xl">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="bg-stone-900 text-white text-left">
+                                                    <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Document Name</th>
+                                                    <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Category</th>
+                                                    <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Size & Type</th>
+                                                    <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-border/30">
+                                                {filteredDocuments.length > 0 ? (
+                                                    filteredDocuments.map((doc) => (
+                                                        <tr key={doc.id || doc.name} className="hover:bg-muted/50 transition-colors">
+                                                            <td className="px-6 py-4 font-bold text-foreground whitespace-nowrap">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="p-2 bg-muted rounded-lg shrink-0">
+                                                                        {getIcon(doc.type)}
+                                                                    </div>
+                                                                    <span>{doc.name}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <span className="text-[11px] text-primary/70 font-semibold truncate bg-primary/5 border border-primary/10 rounded-full px-2.5 py-0.5 w-fit">
+                                                                    {doc.category}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-xs text-muted-foreground font-mono">
+                                                                <span className="uppercase font-bold">{doc.type}</span> • {doc.size}
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    {(doc.type === "pdf" || doc.type === "jpg" || doc.type === "png") ? (
+                                                                        <button
+                                                                            onClick={() => setPreviewDoc({ name: doc.name, path: doc.path, type: doc.type })}
+                                                                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-colors"
+                                                                        >
+                                                                            <Eye className="h-3.5 w-3.5" />
+                                                                            <span>View</span>
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span className="px-3 py-1.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider bg-background/50 border border-border/20 rounded-lg">
+                                                                            Download Only
+                                                                        </span>
+                                                                    )}
+                                                                    <a
+                                                                        href={doc.path}
+                                                                        download={doc.name + "." + doc.type}
+                                                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-card border border-border hover:bg-muted text-foreground transition-all hover:scale-105"
+                                                                        title={`Download ${doc.name}`}
+                                                                    >
+                                                                        <Download className="h-3.5 w-3.5" />
+                                                                    </a>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setEditingDoc(doc)
+                                                                            setIsDocModalOpen(true)
+                                                                        }}
+                                                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-card border border-border hover:bg-muted text-foreground transition-all hover:scale-105"
+                                                                        title="Edit Document"
+                                                                    >
+                                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteDocument(doc.id!, doc.path, doc.name)}
+                                                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 border border-rose-500/10 transition-all hover:scale-105 animate-pulse-hover"
+                                                                        title="Delete Document"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={4} className="py-16 text-center">
+                                                            <div className="flex flex-col items-center justify-center text-center">
+                                                                <Folder className="h-12 w-12 text-muted-foreground/30 mb-3" />
+                                                                <h3 className="font-bold text-lg">No requirements found</h3>
+                                                                <p className="text-muted-foreground text-sm max-w-xs mt-1">Please try modifying your search filter or active category.</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -547,16 +1420,190 @@ export default function Requirements() {
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                {/* Family Member Add/Edit Modal */}
+                <AnimatePresence>
+                    {isFamilyModalOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+                            onClick={() => setIsFamilyModalOpen(false)}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.95, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.95, opacity: 0 }}
+                                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                                className="bg-card w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-border/50"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                {/* Modal Header */}
+                                <div className="px-6 py-4 bg-muted/50 border-b border-border/50 flex items-center justify-between">
+                                    <h3 className="font-bold text-lg text-foreground">
+                                        {editingMember ? "Edit Family Member" : "Add Family Member"}
+                                    </h3>
+                                    <button
+                                        onClick={() => setIsFamilyModalOpen(false)}
+                                        className="p-2 rounded-xl bg-card border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all hover:scale-105"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+
+                                {/* Modal Body / Form */}
+                                <form onSubmit={handleSaveMember} className="p-6 space-y-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Full Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            disabled={isFamilySaving}
+                                            value={formName}
+                                            onChange={(e) => setFormName(e.target.value)}
+                                            placeholder="e.g. Luvy Molina Eugenio"
+                                            className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Relationship</label>
+                                        <select
+                                            disabled={isFamilySaving}
+                                            value={formRelationship}
+                                            onChange={(e) => setFormRelationship(e.target.value as FamilyMember["relationship"])}
+                                            className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60"
+                                        >
+                                            <option value="Mother">Mother</option>
+                                            <option value="Father">Father</option>
+                                            <option value="Sister">Sister</option>
+                                            <option value="Brother">Brother</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Birthday</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            disabled={isFamilySaving}
+                                            value={formBirthday}
+                                            onChange={(e) => setFormBirthday(e.target.value)}
+                                            placeholder="e.g. February 01, 1975"
+                                            className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Contact Number</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            disabled={isFamilySaving}
+                                            value={formContact}
+                                            onChange={(e) => setFormContact(e.target.value)}
+                                            placeholder="e.g. 09164865929"
+                                            className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors font-mono disabled:opacity-60"
+                                        />
+                                    </div>
+
+                                    <div className="pt-4 flex items-center justify-end gap-2.5">
+                                        <button
+                                            type="button"
+                                            disabled={isFamilySaving}
+                                            onClick={() => setIsFamilyModalOpen(false)}
+                                            className="px-4 py-2.5 bg-muted hover:bg-muted/80 text-foreground border border-border/40 font-bold text-xs rounded-xl shadow-sm transition-all disabled:opacity-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isFamilySaving}
+                                            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 transition-all disabled:opacity-50"
+                                        >
+                                            {isFamilySaving ? (
+                                                <>
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    <span>Saving...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Save className="h-3.5 w-3.5" />
+                                                    <span>Save Member</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </form>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* CRUD Modals */}
+                <DocumentModal
+                    isOpen={isDocModalOpen}
+                    onClose={() => setIsDocModalOpen(false)}
+                    onSave={handleSaveDocument}
+                    editingDoc={editingDoc}
+                    personId={selectedPerson}
+                />
+
+                <ChecklistModal
+                    isOpen={isChecklistModalOpen}
+                    onClose={() => setIsChecklistModalOpen(false)}
+                    onSave={handleSaveChecklistItem}
+                    editingItem={editingChecklistItem}
+                    personId={selectedPerson}
+                />
+
+                <ValidIDModal
+                    isOpen={isValidIDModalOpen}
+                    onClose={() => setIsValidIDModalOpen(false)}
+                    onSave={handleSaveValidID}
+                    editingId={editingValidID}
+                    personId={selectedPerson}
+                />
+
+                <CertificateModal
+                    isOpen={isCertModalOpen}
+                    onClose={() => setIsCertModalOpen(false)}
+                    onSave={handleSaveCertificate}
+                    editingCert={editingCert}
+                    personId={selectedPerson}
+                />
             </div>
         </div>
     )
 }
 
 // ── Credentials Tab Component ─────────────────────────────────────────
-function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
+function CredentialsView({
+    showSensitive,
+    setShowSensitive,
+    maskValue,
+    validIDs,
+    certificates,
+    onAddId,
+    onEditId,
+    onDeleteId,
+    onAddCert,
+    onEditCert,
+    onDeleteCert
+}: {
     showSensitive: boolean
     setShowSensitive: (v: boolean) => void
     maskValue: (v: string) => string
+    validIDs: ValidID[]
+    certificates: Certificate[]
+    onAddId: () => void
+    onEditId: (id: ValidID) => void
+    onDeleteId: (id: number, name: string) => void
+    onAddCert: () => void
+    onEditCert: (cert: Certificate) => void
+    onDeleteCert: (id: number, name: string) => void
 }) {
     return (
         <motion.div
@@ -592,14 +1639,23 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
 
             {/* Valid IDs Table */}
             <div className="bg-card border border-border/40 rounded-3xl overflow-hidden shadow-xl">
-                <div className="flex items-center gap-3 px-6 py-5 border-b border-border/30">
-                    <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                        <CreditCard className="h-6 w-6" />
+                <div className="flex items-center justify-between px-6 py-5 border-b border-border/30">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <CreditCard className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold tracking-tight">Valid IDs</h2>
+                            <p className="text-xs text-muted-foreground font-medium">{validIDs.length} records — Government, bank, and personal identification</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-xl font-bold tracking-tight">Valid IDs</h2>
-                        <p className="text-xs text-muted-foreground font-medium">{validIDs.length} records — Government, bank, and personal identification</p>
-                    </div>
+                    <button
+                        onClick={onAddId}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add ID</span>
+                    </button>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -616,11 +1672,12 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
                                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Password</th>
                                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Remarks</th>
                                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap text-center">Scans</th>
+                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30">
-                            {validIDs.map((id, i) => (
-                                <tr key={i} className="hover:bg-muted/50 transition-colors">
+                            {validIDs.map((id) => (
+                                <tr key={id.id || id.name} className="hover:bg-muted/50 transition-colors">
                                     <td className="px-4 py-3 font-bold text-foreground whitespace-nowrap">{id.name}</td>
                                     <td className="px-4 py-3 text-center">
                                         {id.printed ? (
@@ -633,13 +1690,13 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 font-mono text-xs text-foreground/80 whitespace-nowrap">{id.idNumber}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.issuedDate}</td>
+                                    <td className="px-4 py-3 font-mono text-xs text-foreground/80 whitespace-nowrap">{id.id_number}</td>
+                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.issued_date}</td>
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.expiration}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.dateCreated}</td>
+                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.date_created}</td>
                                     <td className="px-4 py-3 text-xs whitespace-nowrap font-mono">
-                                        <span className={!showSensitive && id.userId !== "—" ? "select-none" : ""}>
-                                            {maskValue(id.userId)}
+                                        <span className={!showSensitive && id.user_id !== "—" ? "select-none" : ""}>
+                                            {maskValue(id.user_id)}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-xs whitespace-nowrap font-mono">
@@ -650,19 +1707,37 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{id.remarks}</td>
                                     <td className="px-4 py-3 whitespace-nowrap">
                                         <div className="flex items-center justify-center gap-1.5">
-                                            {id.frontLink && (
-                                                <a href={id.frontLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors">
+                                            {id.front_link && (
+                                                <a href={id.front_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors">
                                                     <ExternalLink className="h-3 w-3" /> Front
                                                 </a>
                                             )}
-                                            {id.backLink && (
-                                                <a href={id.backLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-stone-500/10 text-stone-400 text-[10px] font-bold hover:bg-stone-500/20 transition-colors">
+                                            {id.back_link && (
+                                                <a href={id.back_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-stone-500/10 text-stone-400 text-[10px] font-bold hover:bg-stone-500/20 transition-colors">
                                                     <ExternalLink className="h-3 w-3" /> Back
                                                 </a>
                                             )}
-                                            {!id.frontLink && !id.backLink && (
+                                            {!id.front_link && !id.back_link && (
                                                 <span className="text-[10px] text-muted-foreground/40 font-bold">—</span>
                                             )}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <button
+                                                onClick={() => onEditId(id)}
+                                                className="p-1 rounded bg-muted hover:bg-muted/85 text-foreground transition-all"
+                                                title="Edit ID"
+                                            >
+                                                <Edit2 className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => onDeleteId(id.id!, id.name)}
+                                                className="p-1 rounded bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 transition-all border border-rose-500/10"
+                                                title="Delete ID"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -674,14 +1749,23 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
 
             {/* Certificates Table */}
             <div className="bg-card border border-border/40 rounded-3xl overflow-hidden shadow-xl">
-                <div className="flex items-center gap-3 px-6 py-5 border-b border-border/30">
-                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
-                        <GraduationCap className="h-6 w-6" />
+                <div className="flex items-center justify-between px-6 py-5 border-b border-border/30">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                            <GraduationCap className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold tracking-tight">Certificates</h2>
+                            <p className="text-xs text-muted-foreground font-medium">{certificates.length} records — Academic, employment, and government certifications</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-xl font-bold tracking-tight">Certificates</h2>
-                        <p className="text-xs text-muted-foreground font-medium">{certificates.length} records — Academic, employment, and government certifications</p>
-                    </div>
+                    <button
+                        onClick={onAddCert}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add Certificate</span>
+                    </button>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -698,11 +1782,12 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
                                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Password</th>
                                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Remarks</th>
                                 <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap text-center">Link</th>
+                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider whitespace-nowrap text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30">
-                            {certificates.map((cert, i) => (
-                                <tr key={i} className="hover:bg-muted/50 transition-colors">
+                            {certificates.map((cert) => (
+                                <tr key={cert.id || cert.name} className="hover:bg-muted/50 transition-colors">
                                     <td className="px-4 py-3 font-bold text-foreground whitespace-nowrap">{cert.name}</td>
                                     <td className="px-4 py-3 text-center">
                                         {cert.printed ? (
@@ -715,13 +1800,13 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 font-mono text-xs text-foreground/80 whitespace-nowrap">{cert.idNumber}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.issuedDate}</td>
+                                    <td className="px-4 py-3 font-mono text-xs text-foreground/80 whitespace-nowrap">{cert.id_number}</td>
+                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.issued_date}</td>
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.expiration}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.dateCreated}</td>
+                                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.date_created}</td>
                                     <td className="px-4 py-3 text-xs whitespace-nowrap font-mono">
-                                        <span className={!showSensitive && cert.userId !== "—" ? "select-none" : ""}>
-                                            {maskValue(cert.userId)}
+                                        <span className={!showSensitive && cert.user_id !== "—" ? "select-none" : ""}>
+                                            {maskValue(cert.user_id)}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-xs whitespace-nowrap font-mono">
@@ -738,6 +1823,24 @@ function CredentialsView({ showSensitive, setShowSensitive, maskValue }: {
                                         ) : (
                                             <span className="text-[10px] text-muted-foreground/40 font-bold">—</span>
                                         )}
+                                    </td>
+                                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <button
+                                                onClick={() => onEditCert(cert)}
+                                                className="p-1 rounded bg-muted hover:bg-muted/85 text-foreground transition-all"
+                                                title="Edit Certificate"
+                                            >
+                                                <Edit2 className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => onDeleteCert(cert.id!, cert.name)}
+                                                className="p-1 rounded bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 transition-all border border-rose-500/10"
+                                                title="Delete Certificate"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

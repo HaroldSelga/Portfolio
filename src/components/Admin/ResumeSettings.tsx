@@ -23,7 +23,7 @@ import type { ExperienceItem } from "../../data/experience"
 import type { EducationItem } from "../../data/education"
 import type { Skill } from "../../data/skills"
 import type { VideoItem } from "../../data/videos"
-import { GraduationCap as SchoolIcon, BookOpen } from "lucide-react"
+import { GraduationCap as SchoolIcon } from "lucide-react"
 
 type SettingsTab = "hero" | "education" | "experience" | "skills" | "projects" | "multimedia" | "contact_footer"
 

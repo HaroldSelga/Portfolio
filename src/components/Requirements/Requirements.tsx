@@ -16,10 +16,10 @@ import {
     Folder, 
     X,
     ClipboardList,
-    Shield,
     CreditCard,
     GraduationCap,
     ExternalLink,
+
     Users,
     Heart,
     Calendar,
@@ -46,7 +46,6 @@ import {
     defaultFamilyMembers
 } from "./types"
 
-import PersonFilter from "./PersonFilter"
 import DocumentModal from "./DocumentModal"
 import ChecklistModal from "./ChecklistModal"
 import ValidIDModal from "./ValidIDModal"
@@ -774,31 +773,70 @@ export default function Requirements() {
                         </p>
                     </div>
 
-                    {/* Search and Action Buttons */}
-                    {isDocumentView && (
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-                            <div className="relative w-full md:w-80">
-                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <input
-                                    type="text"
-                                    placeholder="Search documents..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-card border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-medium transition-colors"
-                                />
-                            </div>
+                    {/* Header Actions */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                        {isDocumentView && (
+                            <>
+                                <div className="relative w-full md:w-80">
+                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search documents..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 bg-card border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-medium transition-colors text-foreground"
+                                    />
+                                </div>
 
-                            {filteredDocuments.length > 0 && (
-                                <button
-                                    onClick={handleDownloadAll}
-                                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300 whitespace-nowrap"
+                                {filteredDocuments.length > 0 && (
+                                    <button
+                                        onClick={handleDownloadAll}
+                                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300 whitespace-nowrap"
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        <span>Download All ({filteredDocuments.length})</span>
+                                    </button>
+                                )}
+                            </>
+                        )}
+
+                        {/* Person Filter Selector */}
+                        {selectedCategory !== "Family" && (
+                            <div className="relative min-w-[180px]">
+                                <select
+                                    value={selectedPerson}
+                                    onChange={(e) => setSelectedPerson(e.target.value)}
+                                    className="w-full pl-9 pr-10 py-2.5 bg-card border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-bold transition-colors cursor-pointer appearance-none text-foreground"
                                 >
-                                    <Download className="h-3.5 w-3.5" />
-                                    <span>Download All ({filteredDocuments.length})</span>
-                                </button>
-                            )}
-                        </div>
-                    )}
+                                    <option value="self">👤 Me (Harold)</option>
+                                    {familyMembers.map((member) => (
+                                        <option key={member.id} value={member.id}>
+                                            👥 {member.name} ({member.relationship})
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Show Sensitive Toggle */}
+                        <button
+                            onClick={() => setShowSensitive(!showSensitive)}
+                            className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border whitespace-nowrap ${
+                                showSensitive
+                                    ? "bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20"
+                                    : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20"
+                            }`}
+                        >
+                            {showSensitive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            {showSensitive ? "Hide Sensitive" : "Show Sensitive"}
+                        </button>
+                    </div>
+
                 </div>
 
                 {/* Category navigation tabs */}
@@ -825,15 +863,6 @@ export default function Requirements() {
                     ))}
                 </div>
 
-                {/* Person Filter (not shown on Family tab since that tab manages the family list itself) */}
-                {selectedCategory !== "Family" && (
-                    <PersonFilter
-                        familyMembers={familyMembers}
-                        selectedPerson={selectedPerson}
-                        onChange={setSelectedPerson}
-                    />
-                )}
-
                 {/* Main Content Area */}
                 <AnimatePresence mode="wait">
                     {selectedCategory === "Credentials" ? (
@@ -845,7 +874,6 @@ export default function Requirements() {
                         ) : (
                             <CredentialsView
                                 showSensitive={showSensitive}
-                                setShowSensitive={setShowSensitive}
                                 maskValue={maskValue}
                                 validIDs={validIDs}
                                 certificates={certificates}
@@ -1582,7 +1610,6 @@ export default function Requirements() {
 // ── Credentials Tab Component ─────────────────────────────────────────
 function CredentialsView({
     showSensitive,
-    setShowSensitive,
     maskValue,
     validIDs,
     certificates,
@@ -1594,7 +1621,6 @@ function CredentialsView({
     onDeleteCert
 }: {
     showSensitive: boolean
-    setShowSensitive: (v: boolean) => void
     maskValue: (v: string) => string
     validIDs: ValidID[]
     certificates: Certificate[]
@@ -1613,30 +1639,6 @@ function CredentialsView({
             exit={{ opacity: 0, y: -15 }}
             className="space-y-8"
         >
-            {/* Sensitive Toggle */}
-            <div className="flex items-center justify-between bg-card border border-border/40 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
-                        <Shield className="h-5 w-5" />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-sm">Sensitive Data Protection</h3>
-                        <p className="text-xs text-muted-foreground">UserID and Password fields are hidden by default</p>
-                    </div>
-                </div>
-                <button
-                    onClick={() => setShowSensitive(!showSensitive)}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                        showSensitive
-                            ? "bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20"
-                            : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20"
-                    }`}
-                >
-                    {showSensitive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    {showSensitive ? "Hide Sensitive" : "Show Sensitive"}
-                </button>
-            </div>
-
             {/* Valid IDs Table */}
             <div className="bg-card border border-border/40 rounded-3xl overflow-hidden shadow-xl">
                 <div className="flex items-center justify-between px-6 py-5 border-b border-border/30">

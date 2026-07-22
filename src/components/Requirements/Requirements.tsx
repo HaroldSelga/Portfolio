@@ -104,6 +104,7 @@ export default function Requirements() {
     const [formRelationship, setFormRelationship] = useState<FamilyMember["relationship"]>("Sister")
     const [formBirthday, setFormBirthday] = useState("")
     const [formContact, setFormContact] = useState("")
+    const [formLinkedTo, setFormLinkedTo] = useState<string>("")
 
     // Confirm Dialog State
     const [confirmDialog, setConfirmDialog] = useState<{
@@ -514,7 +515,8 @@ export default function Requirements() {
             name: formName,
             relationship: formRelationship,
             birthday: formBirthday,
-            contact: formContact
+            contact: formContact,
+            linked_to: formLinkedTo || undefined
         }
 
         try {
@@ -1156,6 +1158,7 @@ export default function Requirements() {
                                                 setFormRelationship("Sister")
                                                 setFormBirthday("")
                                                 setFormContact("")
+                                                setFormLinkedTo("")
                                                 setIsFamilyModalOpen(true)
                                             }}
                                             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
@@ -1166,64 +1169,78 @@ export default function Requirements() {
                                     </div>
 
                                     {/* Family Members Grid */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {familyMembers.map((member) => {
+                                    {(() => {
+                                        // Helper functions
+                                        const getGradient = (rel: FamilyMember["relationship"]) => {
+                                            switch (rel) {
+                                                case "Self": return "from-emerald-400 to-teal-600 dark:from-emerald-500/20 dark:to-teal-600/30 text-emerald-600 dark:text-emerald-400"
+                                                case "Mother": return "from-rose-400 to-pink-600 dark:from-rose-500/20 dark:to-pink-600/30 text-rose-600 dark:text-rose-400"
+                                                case "Father": return "from-sky-400 to-blue-600 dark:from-sky-500/20 dark:to-blue-600/30 text-blue-600 dark:text-blue-400"
+                                                case "Sister": return "from-purple-400 to-indigo-600 dark:from-purple-500/20 dark:to-indigo-600/30 text-indigo-600 dark:text-indigo-400"
+                                                case "Brother": return "from-amber-400 to-orange-600 dark:from-amber-500/20 dark:to-orange-600/30 text-orange-600 dark:text-orange-400"
+                                                case "Wife": return "from-pink-400 to-rose-600 dark:from-pink-500/20 dark:to-rose-600/30 text-pink-600 dark:text-pink-400"
+                                                case "Husband": return "from-blue-400 to-indigo-600 dark:from-blue-500/20 dark:to-indigo-600/30 text-blue-600 dark:text-blue-400"
+                                                case "Girlfriend": return "from-fuchsia-400 to-pink-600 dark:from-fuchsia-500/20 dark:to-pink-600/30 text-fuchsia-600 dark:text-fuchsia-400"
+                                                case "Boyfriend": return "from-cyan-400 to-blue-600 dark:from-cyan-500/20 dark:to-blue-600/30 text-cyan-600 dark:text-cyan-400"
+                                                default: return "from-teal-400 to-emerald-600 dark:from-teal-500/20 dark:to-emerald-600/30 text-emerald-600 dark:text-emerald-400"
+                                            }
+                                        }
+                                        const getBadge = (rel: FamilyMember["relationship"]) => {
+                                            switch (rel) {
+                                                case "Self": return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                case "Mother": return "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                                case "Father": return "bg-sky-500/10 text-sky-500 border-sky-500/20"
+                                                case "Sister": return "bg-purple-500/10 text-purple-500 border-purple-500/20"
+                                                case "Brother": return "bg-orange-500/10 text-orange-500 border-orange-500/20"
+                                                case "Wife": return "bg-pink-500/10 text-pink-500 border-pink-500/20"
+                                                case "Husband": return "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                                case "Girlfriend": return "bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20"
+                                                case "Boyfriend": return "bg-cyan-500/10 text-cyan-500 border-cyan-500/20"
+                                                default: return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                            }
+                                        }
+
+                                        // Build couple groups and singles
+                                        const renderedIds = new Set<string>()
+                                        const couples: [FamilyMember, FamilyMember][] = []
+                                        const singles: FamilyMember[] = []
+
+                                        familyMembers.forEach((member) => {
+                                            if (renderedIds.has(member.id)) return
+                                            if (member.linked_to) {
+                                                const partner = familyMembers.find(m => m.id === member.linked_to)
+                                                if (partner && !renderedIds.has(partner.id)) {
+                                                    couples.push([member, partner])
+                                                    renderedIds.add(member.id)
+                                                    renderedIds.add(partner.id)
+                                                    return
+                                                }
+                                            }
+                                            const linkedBy = familyMembers.find(m => m.linked_to === member.id && !renderedIds.has(m.id))
+                                            if (linkedBy) {
+                                                couples.push([member, linkedBy])
+                                                renderedIds.add(member.id)
+                                                renderedIds.add(linkedBy.id)
+                                                return
+                                            }
+                                            singles.push(member)
+                                            renderedIds.add(member.id)
+                                        })
+
+                                        // Render a single member card
+                                        const renderMemberCard = (member: FamilyMember, compact = false) => {
                                             const age = calculateAge(member.birthday)
-                                            const initials = member.name
-                                                .split(" ")
-                                                .map((n) => n[0])
-                                                .join("")
-                                                .slice(0, 2)
-                                                .toUpperCase()
-
-                                            const getGradient = (rel: typeof member.relationship) => {
-                                                switch (rel) {
-                                                    case "Self":
-                                                        return "from-emerald-400 to-teal-600 dark:from-emerald-500/20 dark:to-teal-600/30 text-emerald-600 dark:text-emerald-400"
-                                                    case "Mother":
-                                                        return "from-rose-400 to-pink-600 dark:from-rose-500/20 dark:to-pink-600/30 text-rose-600 dark:text-rose-400"
-                                                    case "Father":
-                                                        return "from-sky-400 to-blue-600 dark:from-sky-500/20 dark:to-blue-600/30 text-blue-600 dark:text-blue-400"
-                                                    case "Sister":
-                                                        return "from-purple-400 to-indigo-600 dark:from-purple-500/20 dark:to-indigo-600/30 text-indigo-600 dark:text-indigo-400"
-                                                    case "Brother":
-                                                        return "from-amber-400 to-orange-600 dark:from-amber-500/20 dark:to-orange-600/30 text-orange-600 dark:text-orange-400"
-                                                    default:
-                                                        return "from-teal-400 to-emerald-600 dark:from-teal-500/20 dark:to-emerald-600/30 text-emerald-600 dark:text-emerald-400"
-                                                }
-                                            }
-
-                                            const getBadge = (rel: typeof member.relationship) => {
-                                                switch (rel) {
-                                                    case "Self":
-                                                        return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                                                    case "Mother":
-                                                        return "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                                                    case "Father":
-                                                        return "bg-sky-500/10 text-sky-500 border-sky-500/20"
-                                                    case "Sister":
-                                                        return "bg-purple-500/10 text-purple-500 border-purple-500/20"
-                                                    case "Brother":
-                                                        return "bg-orange-500/10 text-orange-500 border-orange-500/20"
-                                                    default:
-                                                        return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                                                }
-                                            }
-
+                                            const initials = member.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
                                             return (
-                                                <div 
-                                                    key={member.id}
-                                                    className="bg-card border border-border/40 rounded-3xl p-6 shadow-xl relative overflow-hidden transition-all hover:border-primary/20 hover:shadow-2xl flex flex-col justify-between"
-                                                >
+                                                <div className={`bg-card border border-border/40 rounded-3xl ${compact ? "p-4" : "p-6"} shadow-xl relative overflow-hidden transition-all hover:border-primary/20 hover:shadow-2xl flex flex-col justify-between`}>
                                                     <div className="space-y-4">
-                                                        {/* Member Card Header */}
                                                         <div className="flex items-start justify-between gap-4">
                                                             <div className="flex items-center gap-3.5">
-                                                                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br flex items-center justify-center font-bold text-base shadow-sm shrink-0 ${getGradient(member.relationship)}`}>
+                                                                <div className={`${compact ? "w-10 h-10 text-sm" : "w-12 h-12 text-base"} rounded-2xl bg-gradient-to-br flex items-center justify-center font-bold shadow-sm shrink-0 ${getGradient(member.relationship)}`}>
                                                                     {initials}
                                                                 </div>
                                                                 <div>
-                                                                    <h3 className="font-bold text-base text-foreground leading-snug break-words pr-12">
+                                                                    <h3 className={`font-bold ${compact ? "text-sm" : "text-base"} text-foreground leading-snug break-words pr-12`}>
                                                                         {member.name}
                                                                     </h3>
                                                                     <div className="flex items-center gap-2 mt-1">
@@ -1238,8 +1255,6 @@ export default function Requirements() {
                                                                     </div>
                                                                 </div>
                                                             </div>
-
-                                                            {/* Action Buttons */}
                                                             <div className="flex items-center gap-1.5 shrink-0 absolute top-4 right-4">
                                                                 <button
                                                                     onClick={() => {
@@ -1248,6 +1263,7 @@ export default function Requirements() {
                                                                         setFormRelationship(member.relationship)
                                                                         setFormBirthday(member.birthday)
                                                                         setFormContact(member.contact)
+                                                                        setFormLinkedTo(member.linked_to || "")
                                                                         setIsFamilyModalOpen(true)
                                                                     }}
                                                                     className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-all"
@@ -1264,9 +1280,7 @@ export default function Requirements() {
                                                                 </button>
                                                             </div>
                                                         </div>
-
                                                         <div className="border-t border-border/30 pt-4 space-y-2.5">
-                                                            {/* Birthday */}
                                                             <div className="flex flex-col gap-1">
                                                                 <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
                                                                     <Calendar className="h-4 w-4 text-primary/70 shrink-0" />
@@ -1274,46 +1288,58 @@ export default function Requirements() {
                                                                 </div>
                                                                 {(() => {
                                                                     const days = getBirthdayCountdown(member.birthday)
-                                                                    if (days === 0) {
-                                                                        return (
-                                                                            <span className="inline-flex items-center gap-1 self-start mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                                                                🎉 Birthday is Today! 🎂
-                                                                            </span>
-                                                                        )
-                                                                    }
-                                                                    if (days !== null && days <= 30) {
-                                                                        return (
-                                                                            <span className="inline-flex items-center gap-1 self-start mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
-                                                                                🎂 Birthday in {days} days
-                                                                            </span>
-                                                                        )
-                                                                    }
+                                                                    if (days === 0) return <span className="inline-flex items-center gap-1 self-start mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">🎉 Birthday is Today! 🎂</span>
+                                                                    if (days !== null && days <= 30) return <span className="inline-flex items-center gap-1 self-start mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">🎂 Birthday in {days} days</span>
                                                                     return null
                                                                 })()}
                                                             </div>
-                                                            {/* Contact */}
                                                             <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
                                                                 <Phone className="h-4 w-4 text-primary/70 shrink-0" />
-                                                                <span>
-                                                                    Contact:{" "}
-                                                                    <strong className="text-foreground font-mono">
-                                                                        {maskValue(member.contact)}
-                                                                    </strong>
-                                                                </span>
+                                                                <span>Contact: <strong className="text-foreground font-mono">{maskValue(member.contact)}</strong></span>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             )
-                                        })}
-                                        {familyMembers.length === 0 && (
-                                            <div className="col-span-full py-12 text-center bg-card border border-border/40 rounded-3xl">
-                                                <Users className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                                                <h3 className="font-bold text-lg">No family members</h3>
-                                                <p className="text-muted-foreground text-sm mt-1">Add details of your family members to display them here.</p>
+                                        }
+
+                                        return (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Couple Groups */}
+                                                {couples.map(([a, b]) => (
+                                                    <div key={`couple-${a.id}-${b.id}`} className="col-span-full">
+                                                        <div className="relative bg-gradient-to-r from-pink-500/5 via-rose-500/5 to-pink-500/5 border border-pink-500/20 rounded-[2rem] p-2 shadow-xl">
+                                                            {/* Couple Label */}
+                                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/20">
+                                                                    <Heart className="h-3 w-3 fill-white" /> Couple
+                                                                </span>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                                                                {renderMemberCard(a, true)}
+                                                                {renderMemberCard(b, true)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                {/* Singles */}
+                                                {singles.map((member) => (
+                                                    <div key={member.id}>
+                                                        {renderMemberCard(member)}
+                                                    </div>
+                                                ))}
+
+                                                {familyMembers.length === 0 && (
+                                                    <div className="col-span-full py-12 text-center bg-card border border-border/40 rounded-3xl">
+                                                        <Users className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                                                        <h3 className="font-bold text-lg">No family members</h3>
+                                                        <p className="text-muted-foreground text-sm mt-1">Add details of your family members to display them here.</p>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        )
+                                    })()}
                                 </>
                             )}
                         </motion.div>
@@ -1679,12 +1705,40 @@ export default function Requirements() {
                                             className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60"
                                         >
                                             <option value="Self">Self (Me)</option>
-                                            <option value="Mother">Mother</option>
-                                            <option value="Father">Father</option>
-                                            <option value="Sister">Sister</option>
-                                            <option value="Brother">Brother</option>
+                                            <optgroup label="Family">
+                                                <option value="Mother">Mother</option>
+                                                <option value="Father">Father</option>
+                                                <option value="Sister">Sister</option>
+                                                <option value="Brother">Brother</option>
+                                            </optgroup>
+                                            <optgroup label="Partner">
+                                                <option value="Wife">Wife</option>
+                                                <option value="Husband">Husband</option>
+                                                <option value="Girlfriend">Girlfriend</option>
+                                                <option value="Boyfriend">Boyfriend</option>
+                                            </optgroup>
                                             <option value="Other">Other</option>
                                         </select>
+                                    </div>
+
+                                    {/* Linked To (Partner/Spouse) */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Linked To (Partner/Couple)</label>
+                                        <select
+                                            disabled={isFamilySaving}
+                                            value={formLinkedTo}
+                                            onChange={(e) => setFormLinkedTo(e.target.value)}
+                                            className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60"
+                                        >
+                                            <option value="">— None —</option>
+                                            {familyMembers
+                                                .filter(m => m.id !== (editingMember?.id || ""))
+                                                .map(m => (
+                                                    <option key={m.id} value={m.id}>{m.name} ({m.relationship})</option>
+                                                ))
+                                            }
+                                        </select>
+                                        <p className="text-[10px] text-muted-foreground/60">Link this person to their partner to group them as a couple</p>
                                     </div>
 
                                     <div className="space-y-1.5">

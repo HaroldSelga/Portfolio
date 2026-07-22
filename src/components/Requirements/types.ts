@@ -56,9 +56,10 @@ export interface Certificate {
 export interface FamilyMember {
     id: string
     name: string
-    relationship: "Mother" | "Father" | "Sister" | "Brother" | "Other" | "Self"
+    relationship: "Mother" | "Father" | "Sister" | "Brother" | "Wife" | "Husband" | "Girlfriend" | "Boyfriend" | "Other" | "Self"
     birthday: string
     contact: string
+    linked_to?: string  // ID of partner/spouse for couple grouping
 }
 
 export interface PersonOption {
@@ -86,7 +87,7 @@ export const CHECKLIST_STATUSES = [
 ] as const
 
 // Relationship options
-export const RELATIONSHIPS = ["Mother", "Father", "Sister", "Brother", "Other"] as const
+export const RELATIONSHIPS = ["Mother", "Father", "Sister", "Brother", "Wife", "Husband", "Girlfriend", "Boyfriend", "Other"] as const
 
 // ── Default Data (localStorage fallback) ────────────────────────────────
 

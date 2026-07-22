@@ -56,7 +56,7 @@ export interface Certificate {
 export interface FamilyMember {
     id: string
     name: string
-    relationship: "Mother" | "Father" | "Sister" | "Brother" | "Other"
+    relationship: "Mother" | "Father" | "Sister" | "Brother" | "Other" | "Self"
     birthday: string
     contact: string
 }
@@ -174,6 +174,7 @@ export const defaultCertificates: Omit<Certificate, "person_id">[] = [
 ]
 
 export const defaultFamilyMembers: FamilyMember[] = [
+    { id: "self", name: "John Harold Eugenio Selga", relationship: "Self", birthday: "March 18, 2000", contact: "09363324878" },
     { id: "1", name: "Luvy Molina Eugenio", relationship: "Mother", birthday: "February 01, 1975", contact: "09164865929" },
     { id: "2", name: "Arnold Sacdal Selga", relationship: "Father", birthday: "February 16, 1976", contact: "09914961969" },
     { id: "3", name: "Hanna Mae Selga Alfonso", relationship: "Sister", birthday: "July 02, 1996", contact: "09917753390 or 09362090237" },

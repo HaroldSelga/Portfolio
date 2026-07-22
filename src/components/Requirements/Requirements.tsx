@@ -345,6 +345,29 @@ export default function Requirements() {
         return showSensitive ? value : "••••••••"
     }
 
+    const handlePreviewLink = (name: string, url: string) => {
+        if (!url) return
+        
+        let path = url
+        let type = "pdf" // Default to iframe
+        
+        // Transform Google Drive view link to preview link for embedding
+        const driveRegex = /drive\.google\.com\/file\/d\/([^/]+)\/view/
+        const match = url.match(driveRegex)
+        if (match) {
+            path = `https://drive.google.com/file/d/${match[1]}/preview`
+            type = "pdf"
+        } else {
+            // Check suffix
+            const cleanUrl = url.split("?")[0].toLowerCase()
+            if (cleanUrl.endsWith(".jpg") || cleanUrl.endsWith(".jpeg") || cleanUrl.endsWith(".png") || cleanUrl.endsWith(".webp")) {
+                type = "jpg"
+            }
+        }
+        
+        setPreviewDoc({ name, path, type })
+    }
+
     const calculateAge = (birthdayStr: string) => {
         if (!birthdayStr) return null
         try {
@@ -389,7 +412,7 @@ export default function Requirements() {
         if (!formName.trim() || !formBirthday.trim() || !formContact.trim()) return
 
         const payload: FamilyMember = {
-            id: editingMember ? editingMember.id : Date.now().toString(),
+            id: editingMember ? editingMember.id : (formRelationship === "Self" ? "self" : Date.now().toString()),
             name: formName,
             relationship: formRelationship,
             birthday: formBirthday,
@@ -809,11 +832,14 @@ export default function Requirements() {
                                     className="w-full pl-9 pr-10 py-2.5 bg-card border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-bold transition-colors cursor-pointer appearance-none text-foreground"
                                 >
                                     <option value="self">👤 Me (Harold)</option>
-                                    {familyMembers.map((member) => (
-                                        <option key={member.id} value={member.id}>
-                                            👥 {member.name} ({member.relationship})
-                                        </option>
-                                    ))}
+                                    {familyMembers
+                                        .filter((m) => m.id !== "self")
+                                        .map((member) => (
+                                            <option key={member.id} value={member.id}>
+                                                👥 {member.name} ({member.relationship})
+                                            </option>
+                                        ))
+                                    }
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -895,7 +921,9 @@ export default function Requirements() {
                                     setIsCertModalOpen(true)
                                 }}
                                 onDeleteCert={(id, name) => handleDeleteCertificate(id, name)}
+                                onPreviewLink={handlePreviewLink}
                             />
+
                         )
                     ) : selectedCategory === "Family" ? (
                         <motion.div
@@ -1026,6 +1054,8 @@ export default function Requirements() {
 
                                             const getGradient = (rel: typeof member.relationship) => {
                                                 switch (rel) {
+                                                    case "Self":
+                                                        return "from-emerald-400 to-teal-600 dark:from-emerald-500/20 dark:to-teal-600/30 text-emerald-600 dark:text-emerald-400"
                                                     case "Mother":
                                                         return "from-rose-400 to-pink-600 dark:from-rose-500/20 dark:to-pink-600/30 text-rose-600 dark:text-rose-400"
                                                     case "Father":
@@ -1041,6 +1071,8 @@ export default function Requirements() {
 
                                             const getBadge = (rel: typeof member.relationship) => {
                                                 switch (rel) {
+                                                    case "Self":
+                                                        return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
                                                     case "Mother":
                                                         return "bg-rose-500/10 text-rose-500 border-rose-500/20"
                                                     case "Father":
@@ -1503,6 +1535,7 @@ export default function Requirements() {
                                             onChange={(e) => setFormRelationship(e.target.value as FamilyMember["relationship"])}
                                             className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60"
                                         >
+                                            <option value="Self">Self (Me)</option>
                                             <option value="Mother">Mother</option>
                                             <option value="Father">Father</option>
                                             <option value="Sister">Sister</option>
@@ -1618,7 +1651,8 @@ function CredentialsView({
     onDeleteId,
     onAddCert,
     onEditCert,
-    onDeleteCert
+    onDeleteCert,
+    onPreviewLink
 }: {
     showSensitive: boolean
     maskValue: (v: string) => string
@@ -1630,6 +1664,7 @@ function CredentialsView({
     onAddCert: () => void
     onEditCert: (cert: Certificate) => void
     onDeleteCert: (id: number, name: string) => void
+    onPreviewLink: (name: string, url: string) => void
 }) {
     return (
         <motion.div
@@ -1710,20 +1745,27 @@ function CredentialsView({
                                     <td className="px-4 py-3 whitespace-nowrap">
                                         <div className="flex items-center justify-center gap-1.5">
                                             {id.front_link && (
-                                                <a href={id.front_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors">
+                                                <button
+                                                    onClick={() => onPreviewLink(`${id.name} (Front)`, id.front_link)}
+                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors"
+                                                >
                                                     <ExternalLink className="h-3 w-3" /> Front
-                                                </a>
+                                                </button>
                                             )}
                                             {id.back_link && (
-                                                <a href={id.back_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-stone-500/10 text-stone-400 text-[10px] font-bold hover:bg-stone-500/20 transition-colors">
+                                                <button
+                                                    onClick={() => onPreviewLink(`${id.name} (Back)`, id.back_link)}
+                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-stone-500/10 text-stone-400 text-[10px] font-bold hover:bg-stone-500/20 transition-colors"
+                                                >
                                                     <ExternalLink className="h-3 w-3" /> Back
-                                                </a>
+                                                </button>
                                             )}
                                             {!id.front_link && !id.back_link && (
                                                 <span className="text-[10px] text-muted-foreground/40 font-bold">—</span>
                                             )}
                                         </div>
                                     </td>
+
                                     <td className="px-4 py-3 text-right whitespace-nowrap">
                                         <div className="flex items-center justify-end gap-1.5">
                                             <button
@@ -1819,13 +1861,17 @@ function CredentialsView({
                                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{cert.remarks}</td>
                                     <td className="px-4 py-3 whitespace-nowrap text-center">
                                         {cert.link ? (
-                                            <a href={cert.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors">
+                                            <button
+                                                onClick={() => onPreviewLink(cert.name, cert.link)}
+                                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors"
+                                            >
                                                 <ExternalLink className="h-3 w-3" /> View
-                                            </a>
+                                            </button>
                                         ) : (
                                             <span className="text-[10px] text-muted-foreground/40 font-bold">—</span>
                                         )}
                                     </td>
+
                                     <td className="px-4 py-3 text-right whitespace-nowrap">
                                         <div className="flex items-center justify-end gap-1.5">
                                             <button

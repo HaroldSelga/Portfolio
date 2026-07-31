@@ -721,6 +721,7 @@ export default function FinanceTracker() {
                 .update({
                     name: wallet.name,
                     icon: wallet.icon,
+                    currency: wallet.currency,
                     balance: wallet.balance
                 })
                 .eq("id", wallet.id)

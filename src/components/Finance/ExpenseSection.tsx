@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Trash2, TrendingDown, X, AlertCircle, Sparkles } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import type { FinanceEntry, Wallet, CategoryBudget, CurrencyCode } from "./types"
-import { EXPENSE_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
+import { EXPENSE_CATEGORIES, CURRENCIES, formatCurrency, getLocalDateString, getDefaultSmartWallet } from "./types"
 
 interface ExpenseSectionProps {
     entries: FinanceEntry[]
@@ -27,12 +27,18 @@ export function ExpenseSection({
 }: ExpenseSectionProps) {
     const [showForm, setShowForm] = useState(false)
     const [formData, setFormData] = useState({
-        date: new Date().toISOString().split("T")[0],
+        date: getLocalDateString(),
         category: "food",
         description: "",
         amount: "",
-        wallet_id: wallets[0]?.id || "",
+        wallet_id: getDefaultSmartWallet(wallets),
     })
+
+    useEffect(() => {
+        if (!formData.wallet_id && wallets.length > 0) {
+            setFormData(prev => ({ ...prev, wallet_id: getDefaultSmartWallet(wallets) }))
+        }
+    }, [wallets, formData.wallet_id])
 
     const activeWalletId = formData.wallet_id || wallets[0]?.id || ""
     const selectedWallet = wallets.find(w => w.id === activeWalletId)
@@ -98,11 +104,11 @@ export function ExpenseSection({
         })
 
         setFormData({
-            date: new Date().toISOString().split("T")[0],
+            date: getLocalDateString(),
             category: "food",
             description: "",
             amount: "",
-            wallet_id: wallets[0]?.id || "",
+            wallet_id: getDefaultSmartWallet(wallets),
         })
         setShowForm(false)
     }

@@ -26,7 +26,11 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                     entry.category.toLowerCase().includes(searchQuery.toLowerCase())
                 
                 const matchesWallet = selectedWallet === "all" || entry.wallet_id === selectedWallet
-                const matchesType = selectedType === "all" || entry.type === selectedType
+                const matchesType = selectedType === "all" 
+                    ? true 
+                    : selectedType === "transfer" 
+                        ? entry.category === "transfer"
+                        : entry.type === selectedType
 
                 return matchesSearch && matchesWallet && matchesType
             })
@@ -69,6 +73,7 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                             <option value="all">All Types</option>
                             <option value="income">➕ Income</option>
                             <option value="expense">➖ Expenses</option>
+                            <option value="transfer">🔁 Transfers</option>
                         </select>
 
                         {/* Filter Wallet */}
@@ -138,9 +143,15 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                                                 {wallet?.name || "Unknown Wallet"}
                                             </span>
                                             <span>·</span>
-                                            <span className="px-1.5 py-0.5 bg-muted rounded-md text-[10px] font-bold uppercase tracking-wide">
-                                                {catDetails?.label || entry.category}
-                                            </span>
+                                            {entry.category === "transfer" ? (
+                                                <span className="px-1.5 py-0.5 bg-sky-500/10 border border-sky-500/30 text-sky-500 rounded-md text-[10px] font-black uppercase tracking-wide">
+                                                    🔁 Wallet Transfer
+                                                </span>
+                                            ) : (
+                                                <span className="px-1.5 py-0.5 bg-muted rounded-md text-[10px] font-bold uppercase tracking-wide">
+                                                    {catDetails?.label || entry.category}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 

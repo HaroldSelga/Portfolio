@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
 import type { WishlistItem, Wallet, CurrencyCode } from "./types"
-import { formatCurrency } from "./types"
+import { formatCurrency, getLocalDateString, getDefaultSmartWallet } from "./types"
 
 interface WishlistSectionProps {
     items: WishlistItem[]
@@ -30,8 +30,8 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
 
     const [purchaseForm, setPurchaseForm] = useState({
         actual_price: "",
-        wallet_id: wallets[0]?.id || "",
-        date: new Date().toISOString().split("T")[0],
+        wallet_id: getDefaultSmartWallet(wallets),
+        date: getLocalDateString(),
         notes: "",
     })
 
@@ -67,8 +67,8 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
         setPurchaseModalItem(item)
         setPurchaseForm({
             actual_price: item.estimated_price.toString(),
-            wallet_id: wallets[0]?.id || "",
-            date: new Date().toISOString().split("T")[0],
+            wallet_id: getDefaultSmartWallet(wallets, item.estimated_price),
+            date: getLocalDateString(),
             notes: item.notes ? `Wishlist: ${item.notes}` : `Wishlist Purchase: ${item.label}`,
         })
     }

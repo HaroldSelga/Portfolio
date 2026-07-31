@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Check, Trash2, Receipt, X, Edit2, AlertTriangle, Clock, CalendarDays } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
 import type { BillTemplate, Wallet, FinanceEntry, CurrencyCode } from "./types"
-import { EXPENSE_CATEGORIES, formatCurrency } from "./types"
+import { EXPENSE_CATEGORIES, formatCurrency, getDefaultSmartWallet } from "./types"
 
 interface BillsSectionProps {
     bills: BillTemplate[]
@@ -22,8 +22,14 @@ interface BillsSectionProps {
 export function BillsSection({ bills, wallets, entries, showAmounts = true, baseCurrency = "PHP", onAddBill, onUpdateBill, onDeleteBill, onPayBill }: BillsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [payModalBill, setPayModalBill] = useState<BillTemplate | null>(null)
-    const [selectedWalletId, setSelectedWalletId] = useState(wallets[0]?.id || "")
+    const [selectedWalletId, setSelectedWalletId] = useState(getDefaultSmartWallet(wallets))
     const [payAmount, setPayAmount] = useState("")
+
+    useEffect(() => {
+        if (payModalBill) {
+            setSelectedWalletId(getDefaultSmartWallet(wallets, payModalBill.amount))
+        }
+    }, [payModalBill, wallets])
 
     const [editModalBill, setEditModalBill] = useState<BillTemplate | null>(null)
     const [editForm, setEditForm] = useState({

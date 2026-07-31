@@ -179,6 +179,40 @@ function calculateDayPayTW(
             overtimePay = (typhOt1 * hourlyRate * config.restDayOtTier1) + (typhOt2 * hourlyRate * config.restDayOtTier2)
             break
         }
+        case "mandatory_off": {
+            // Statutory Mandatory Off (例休日 - 勞基法 §36): Double Pay (2.0x) for all hours worked
+            regularHours = Math.min(totalHours, REGULAR_HOURS)
+            overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
+            regularPay = regularHours * hourlyRate * 2.0
+            overtimePay = overtimeHours * hourlyRate * 2.0
+            break
+        }
+        case "rest_day_holiday": {
+            // Holiday falling on Rest Day (休息日遇國定假日): 2.6x Rate
+            regularHours = Math.min(totalHours, REGULAR_HOURS)
+            overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
+            regularPay = regularHours * hourlyRate * 2.6
+            overtimePay = overtimeHours * hourlyRate * 2.67
+            break
+        }
+        case "paid_leave": {
+            // Paid Vacation / Annual Leave (特別休假 / 特休 - 勞基法 §38): Full 100% Pay
+            regularHours = REGULAR_HOURS
+            regularPay = REGULAR_HOURS * hourlyRate
+            break
+        }
+        case "sick_leave": {
+            // Paid / Half-Pay Sick Leave (普通傷病假 - 勞基法 §43): 50% Pay
+            regularHours = REGULAR_HOURS
+            regularPay = REGULAR_HOURS * hourlyRate * 0.5
+            break
+        }
+        case "unpaid_leave": {
+            // Unpaid Personal Leave (事假 - 0 Pay)
+            regularHours = 0
+            regularPay = 0
+            break
+        }
     }
 
     // Night differential: flat NT$/hr from config
@@ -251,6 +285,40 @@ function calculateDayPayPH(
             regularPay = regularHours * hourlyRate
             holidayPremium = regularHours * hourlyRate * (config.typhoonDayMultiplier - 1)
             overtimePay = overtimeHours * hourlyRate * config.typhoonDayOt
+            break
+        }
+        case "mandatory_off": {
+            // Statutory Rest Day / Mandatory Off (DOLE): 1.30x Base Pay
+            regularHours = Math.min(totalHours, REGULAR_HOURS)
+            overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
+            regularPay = regularHours * hourlyRate * config.restDayBase
+            overtimePay = overtimeHours * hourlyRate * config.restDayOt
+            break
+        }
+        case "rest_day_holiday": {
+            // Regular Holiday on Rest Day (DOLE 260% Rule): 2.60x Base Pay
+            regularHours = Math.min(totalHours, REGULAR_HOURS)
+            overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
+            regularPay = regularHours * hourlyRate * 2.6
+            overtimePay = overtimeHours * hourlyRate * 2.6 * 1.3
+            break
+        }
+        case "paid_leave": {
+            // Service Incentive Leave / Paid Vacation Leave: 100% Pay
+            regularHours = REGULAR_HOURS
+            regularPay = REGULAR_HOURS * hourlyRate
+            break
+        }
+        case "sick_leave": {
+            // Paid Sick Leave: 100% Pay
+            regularHours = REGULAR_HOURS
+            regularPay = REGULAR_HOURS * hourlyRate
+            break
+        }
+        case "unpaid_leave": {
+            // Unpaid Leave (0 Pay)
+            regularHours = 0
+            regularPay = 0
             break
         }
     }

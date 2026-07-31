@@ -4,7 +4,7 @@ import { Plus, Trash2, TrendingUp, X, Briefcase } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import type { FinanceEntry, Wallet, CurrencyCode } from "./types"
-import { INCOME_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
+import { INCOME_CATEGORIES, CURRENCIES, formatCurrency, getLocalDateString, getDefaultSmartWallet } from "./types"
 
 interface NetSalaryPreset {
     amount: number
@@ -25,11 +25,11 @@ interface IncomeSectionProps {
 export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryPreset, onAdd, onDelete }: IncomeSectionProps) {
     const [showForm, setShowForm] = useState(false)
     const [formData, setFormData] = useState({
-        date: new Date().toISOString().split("T")[0],
+        date: getLocalDateString(),
         category: "salary",
         description: "",
         amount: "",
-        wallet_id: wallets[0]?.id || "",
+        wallet_id: getDefaultSmartWallet(wallets),
     })
 
     const activeWalletId = formData.wallet_id || wallets[0]?.id || ""
@@ -53,11 +53,11 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
         })
 
         setFormData({
-            date: new Date().toISOString().split("T")[0],
+            date: getLocalDateString(),
             category: "salary",
             description: "",
             amount: "",
-            wallet_id: wallets[0]?.id || "",
+            wallet_id: getDefaultSmartWallet(wallets),
         })
         setShowForm(false)
     }
@@ -112,7 +112,7 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                                     type="button"
                                     onClick={() => {
                                         setFormData({
-                                            date: new Date().toISOString().split("T")[0],
+                                            date: getLocalDateString(),
                                             category: "salary",
                                             description: `Salary Payout — ${netSalaryPreset.profileLabel}`,
                                             amount: netSalaryPreset.amount.toString(),

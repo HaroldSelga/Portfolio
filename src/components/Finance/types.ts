@@ -142,7 +142,17 @@ export interface CategoryBudget {
 export type WorkCountry = "TW" | "PH"
 export type ScheduleType = "2-2" | "3-3" | "4-2" | "4-3" | "5-2" | "6-1" | "3-shift" | "custom"
 export type RateType = "hourly" | "monthly"
-export type DayType = "regular" | "rest_day" | "special_holiday" | "regular_holiday" | "typhoon_disaster_day"
+export type DayType = 
+    | "regular" 
+    | "rest_day" 
+    | "mandatory_off"
+    | "regular_holiday" 
+    | "special_holiday" 
+    | "rest_day_holiday"
+    | "typhoon_disaster_day"
+    | "paid_leave"
+    | "sick_leave"
+    | "unpaid_leave"
 
 export interface WorkProfile {
     id: string
@@ -315,3 +325,38 @@ export const WALLET_PRESETS = {
         { name: "Emergency Fund", icon: "banknote" },
     ],
 } as const
+
+/**
+ * Helper to get local YYYY-MM-DD date string without UTC timezone offset shift
+ */
+export function getLocalDateString(date: Date = new Date()): string {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+}
+
+/**
+ * Helper to select default smart wallet:
+ * 1. Prefers wallets with balance > 0 (or balance >= minAmount).
+ * 2. Prioritizes 'Cash on Hand' or 'Cash' wallet first.
+ * 3. Fallbacks to wallet with highest balance or first wallet.
+ */
+export function getDefaultSmartWallet(wallets: Wallet[], minAmount: number = 0): string {
+    if (!wallets || wallets.length === 0) return ""
+
+    // 1. Wallets with sufficient balance
+    const funded = wallets.filter(w => w.balance > minAmount)
+    const pool = funded.length > 0 ? funded : wallets
+
+    // 2. Look for "Cash on Hand" or "Cash" in pool
+    const cashWallet = pool.find(w => {
+        const name = w.name.toLowerCase()
+        return name.includes("cash on hand") || name.includes("cash")
+    })
+    if (cashWallet) return cashWallet.id
+
+    // 3. Otherwise pick wallet with highest balance
+    const highest = [...pool].sort((a, b) => b.balance - a.balance)[0]
+    return highest?.id || wallets[0]?.id || ""
+}

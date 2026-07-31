@@ -33,7 +33,7 @@ import { FundsSection } from "./FundsSection"
 import { SalarySection } from "./SalarySection"
 import { calculatePayroll } from "./salaryCalculator"
 import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, CategoryBudget, CurrencyCode, WorkProfile, TimeLog, PayrollDeduction } from "./types"
-import { CURRENCIES, formatCurrency } from "./types"
+import { CURRENCIES, formatCurrency, getLocalDateString, getDefaultSmartWallet } from "./types"
 import {
     getExchangeRates,
     getCustomExchangeRates,
@@ -127,11 +127,20 @@ export default function FinanceTracker() {
         notes: "",
     })
 
+    useEffect(() => {
+        if (showTransfer && !transferData.from && wallets.length > 0) {
+            setTransferData(prev => ({
+                ...prev,
+                from: getDefaultSmartWallet(wallets)
+            }))
+        }
+    }, [showTransfer, wallets, transferData.from])
+
     // Compute active profile's current month Net Salary Preset for Income Section
     const netSalaryPreset = useMemo(() => {
         if (workProfiles.length === 0) return null
         const activeProfile = workProfiles[0]
-        const currentMonth = new Date().toISOString().slice(0, 7)
+        const currentMonth = getLocalDateString().slice(0, 7)
         const monthlyLogs = timeLogs.filter(l => l.profile_id === activeProfile.id && l.date.startsWith(currentMonth))
         const summary = calculatePayroll(monthlyLogs, activeProfile, payrollDeductions, "full")
         if (!summary || summary.netPay <= 0) return null
@@ -580,7 +589,7 @@ export default function FinanceTracker() {
 
         await handleAddEntry({
             type: "expense",
-            date: new Date().toISOString().split("T")[0],
+            date: getLocalDateString(),
             category: bill.category,
             description,
             amount: bill.amount,
@@ -614,7 +623,7 @@ export default function FinanceTracker() {
             // Deduct from source wallet (expense)
             await handleAddEntry({
                 type: "expense",
-                date: new Date().toISOString().split("T")[0],
+                date: getLocalDateString(),
                 category: "transfer",
                 description: fromCurr !== toCurr 
                     ? `Transfer to ${toWallet.name} (${formatCurrency(targetAmount, toCurr)})${notesSuffix}`
@@ -628,7 +637,7 @@ export default function FinanceTracker() {
             if (feeAmount > 0) {
                 await handleAddEntry({
                     type: "expense",
-                    date: new Date().toISOString().split("T")[0],
+                    date: getLocalDateString(),
                     category: "transfer",
                     description: `Transfer Fee (${toWallet.name})`,
                     amount: feeAmount,
@@ -640,7 +649,7 @@ export default function FinanceTracker() {
             // Deposit to destination wallet (income)
             await handleAddEntry({
                 type: "income",
-                date: new Date().toISOString().split("T")[0],
+                date: getLocalDateString(),
                 category: "transfer",
                 description: fromCurr !== toCurr 
                     ? `Transfer from ${fromWallet.name} (${formatCurrency(fromAmount, fromCurr)})${notesSuffix}`
@@ -883,7 +892,7 @@ export default function FinanceTracker() {
 
         await handleAddEntry({
             type: type === "deposit" ? "expense" : "income",
-            date: new Date().toISOString().split("T")[0],
+            date: getLocalDateString(),
             category: type === "deposit" ? "savings_deposit" : "savings_withdraw",
             description: notes || `${type === "deposit" ? "Deposit to" : "Withdrawal from"} ${fund.label}`,
             amount: amount,
@@ -1333,7 +1342,7 @@ export default function FinanceTracker() {
                                     onReceiveIncome={async ({ amount, description, wallet_id, currency }) => {
                                         await handleAddEntry({
                                             type: "income",
-                                            date: new Date().toISOString().split("T")[0],
+                                            date: getLocalDateString(),
                                             category: "salary",
                                             description,
                                             amount,
@@ -1512,31 +1521,19 @@ export default function FinanceTracker() {
                                         <span className="text-[10px] text-muted-foreground font-semibold">Available: {formatCurrency(fromW.balance, fromCurr, showAmounts)}</span>
                                     )}
                                 </label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        step="any"
-                                        min="0.000001"
-                                        placeholder="0.00"
-                                        value={transferData.amount}
-                                        onChange={e => setTransferData({ ...transferData, amount: e.target.value })}
-                                        className={cn(
-                                            "flex-1 px-3 py-2 bg-background border rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2",
-                                            isOverdraft ? "border-rose-500/60 focus:ring-rose-500/20" : "border-border/60 focus:ring-primary/20 focus:border-primary"
-                                        )}
-                                        required
-                                    />
-                                    {fromW && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setTransferData({ ...transferData, amount: fromW.balance.toString() })}
-                                            className="px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-black transition-all shrink-0"
-                                            title="Transfer maximum available balance"
-                                        >
-                                            MAX
-                                        </button>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    min="0.000001"
+                                    placeholder="0.00"
+                                    value={transferData.amount}
+                                    onChange={e => setTransferData({ ...transferData, amount: e.target.value })}
+                                    className={cn(
+                                        "w-full px-3 py-2 bg-background border rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2",
+                                        isOverdraft ? "border-rose-500/60 focus:ring-rose-500/20" : "border-border/60 focus:ring-primary/20 focus:border-primary"
                                     )}
-                                </div>
+                                    required
+                                />
                             </div>
 
                             {/* Overdraft Warning Banner */}

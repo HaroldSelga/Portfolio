@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
     Clock,
@@ -35,7 +35,7 @@ import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
 import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType, PayrollDeduction, KinsenasPeriod } from "./types"
-import { CURRENCIES, formatCurrency } from "./types"
+import { CURRENCIES, formatCurrency, getLocalDateString } from "./types"
 import { getComputationConfig } from "./computationConfig"
 import {
     getHourlyRate,
@@ -137,20 +137,28 @@ export function SalarySection({
         custom_rest_days: undefined as number | undefined,
         currency: "NTD" as CurrencyCode,
         wallet_id: "",
-        cycle_start_date: new Date().toISOString().split("T")[0],
+        cycle_start_date: getLocalDateString(),
         year_end_bonus_multiplier: 1.0,
     })
 
     // TimeLog Form State
     const [showLogModal, setShowLogModal] = useState(false)
     const [logFormData, setLogFormData] = useState({
-        date: new Date().toISOString().split("T")[0],
+        date: getLocalDateString(),
         time_in: "08:00",
         time_out: "20:00",
         break_minutes: 0,
         day_type: "regular" as DayType,
         notes: "",
     })
+
+    // Auto-detect day_type (holiday, rest day, regular) when showLogModal opens or date changes
+    useEffect(() => {
+        if (showLogModal && activeProfile && logFormData.date) {
+            const autoType = getAutoDayType(logFormData.date, activeProfile)
+            setLogFormData(prev => ({ ...prev, day_type: autoType }))
+        }
+    }, [showLogModal, logFormData.date, activeProfile])
 
     // Tax Estimator Inputs
     const [daysInCountry, setDaysInCountry] = useState<number>(365)
@@ -243,7 +251,7 @@ export function SalarySection({
         if (!activeProfile || monthlyLogs.length === 0) return []
         const [year, month] = selectedMonth.split("-").map(Number)
         const daysInMonthCount = new Date(year, month, 0).getDate()
-        const todayStr = new Date().toISOString().split("T")[0]
+        const todayStr = getLocalDateString()
 
         const missing: string[] = []
         const loggedDatesSet = new Set(monthlyLogs.map(l => l.date))
@@ -278,7 +286,7 @@ export function SalarySection({
                 custom_rest_days: undefined,
                 currency: "NTD",
                 wallet_id: wallets[0]?.id || "",
-                cycle_start_date: new Date().toISOString().split("T")[0],
+                cycle_start_date: getLocalDateString(),
                 year_end_bonus_multiplier: 1.0,
             })
         } else {
@@ -325,7 +333,7 @@ export function SalarySection({
             })
             setShowLogModal(false)
             setLogFormData({
-                date: new Date().toISOString().split("T")[0],
+                date: getLocalDateString(),
                 time_in: "08:00",
                 time_out: "20:00",
                 break_minutes: activeProfile?.shift_hours === 12 ? 120 : 0,
@@ -354,7 +362,7 @@ export function SalarySection({
     // Quick 1-tap shift log helper
     const handleQuickShiftLog = async (type: "day" | "night", dateOverride?: string) => {
         if (!activeProfile) return
-        const targetDate = dateOverride || new Date().toISOString().split("T")[0]
+        const targetDate = dateOverride || getLocalDateString()
         const shiftHours = activeProfile.shift_hours || 12
         const { timeIn, timeOut } = getShiftTimes(type, shiftHours)
 
@@ -448,7 +456,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
         <div className="space-y-6">
             {/* Today's Statutory Holiday Banner if today is a holiday */}
             {(() => {
-                const todayStr = new Date().toISOString().split("T")[0]
+                const todayStr = getLocalDateString()
                 const country = activeProfile ? activeProfile.country : "TW"
                 const todayHoliday = checkHoliday(todayStr, country)
                 if (!todayHoliday) return null
@@ -1527,7 +1535,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                 custom_rest_days: p.custom_rest_days,
                                                                 currency: p.currency,
                                                                 wallet_id: p.wallet_id || "",
-                                                                cycle_start_date: p.cycle_start_date || new Date().toISOString().split("T")[0],
+                                                                cycle_start_date: p.cycle_start_date || getLocalDateString(),
                                                                 year_end_bonus_multiplier: p.year_end_bonus_multiplier || 1.0,
                                                             })
                                                             setShowProfileModal(true)
@@ -1942,6 +1950,67 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                 className="max-w-md"
             >
                 <form onSubmit={handleSaveLog} className="p-6 space-y-4 text-xs font-medium">
+                    {/* ⚡ Quick Shift Presets Bar */}
+                    {(() => {
+                        const autoType = activeProfile ? getAutoDayType(logFormData.date, activeProfile) : "regular"
+                        return (
+                            <div>
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Quick Shift Presets</label>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setLogFormData({
+                                            ...logFormData,
+                                            time_in: "08:00",
+                                            time_out: "20:00",
+                                            break_minutes: activeProfile?.shift_hours === 12 ? 120 : 60,
+                                            day_type: autoType
+                                        })}
+                                        className="px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
+                                    >
+                                        ☀️ Day (12h)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLogFormData({
+                                            ...logFormData,
+                                            time_in: "20:00",
+                                            time_out: "08:00",
+                                            break_minutes: activeProfile?.shift_hours === 12 ? 120 : 60,
+                                            day_type: autoType
+                                        })}
+                                        className="px-2 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
+                                    >
+                                        🌙 Night (12h)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLogFormData({
+                                            ...logFormData,
+                                            time_in: "08:00",
+                                            time_out: "17:00",
+                                            break_minutes: 60,
+                                            day_type: autoType
+                                        })}
+                                        className="px-2 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
+                                    >
+                                        👔 Regular 8h
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLogFormData({
+                                            ...logFormData,
+                                            day_type: "rest_day"
+                                        })}
+                                        className="px-2 py-1.5 bg-muted/60 hover:bg-muted border border-border/40 text-muted-foreground rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
+                                    >
+                                        🏖️ Rest Day
+                                    </button>
+                                </div>
+                            </div>
+                        )
+                    })()}
+
                     <div>
                         <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Date</label>
                         <input
@@ -2035,15 +2104,57 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         <select
                             value={logFormData.day_type}
                             onChange={e => setLogFormData({ ...logFormData, day_type: e.target.value as DayType })}
-                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none"
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none text-xs font-bold"
                         >
-                            <option value="regular">Regular Work Day</option>
-                            <option value="rest_day">Rest Day (Day Off)</option>
-                            <option value="regular_holiday">Regular / National Holiday</option>
-                            <option value="special_holiday">Special Holiday</option>
-                            <option value="typhoon_disaster_day">🌀 Typhoon / Disaster Work Day (Double Pay 2.0x)</option>
+                            <option value="regular">💼 Regular Work Day (正常工作日)</option>
+                            <option value="rest_day">🏖️ Flexible Rest Day (休息日 - OT Rate 1.34x / 1.67x)</option>
+                            <option value="mandatory_off">⛔ Mandatory Statutory Off (例休日 - Double Pay 2.0x)</option>
+                            <option value="regular_holiday">🎉 Statutory National Holiday (國定假日 - Double Pay 2.0x)</option>
+                            <option value="special_holiday">⭐ Special Holiday / Special Off (特別休假 / 特休 - 1.3x / 2.0x)</option>
+                            <option value="rest_day_holiday">🎌 Holiday on Rest Day (休息日遇國定假日 - 2.6x Rate)</option>
+                            <option value="typhoon_disaster_day">🌀 Typhoon / Disaster Work Day (颱風 / 天災出勤 - Double Pay 2.0x)</option>
+                            <option value="paid_leave">🌴 Paid Annual / Vacation Leave (特休 / SIL - 100% Paid)</option>
+                            <option value="sick_leave">🤒 Sick / Medical Leave (病假 - Paid / Half-Pay 50%)</option>
+                            <option value="unpaid_leave">❌ Unpaid Personal Leave (事假 - 0 Pay)</option>
                         </select>
                     </div>
+
+                    {/* 💰 Live Shift Earnings Calculator Card */}
+                    {activeProfile && (() => {
+                        const tempLog: TimeLog = {
+                            id: "temp",
+                            profile_id: activeProfile.id,
+                            date: logFormData.date,
+                            time_in: logFormData.time_in,
+                            time_out: logFormData.time_out,
+                            break_minutes: logFormData.break_minutes || 0,
+                            day_type: logFormData.day_type,
+                            notes: null,
+                            created_at: new Date().toISOString()
+                        }
+                        const shiftCalc = calculateDayPay(tempLog, activeProfile)
+                        if (!shiftCalc) return null
+
+                        return (
+                            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-1.5">
+                                <div className="flex justify-between items-center text-xs font-black text-emerald-500">
+                                    <span className="flex items-center gap-1.5">
+                                        <Calculator className="h-4 w-4 shrink-0" />
+                                        <span>Estimated Shift Pay</span>
+                                    </span>
+                                    <span className="text-sm font-black tabular-nums">
+                                        +{formatCurrency(shiftCalc.totalPay, activeProfile.currency, showAmounts)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold">
+                                    <span>Net Worked: <strong className="text-foreground">{shiftCalc.totalHours.toFixed(1)}h</strong> (Unpaid Break: {(logFormData.break_minutes / 60).toFixed(1)}h)</span>
+                                    {shiftCalc.overtimeHours > 0 && (
+                                        <span className="text-amber-500 font-bold">Includes {shiftCalc.overtimeHours.toFixed(1)}h OT (+{formatCurrency(shiftCalc.overtimePay, activeProfile.currency, showAmounts)})</span>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    })()}
 
                     <div className="flex gap-2 pt-2">
                         <Button type="button" onClick={() => setShowLogModal(false)} className="flex-1 bg-muted font-bold rounded-xl">

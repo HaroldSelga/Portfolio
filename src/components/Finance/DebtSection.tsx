@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
 import type { Debt, DebtPayment, Wallet, CurrencyCode } from "./types"
-import { formatCurrency } from "./types"
+import { formatCurrency, getLocalDateString, getDefaultSmartWallet } from "./types"
 
 interface DebtSectionProps {
     debts: Debt[]
@@ -24,10 +24,10 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
     const [paymentModal, setPaymentModal] = useState<string | null>(null)
     const [newDebt, setNewDebt] = useState({ label: "", total_amount: "" })
     const [newPayment, setNewPayment] = useState({
-        date: new Date().toISOString().split("T")[0],
+        date: getLocalDateString(),
         amount: "",
         notes: "",
-        wallet_id: wallets[0]?.id || "",
+        wallet_id: getDefaultSmartWallet(wallets),
     })
 
     const totalDebt = debts.reduce((sum, d) => sum + d.total_amount, 0)
@@ -68,10 +68,10 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
             wallet_id: newPayment.wallet_id,
         })
         setNewPayment({
-            date: new Date().toISOString().split("T")[0],
+            date: getLocalDateString(),
             amount: "",
             notes: "",
-            wallet_id: wallets[0]?.id || "",
+            wallet_id: getDefaultSmartWallet(wallets),
         })
         setPaymentModal(null)
     }
@@ -227,10 +227,10 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
                                                 <Button
                                                     onClick={() => {
                                                         setNewPayment({
-                                                            date: new Date().toISOString().split("T")[0],
+                                                            date: getLocalDateString(),
                                                             amount: "",
                                                             notes: "",
-                                                            wallet_id: wallets[0]?.id || "",
+                                                            wallet_id: getDefaultSmartWallet(wallets, debt.total_amount - debt.paid_amount),
                                                         })
                                                         setPaymentModal(debt.id)
                                                     }}

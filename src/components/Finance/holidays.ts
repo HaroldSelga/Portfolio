@@ -1,3 +1,5 @@
+import { getLocalDateString } from "./types"
+
 /**
  * Official Public Holidays for Taiwan (🇹🇼) and Philippines (🇵🇭)
  * Automatic detection helper for Salary & Overtime calculations
@@ -141,7 +143,7 @@ export function getHolidaysForCountry(country: "TW" | "PH"): Holiday[] {
  * Get upcoming holidays from a reference date (defaults to today)
  */
 export function getUpcomingHolidays(country: "TW" | "PH", limit: number = 3, fromDate?: string): (Holiday & { daysAway: number })[] {
-    const todayStr = fromDate || new Date().toISOString().split("T")[0]
+    const todayStr = fromDate || getLocalDateString()
     const today = new Date(todayStr)
 
     return getAllHolidays()

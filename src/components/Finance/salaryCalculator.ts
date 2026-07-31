@@ -53,10 +53,24 @@ export function getStandardMonthlyHours(profile: WorkProfile): number {
     if (profile.custom_monthly_hours && profile.custom_monthly_hours > 0) {
         return profile.custom_monthly_hours
     }
-    // Default standard monthly working hours:
-    // TW: 40hrs/week × 4.33 weeks = 173.2 hrs/month
-    // PH: 8hrs/day × 22 working days = 176 hrs/month
-    return profile.country === "TW" ? 173.2 : 176
+    
+    if (profile.country === "TW") {
+        // Under Taiwan Labor Standards Act (勞基法 §24):
+        // For monthly-salaried 5-2 office employees, standard divisor is 240 hrs (30 days × 8 hrs).
+        // For 2-2 / 3-3 / 4-2 factory rotation shifts, 173.2 hrs (40 hrs/week × 4.33 weeks) is standard.
+        if (profile.rate_type === "monthly" && profile.schedule_type === "5-2") {
+            return 240
+        }
+        return 173.2
+    } else {
+        // Philippines DOLE standard monthly hours:
+        // 6-1 schedule (26 working days × 8 hrs = 208 hrs)
+        // 5-2 / 2-2 / other schedules (22 working days × 8 hrs = 176 hrs)
+        if (profile.schedule_type === "6-1") {
+            return 208
+        }
+        return 176
+    }
 }
 
 export function getHourlyRate(profile: WorkProfile): number {

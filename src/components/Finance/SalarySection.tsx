@@ -36,6 +36,7 @@ import { CURRENCIES, formatCurrency } from "./types"
 import {
     getHourlyRate,
     getMonthlySalary,
+    getDailyRate,
     getStandardMonthlyHours,
     calculateDayPay,
     calculatePayroll,
@@ -396,8 +397,49 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
 
     return (
         <div className="space-y-6">
+            {/* Today's Statutory Holiday Banner if today is a holiday */}
+            {(() => {
+                const todayStr = new Date().toISOString().split("T")[0]
+                const country = activeProfile ? activeProfile.country : "TW"
+                const todayHoliday = checkHoliday(todayStr, country)
+                if (!todayHoliday) return null
+
+                return (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-4 bg-gradient-to-r from-rose-500/20 via-amber-500/20 to-primary/20 border border-rose-500/40 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-rose-500 shadow-md"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-rose-500 text-white rounded-xl font-black text-lg shrink-0">🎉</div>
+                            <div>
+                                <div className="text-xs font-black uppercase tracking-wider text-rose-500">TODAY IS AN OFFICIAL STATUTORY HOLIDAY!</div>
+                                <div className="text-sm font-black text-foreground">{todayHoliday.name} ({country === "TW" ? "🇹🇼 Taiwan" : "🇵🇭 Philippines"})</div>
+                                <div className="text-[11px] text-muted-foreground font-medium">Working today earns <span className="font-bold text-rose-500">{todayHoliday.type === "regular_holiday" ? "2.0x Double Pay" : "1.3x Special Holiday Pay"}</span>!</div>
+                            </div>
+                        </div>
+                        <Button
+                            size="sm"
+                            onClick={() => {
+                                setLogFormData({
+                                    date: todayStr,
+                                    time_in: "08:00",
+                                    time_out: activeProfile?.shift_hours === 12 ? "20:00" : "17:00",
+                                    day_type: todayHoliday.type,
+                                    notes: `Holiday shift: ${todayHoliday.name}`
+                                })
+                                setShowLogModal(true)
+                            }}
+                            className="bg-rose-500 text-white hover:bg-rose-600 font-bold rounded-xl text-xs shrink-0 gap-1.5 shadow-md shadow-rose-500/20"
+                        >
+                            <Sparkles className="h-4 w-4" /> + Log Holiday Shift Today
+                        </Button>
+                    </motion.div>
+                )
+            })()}
+
             {/* Header & Job Selector */}
-            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 md:p-6 shadow-sm">
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 md:p-6 shadow-sm space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2">
@@ -407,6 +449,29 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         <p className="text-xs text-muted-foreground font-medium mt-1">
                             Track shifts, Taiwan 2-2 schedules, overtime, night differential, holidays & tax refunds.
                         </p>
+
+                        {/* Upcoming Holiday Header Badge */}
+                        {(() => {
+                            const country = activeProfile ? activeProfile.country : "TW"
+                            const upcoming = getUpcomingHolidays(country, 1)
+                            if (upcoming.length === 0) return null
+                            const nextH = upcoming[0]
+                            return (
+                                <button
+                                    onClick={() => {
+                                        setSelectedHolidayCountry(country)
+                                        setActiveSubTab("holidays")
+                                    }}
+                                    className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 rounded-xl text-[11px] font-bold transition-all"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5" />
+                                    <span>Next Holiday: <span className="font-black">{nextH.name}</span> ({new Date(nextH.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })})</span>
+                                    <span className="bg-rose-500 text-white px-1.5 py-0.2 rounded-md text-[9px] font-black">
+                                        {nextH.daysAway === 0 ? "TODAY" : `in ${nextH.daysAway}d`}
+                                    </span>
+                                </button>
+                            )
+                        })()}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -1366,15 +1431,15 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                         <div>
                             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Country Law</label>
                             <select
                                 value={profileFormData.country}
                                 onChange={e => setProfileFormData({ ...profileFormData, country: e.target.value as "TW" | "PH" })}
-                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none"
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none text-xs"
                             >
-                                <option value="TW">🇹🇼 Taiwan (勞動基準法)</option>
+                                <option value="TW">🇹🇼 Taiwan (勞基法)</option>
                                 <option value="PH">🇵🇭 Philippines (DOLE)</option>
                             </select>
                         </div>
@@ -1382,8 +1447,16 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Schedule</label>
                             <select
                                 value={profileFormData.schedule_type}
-                                onChange={e => setProfileFormData({ ...profileFormData, schedule_type: e.target.value as ScheduleType })}
-                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none"
+                                onChange={e => {
+                                    const sched = e.target.value as ScheduleType
+                                    const autoHours = (sched === "2-2" || sched === "3-3") ? 12 : (sched === "4-3" ? 10 : 8)
+                                    setProfileFormData(prev => ({
+                                        ...prev,
+                                        schedule_type: sched,
+                                        shift_hours: autoHours
+                                    }))
+                                }}
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none text-xs"
                             >
                                 <option value="2-2">🇹🇼 2-2 Rotation (12hr)</option>
                                 <option value="3-3">🇹🇼 3-3 Rotation (12hr)</option>
@@ -1394,6 +1467,20 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                 <option value="3-shift">🇹🇼/🇵🇭 Rotating 3-Shift (8hr)</option>
                                 <option value="custom">⚙️ Custom Work-Rest Cycle</option>
                             </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Shift Hours</label>
+                            <input
+                                type="number"
+                                step="any"
+                                min="1"
+                                max="24"
+                                value={profileFormData.shift_hours}
+                                onChange={e => setProfileFormData({ ...profileFormData, shift_hours: parseFloat(e.target.value) || 8 })}
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none font-bold text-xs"
+                                placeholder="e.g. 12"
+                                required
+                            />
                         </div>
                     </div>
 
@@ -1484,19 +1571,10 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
 
                     {/* Live Salary Computation Preview Card */}
                     {(() => {
-                        const monthlyHours = profileFormData.custom_monthly_hours && profileFormData.custom_monthly_hours > 0
-                            ? profileFormData.custom_monthly_hours
-                            : (profileFormData.country === "TW" ? 173.2 : 176)
-
-                        const computedHourly = profileFormData.rate_type === "hourly"
-                            ? profileFormData.base_rate
-                            : (profileFormData.base_rate > 0 ? profileFormData.base_rate / monthlyHours : 0)
-
-                        const computedMonthly = profileFormData.rate_type === "monthly"
-                            ? profileFormData.base_rate
-                            : profileFormData.base_rate * monthlyHours
-
-                        const computedDaily = computedHourly * (profileFormData.shift_hours || 8)
+                        const monthlyHours = getStandardMonthlyHours(profileFormData as any)
+                        const computedHourly = getHourlyRate(profileFormData as any)
+                        const computedMonthly = getMonthlySalary(profileFormData as any)
+                        const computedDaily = getDailyRate(profileFormData as any)
 
                         return (
                             <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-2 text-xs">

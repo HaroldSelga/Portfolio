@@ -245,9 +245,10 @@ export function ExpenseSection({
                                         {wallets.map(w => {
                                             const wCurr = w.currency || "PHP"
                                             const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                            const balStr = formatCurrency(w.balance, wCurr, showAmounts)
                                             return (
                                                 <option key={w.id} value={w.id}>
-                                                    {flag} {w.name} ({wCurr})
+                                                    {flag} {w.name} ({balStr})
                                                 </option>
                                             )
                                         })}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
     Loader2,
@@ -31,6 +31,7 @@ import { WishlistSection } from "./WishlistSection"
 import { SettingsSection } from "./SettingsSection"
 import { FundsSection } from "./FundsSection"
 import { SalarySection } from "./SalarySection"
+import { calculatePayroll } from "./salaryCalculator"
 import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, CategoryBudget, CurrencyCode, WorkProfile, TimeLog, PayrollDeduction } from "./types"
 import { CURRENCIES, formatCurrency } from "./types"
 import {
@@ -122,7 +123,25 @@ export default function FinanceTracker() {
         from: "",
         to: "",
         amount: "",
+        fee: "",
+        notes: "",
     })
+
+    // Compute active profile's current month Net Salary Preset for Income Section
+    const netSalaryPreset = useMemo(() => {
+        if (workProfiles.length === 0) return null
+        const activeProfile = workProfiles[0]
+        const currentMonth = new Date().toISOString().slice(0, 7)
+        const monthlyLogs = timeLogs.filter(l => l.profile_id === activeProfile.id && l.date.startsWith(currentMonth))
+        const summary = calculatePayroll(monthlyLogs, activeProfile, payrollDeductions, "full")
+        if (!summary || summary.netPay <= 0) return null
+        return {
+            amount: summary.netPay,
+            profileLabel: activeProfile.label,
+            currency: activeProfile.currency,
+            targetWalletId: activeProfile.wallet_id || undefined
+        }
+    }, [workProfiles, timeLogs, payrollDeductions])
 
     // Fetch all data
     const fetchAll = useCallback(async () => {
@@ -572,8 +591,9 @@ export default function FinanceTracker() {
     // Transfer between wallets (supports multi-currency conversion)
     const handleTransfer = async (e: React.FormEvent) => {
         e.preventDefault()
-        const { from, to, amount: amtStr } = transferData
+        const { from, to, amount: amtStr, fee: feeStr, notes } = transferData
         const fromAmount = parseFloat(amtStr)
+        const feeAmount = parseFloat(feeStr || "0")
         if (!from || !to || from === to || !fromAmount || fromAmount <= 0) return
 
         try {
@@ -589,18 +609,33 @@ export default function FinanceTracker() {
                 ? fromAmount 
                 : convertCurrency(fromAmount, fromCurr, toCurr, rates, customRates)
 
+            const notesSuffix = notes ? ` (${notes})` : ""
+
             // Deduct from source wallet (expense)
             await handleAddEntry({
                 type: "expense",
                 date: new Date().toISOString().split("T")[0],
                 category: "transfer",
                 description: fromCurr !== toCurr 
-                    ? `Transfer to ${toWallet.name} (${formatCurrency(targetAmount, toCurr)})`
-                    : `Transfer to ${toWallet.name}`,
+                    ? `Transfer to ${toWallet.name} (${formatCurrency(targetAmount, toCurr)})${notesSuffix}`
+                    : `Transfer to ${toWallet.name}${notesSuffix}`,
                 amount: fromAmount,
                 wallet_id: from,
                 currency: fromCurr,
             })
+
+            // Deduct transfer fee if applicable
+            if (feeAmount > 0) {
+                await handleAddEntry({
+                    type: "expense",
+                    date: new Date().toISOString().split("T")[0],
+                    category: "transfer",
+                    description: `Transfer Fee (${toWallet.name})`,
+                    amount: feeAmount,
+                    wallet_id: from,
+                    currency: fromCurr,
+                })
+            }
 
             // Deposit to destination wallet (income)
             await handleAddEntry({
@@ -608,14 +643,14 @@ export default function FinanceTracker() {
                 date: new Date().toISOString().split("T")[0],
                 category: "transfer",
                 description: fromCurr !== toCurr 
-                    ? `Transfer from ${fromWallet.name} (${formatCurrency(fromAmount, fromCurr)})`
-                    : `Transfer from ${fromWallet.name}`,
+                    ? `Transfer from ${fromWallet.name} (${formatCurrency(fromAmount, fromCurr)})${notesSuffix}`
+                    : `Transfer from ${fromWallet.name}${notesSuffix}`,
                 amount: targetAmount,
                 wallet_id: to,
                 currency: toCurr,
             })
 
-            setTransferData({ from: "", to: "", amount: "" })
+            setTransferData({ from: "", to: "", amount: "", fee: "", notes: "" })
             setShowTransfer(false)
         } catch (e) {
             console.error("Error transferring:", e)
@@ -1257,6 +1292,7 @@ export default function FinanceTracker() {
                                     entries={entries}
                                     wallets={wallets}
                                     showAmounts={showAmounts}
+                                    netSalaryPreset={netSalaryPreset}
                                     onAdd={handleAddEntry}
                                     onDelete={handleDeleteEntry}
                                 />
@@ -1404,108 +1440,164 @@ export default function FinanceTracker() {
                 title="Transfer Between Wallets"
                 className="max-w-md"
             >
-                <form onSubmit={handleTransfer} className="p-6 space-y-4">
-                    <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">From Wallet</label>
-                        <select
-                            value={transferData.from}
-                            onChange={e => setTransferData({ ...transferData, from: e.target.value })}
-                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                            required
-                        >
-                            <option value="">Select wallet...</option>
-                            {wallets.map(w => {
-                                const wCurr = w.currency || "PHP"
-                                const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
-                                return (
-                                    <option key={w.id} value={w.id}>
-                                        {flag} {w.name} ({formatCurrency(w.balance, wCurr, showAmounts)})
-                                    </option>
-                                )
-                            })}
-                        </select>
-                    </div>
+                {(() => {
+                    const fromW = wallets.find(w => w.id === transferData.from)
+                    const toW = wallets.find(w => w.id === transferData.to)
+                    const fromCurr = fromW?.currency || "PHP"
+                    const toCurr = toW?.currency || "PHP"
+                    const amt = parseFloat(transferData.amount || "0")
+                    const feeAmt = parseFloat(transferData.fee || "0")
+                    const totalDeduction = amt + feeAmt
+                    const isOverdraft = fromW ? totalDeduction > fromW.balance : false
 
-                    <div className="flex justify-center">
-                        <div className="p-2 bg-muted rounded-full">
-                            <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                    </div>
+                    return (
+                        <form onSubmit={handleTransfer} className="p-6 space-y-4">
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">From Wallet</label>
+                                <select
+                                    value={transferData.from}
+                                    onChange={e => setTransferData({ ...transferData, from: e.target.value })}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                    required
+                                >
+                                    <option value="">Select wallet...</option>
+                                    {wallets.map(w => {
+                                        const wCurr = w.currency || "PHP"
+                                        const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                        return (
+                                            <option key={w.id} value={w.id}>
+                                                {flag} {w.name} ({formatCurrency(w.balance, wCurr, showAmounts)})
+                                            </option>
+                                        )
+                                    })}
+                                </select>
+                            </div>
 
-                    <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">To Wallet</label>
-                        <select
-                            value={transferData.to}
-                            onChange={e => setTransferData({ ...transferData, to: e.target.value })}
-                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                            required
-                        >
-                            <option value="">Select wallet...</option>
-                            {wallets.filter(w => w.id !== transferData.from).map(w => {
-                                const wCurr = w.currency || "PHP"
-                                const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
-                                return (
-                                    <option key={w.id} value={w.id}>
-                                        {flag} {w.name} ({formatCurrency(w.balance, wCurr, showAmounts)})
-                                    </option>
-                                )
-                            })}
-                        </select>
-                    </div>
+                            <div className="flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setTransferData({ ...transferData, from: transferData.to, to: transferData.from })}
+                                    className="p-2 bg-muted hover:bg-muted/80 rounded-full transition-all text-muted-foreground hover:text-foreground"
+                                    title="Swap Wallets"
+                                >
+                                    <ArrowRightLeft className="h-4 w-4" />
+                                </button>
+                            </div>
 
-                    <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
-                            Amount to Transfer ({CURRENCIES[wallets.find(w => w.id === transferData.from)?.currency || "PHP"]?.symbol})
-                        </label>
-                        <input
-                            type="number"
-                            step="any"
-                            min="0.000001"
-                            placeholder="0.00"
-                            value={transferData.amount}
-                            onChange={e => setTransferData({ ...transferData, amount: e.target.value })}
-                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                            required
-                        />
-                    </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">To Wallet</label>
+                                <select
+                                    value={transferData.to}
+                                    onChange={e => setTransferData({ ...transferData, to: e.target.value })}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                    required
+                                >
+                                    <option value="">Select wallet...</option>
+                                    {wallets.filter(w => w.id !== transferData.from).map(w => {
+                                        const wCurr = w.currency || "PHP"
+                                        const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                        return (
+                                            <option key={w.id} value={w.id}>
+                                                {flag} {w.name} ({formatCurrency(w.balance, wCurr, showAmounts)})
+                                            </option>
+                                        )
+                                    })}
+                                </select>
+                            </div>
 
-                    {/* Conversion Rate Preview if transferring across different currencies */}
-                    {(() => {
-                        const fromW = wallets.find(w => w.id === transferData.from)
-                        const toW = wallets.find(w => w.id === transferData.to)
-                        const fromC = fromW?.currency || "PHP"
-                        const toC = toW?.currency || "PHP"
-                        const amt = parseFloat(transferData.amount || "0")
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 flex justify-between items-center">
+                                    <span>Amount to Transfer ({CURRENCIES[fromCurr]?.symbol || "₱"})</span>
+                                    {fromW && (
+                                        <span className="text-[10px] text-muted-foreground font-semibold">Available: {formatCurrency(fromW.balance, fromCurr, showAmounts)}</span>
+                                    )}
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        min="0.000001"
+                                        placeholder="0.00"
+                                        value={transferData.amount}
+                                        onChange={e => setTransferData({ ...transferData, amount: e.target.value })}
+                                        className={cn(
+                                            "flex-1 px-3 py-2 bg-background border rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2",
+                                            isOverdraft ? "border-rose-500/60 focus:ring-rose-500/20" : "border-border/60 focus:ring-primary/20 focus:border-primary"
+                                        )}
+                                        required
+                                    />
+                                    {fromW && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setTransferData({ ...transferData, amount: fromW.balance.toString() })}
+                                            className="px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-black transition-all shrink-0"
+                                            title="Transfer maximum available balance"
+                                        >
+                                            MAX
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
 
-                        if (fromW && toW && fromC !== toC && amt > 0) {
-                            const converted = convertCurrency(amt, fromC, toC, rates, customRates)
-                            return (
+                            {/* Overdraft Warning Banner */}
+                            {isOverdraft && (
+                                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-500 text-xs font-bold flex items-center gap-2">
+                                    <span className="font-black">❌ Amount exceeds available balance!</span>
+                                </div>
+                            )}
+
+                            {/* Conversion Rate Preview if transferring across different currencies */}
+                            {fromW && toW && fromCurr !== toCurr && amt > 0 && (
                                 <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-500 font-medium text-center">
                                     <span>Recipient receives: </span>
-                                    <span className="font-black tabular-nums">{formatCurrency(converted, toC, showAmounts)}</span>
+                                    <span className="font-black tabular-nums">{formatCurrency(convertCurrency(amt, fromCurr, toCurr, rates, customRates), toCurr, showAmounts)}</span>
                                 </div>
-                            )
-                        }
-                        return null
-                    })()}
+                            )}
 
-                    <div className="flex gap-2">
-                        <Button
-                            type="button"
-                            onClick={() => setShowTransfer(false)}
-                            className="flex-1 bg-muted text-foreground hover:bg-muted/80 font-bold rounded-xl"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={!transferData.from || !transferData.to || transferData.from === transferData.to || !transferData.amount}
-                            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl shadow-lg shadow-primary/20"
-                        >
-                            Transfer
-                        </Button>
-                    </div>
-                </form>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Fee ({CURRENCIES[fromCurr]?.symbol}, optional)</label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        min="0"
+                                        placeholder="0.00"
+                                        value={transferData.fee}
+                                        onChange={e => setTransferData({ ...transferData, fee: e.target.value })}
+                                        className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes (optional)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Remittance"
+                                        value={transferData.notes}
+                                        onChange={e => setTransferData({ ...transferData, notes: e.target.value })}
+                                        className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-1">
+                                <Button
+                                    type="button"
+                                    onClick={() => setShowTransfer(false)}
+                                    className="flex-1 bg-muted text-foreground hover:bg-muted/80 font-bold rounded-xl"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={!transferData.from || !transferData.to || transferData.from === transferData.to || !transferData.amount || isOverdraft}
+                                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl shadow-lg shadow-primary/20"
+                                >
+                                    Transfer
+                                </Button>
+                            </div>
+                        </form>
+                    )
+                })()}
             </Modal>
         </div>
     )

@@ -1,20 +1,28 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Trash2, TrendingUp, X } from "lucide-react"
+import { Plus, Trash2, TrendingUp, X, Briefcase } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import type { FinanceEntry, Wallet, CurrencyCode } from "./types"
 import { INCOME_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
 
+interface NetSalaryPreset {
+    amount: number
+    profileLabel: string
+    currency: CurrencyCode
+    targetWalletId?: string
+}
+
 interface IncomeSectionProps {
     entries: FinanceEntry[]
     wallets: Wallet[]
     showAmounts?: boolean
+    netSalaryPreset?: NetSalaryPreset | null
     onAdd: (entry: Omit<FinanceEntry, "id" | "created_at">) => void
     onDelete: (id: string) => void
 }
 
-export function IncomeSection({ entries, wallets, showAmounts = true, onAdd, onDelete }: IncomeSectionProps) {
+export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryPreset, onAdd, onDelete }: IncomeSectionProps) {
     const [showForm, setShowForm] = useState(false)
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split("T")[0],
@@ -98,6 +106,31 @@ export function IncomeSection({ entries, wallets, showAmounts = true, onAdd, onD
                         className="overflow-hidden"
                     >
                         <div className="bg-card/60 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-4 space-y-3">
+                            {/* Quick Net Salary Preset Button */}
+                            {netSalaryPreset && netSalaryPreset.amount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData({
+                                            date: new Date().toISOString().split("T")[0],
+                                            category: "salary",
+                                            description: `Salary Payout — ${netSalaryPreset.profileLabel}`,
+                                            amount: netSalaryPreset.amount.toString(),
+                                            wallet_id: netSalaryPreset.targetWalletId || formData.wallet_id || wallets[0]?.id || ""
+                                        })
+                                    }}
+                                    className="w-full p-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-left flex items-center justify-between text-xs font-bold transition-all text-emerald-500 group shadow-sm"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <Briefcase className="h-4 w-4 shrink-0 text-emerald-500 group-hover:scale-110 transition-transform" />
+                                        <span>Auto-fill Current Net Salary ({netSalaryPreset.profileLabel})</span>
+                                    </span>
+                                    <span className="font-black tabular-nums">
+                                        +{formatCurrency(netSalaryPreset.amount, netSalaryPreset.currency, showAmounts)} ➔
+                                    </span>
+                                </button>
+                            )}
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Date</label>
@@ -148,9 +181,10 @@ export function IncomeSection({ entries, wallets, showAmounts = true, onAdd, onD
                                         {wallets.map(w => {
                                             const wCurr = w.currency || "PHP"
                                             const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                            const balStr = formatCurrency(w.balance, wCurr, showAmounts)
                                             return (
                                                 <option key={w.id} value={w.id}>
-                                                    {flag} {w.name} ({wCurr})
+                                                    {flag} {w.name} ({balStr})
                                                 </option>
                                             )
                                         })}

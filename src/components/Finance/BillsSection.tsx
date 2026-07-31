@@ -49,32 +49,8 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
     const currentDay = now.getDate()
     const currentMonthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
 
-    // Manual monthly paid state override (persisted in localStorage)
-    const [manualPaidBills, setManualPaidBills] = useState<string[]>(() => {
-        try {
-            const stored = localStorage.getItem("finance_manual_paid_bills")
-            if (stored) return JSON.parse(stored)
-        } catch (e) {
-            console.warn("Error reading manual paid bills:", e)
-        }
-        return []
-    })
-
-    const handleToggleManualPaid = (billId: string) => {
-        const key = `${currentMonthPrefix}_${billId}`
-        const exists = manualPaidBills.includes(key)
-        const updated = exists ? manualPaidBills.filter(k => k !== key) : [...manualPaidBills, key]
-        setManualPaidBills(updated)
-        localStorage.setItem("finance_manual_paid_bills", JSON.stringify(updated))
-    }
-
-    // Calculate bill status based on transaction history of the current month + manual overrides
+    // Calculate bill status based on transaction history of the current month
     const getBillStatus = (bill: BillTemplate) => {
-        const key = `${currentMonthPrefix}_${bill.id}`
-        if (manualPaidBills.includes(key)) {
-            return { status: "paid" as const, daysLeft: 0 }
-        }
-
         // Find if paid this month via expense entries
         const hasPaid = entries.some(e => {
             if (!e.date.startsWith(currentMonthPrefix) || e.type !== "expense") return false
@@ -426,18 +402,6 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
                                         >
                                             <Edit2 className="h-3.5 w-3.5" />
                                         </button>
-                                        <button
-                                            onClick={() => handleToggleManualPaid(bill.id)}
-                                            className={cn(
-                                                "p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
-                                                info.status === "paid"
-                                                    ? "text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10"
-                                                    : "text-emerald-500 hover:bg-emerald-500/10"
-                                            )}
-                                            title={info.status === "paid" ? "Mark as Unpaid" : "Mark as Paid"}
-                                        >
-                                            {info.status === "paid" ? "Undo Paid" : "Mark Paid"}
-                                        </button>
                                         {info.status !== "paid" && (
                                             <Button
                                                 onClick={() => {
@@ -448,10 +412,10 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
                                                     setSelectedWalletId(wallets[0]?.id || "")
                                                 }}
                                                 size="sm"
-                                                className="h-8 rounded-xl text-xs font-black uppercase bg-emerald-500 hover:bg-emerald-600 text-white gap-1"
+                                                className="h-8 rounded-xl text-xs font-black uppercase bg-emerald-500 hover:bg-emerald-600 text-white gap-1 shadow-sm"
                                             >
                                                 <Check className="h-3 w-3" />
-                                                Pay & Log
+                                                Pay Bill
                                             </Button>
                                         )}
                                     </div>

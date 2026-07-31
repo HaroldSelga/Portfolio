@@ -259,6 +259,16 @@ export default function FinanceTracker() {
                     setTimeLogs(JSON.parse(localLogs))
                 }
             }
+
+            // Payroll Deductions fetch from Supabase
+            try {
+                const { data, error } = await supabase.from("payroll_deductions").select("*").order("created_at")
+                if (!error && data && data.length > 0) {
+                    setPayrollDeductions(data)
+                }
+            } catch (err) {
+                console.warn("Payroll deductions fetch error, keeping local:", err)
+            }
         } catch (e) {
             console.error("Error fetching finance data:", e)
         } finally {
@@ -885,6 +895,52 @@ export default function FinanceTracker() {
                 setFunds(prev => prev.filter(f => f.id !== id))
             }
         }
+    }
+
+    // Payroll Deductions CRUD (Supabase + LocalStorage sync)
+    const handleAddDeduction = async (deduction: Omit<PayrollDeduction, "id" | "created_at">) => {
+        const newDed: PayrollDeduction = {
+            ...deduction,
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString()
+        }
+        try {
+            const { data, error } = await supabase.from("payroll_deductions").insert(deduction).select().single()
+            if (!error && data) {
+                setPayrollDeductions(prev => [...prev, data])
+                return
+            }
+        } catch (e) {
+            console.warn("Supabase deduction insert failed, using local storage:", e)
+        }
+        const updated = [...payrollDeductions, newDed]
+        setPayrollDeductions(updated)
+        localStorage.setItem("finance_payroll_deductions", JSON.stringify(updated))
+    }
+
+    const handleDeleteDeduction = async (id: string) => {
+        try {
+            await supabase.from("payroll_deductions").delete().eq("id", id)
+        } catch (e) {
+            console.warn("Supabase deduction delete error:", e)
+        }
+        const updated = payrollDeductions.filter(d => d.id !== id)
+        setPayrollDeductions(updated)
+        localStorage.setItem("finance_payroll_deductions", JSON.stringify(updated))
+    }
+
+    const handleToggleDeduction = async (id: string) => {
+        const ded = payrollDeductions.find(d => d.id === id)
+        if (!ded) return
+        const nextActive = !ded.is_active
+        try {
+            await supabase.from("payroll_deductions").update({ is_active: nextActive }).eq("id", id)
+        } catch (e) {
+            console.warn("Supabase deduction toggle error:", e)
+        }
+        const updated = payrollDeductions.map(d => d.id === id ? { ...d, is_active: nextActive } : d)
+        setPayrollDeductions(updated)
+        localStorage.setItem("finance_payroll_deductions", JSON.stringify(updated))
     }
 
     // Work Profile CRUD

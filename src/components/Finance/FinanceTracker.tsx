@@ -1187,6 +1187,7 @@ export default function FinanceTracker() {
                                     wallets={wallets}
                                     showAmounts={showAmounts}
                                     baseCurrency={baseCurrency}
+                                    rates={rates}
                                     onAddProfile={handleAddProfile}
                                     onUpdateProfile={handleUpdateProfile}
                                     onDeleteProfile={handleDeleteProfile}

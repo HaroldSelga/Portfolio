@@ -49,17 +49,32 @@ export function calculateNightHours(timeIn: string, timeOut: string): number {
     return nightMinutes / 60
 }
 
-// ═══════════════════════════════════════════
-// HELPER: Get hourly rate from profile
-// ═══════════════════════════════════════════
+export function getStandardMonthlyHours(profile: WorkProfile): number {
+    if (profile.custom_monthly_hours && profile.custom_monthly_hours > 0) {
+        return profile.custom_monthly_hours
+    }
+    // Default standard monthly working hours:
+    // TW: 40hrs/week × 4.33 weeks = 173.2 hrs/month
+    // PH: 8hrs/day × 22 working days = 176 hrs/month
+    return profile.country === "TW" ? 173.2 : 176
+}
 
 export function getHourlyRate(profile: WorkProfile): number {
     if (profile.rate_type === "hourly") return profile.base_rate
-    // Monthly salary → hourly: monthly / (standard_hours_per_month)
-    // TW: 40hrs/week × 4.33 weeks = 173.2 hrs/month
-    // PH: 40hrs/week × 4.33 weeks = 173.2 hrs/month (or 8hrs × 22 days = 176)
-    const monthlyHours = profile.country === "TW" ? 173.2 : 176
-    return profile.base_rate / monthlyHours
+    const monthlyHours = getStandardMonthlyHours(profile)
+    return profile.base_rate > 0 ? profile.base_rate / monthlyHours : 0
+}
+
+export function getMonthlySalary(profile: WorkProfile): number {
+    if (profile.rate_type === "monthly") return profile.base_rate
+    const monthlyHours = getStandardMonthlyHours(profile)
+    return profile.base_rate * monthlyHours
+}
+
+export function getDailyRate(profile: WorkProfile): number {
+    const hourly = getHourlyRate(profile)
+    const shiftHours = profile.shift_hours || 8
+    return hourly * shiftHours
 }
 
 // ═══════════════════════════════════════════

@@ -12,7 +12,7 @@ export interface Holiday {
 
 export const OFFICIAL_HOLIDAYS: Holiday[] = [
     // ═══════════════════════════════════════════
-    // TAIWAN (🇹🇼) STATUTORY HOLIDAYS (2026)
+    // TAIWAN (🇹🇼) STATUTORY HOLIDAYS (2026 - 16 Statutory Days per 勞基法 §37)
     // ═══════════════════════════════════════════
     { date: "2026-01-01", name: "Founding Day / New Year's Day (中華民國開國紀念日)", country: "TW", type: "regular_holiday" },
     { date: "2026-02-16", name: "Lunar New Year's Eve (農曆除夕)", country: "TW", type: "regular_holiday" },
@@ -26,15 +26,17 @@ export const OFFICIAL_HOLIDAYS: Holiday[] = [
     { date: "2026-05-01", name: "Labor Day (勞動節)", country: "TW", type: "regular_holiday" },
     { date: "2026-06-19", name: "Dragon Boat Festival (端午節)", country: "TW", type: "regular_holiday" },
     { date: "2026-09-25", name: "Mid-Autumn Festival (中秋節)", country: "TW", type: "regular_holiday" },
+    { date: "2026-09-28", name: "Teachers' Day / Confucius Birthday (孔子誕辰紀念日)", country: "TW", type: "regular_holiday" },
     { date: "2026-10-10", name: "National Day / Double Tenth (國慶日)", country: "TW", type: "regular_holiday" },
+    { date: "2026-10-25", name: "Taiwan Retrocession Day (台灣光復節)", country: "TW", type: "regular_holiday" },
+    { date: "2026-12-25", name: "Constitution Day (行憲紀念日)", country: "TW", type: "regular_holiday" },
 
     // ═══════════════════════════════════════════
-    // PHILIPPINES (🇵🇭) NATIONAL HOLIDAYS (2026)
+    // PHILIPPINES (🇵🇭) NATIONAL HOLIDAYS (2026 - Proclamation 1006)
     // ═══════════════════════════════════════════
     { date: "2026-01-01", name: "New Year's Day", country: "PH", type: "regular_holiday" },
-    { date: "2026-01-23", name: "First Philippine Republic Day", country: "PH", type: "special_holiday" },
     { date: "2026-02-17", name: "Chinese New Year", country: "PH", type: "special_holiday" },
-    { date: "2026-02-25", name: "EDSA People Power Revolution Anniversary", country: "PH", type: "special_holiday" },
+    { date: "2026-03-20", name: "Eid'l Fitr (Feast of Ramadan)", country: "PH", type: "regular_holiday" },
     { date: "2026-04-02", name: "Maundy Thursday", country: "PH", type: "regular_holiday" },
     { date: "2026-04-03", name: "Good Friday", country: "PH", type: "regular_holiday" },
     { date: "2026-04-04", name: "Black Saturday", country: "PH", type: "special_holiday" },
@@ -58,4 +60,37 @@ export const OFFICIAL_HOLIDAYS: Holiday[] = [
  */
 export function checkHoliday(date: string, country: "TW" | "PH"): Holiday | null {
     return OFFICIAL_HOLIDAYS.find(h => h.date === date && h.country === country) || null
+}
+
+/**
+ * Get all holidays for a specific country
+ */
+export function getHolidaysForCountry(country: "TW" | "PH"): Holiday[] {
+    return OFFICIAL_HOLIDAYS.filter(h => h.country === country).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/**
+ * Get upcoming holidays from a reference date (defaults to today)
+ */
+export function getUpcomingHolidays(country: "TW" | "PH", limit: number = 3, fromDate?: string): (Holiday & { daysAway: number })[] {
+    const todayStr = fromDate || new Date().toISOString().split("T")[0]
+    const today = new Date(todayStr)
+
+    return OFFICIAL_HOLIDAYS
+        .filter(h => h.country === country && h.date >= todayStr)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, limit)
+        .map(h => {
+            const hDate = new Date(h.date)
+            const diffTime = hDate.getTime() - today.getTime()
+            const daysAway = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+            return { ...h, daysAway }
+        })
+}
+
+/**
+ * Get holidays for a specific YYYY-MM month
+ */
+export function getHolidaysForMonth(yearMonth: string, country: "TW" | "PH"): Holiday[] {
+    return OFFICIAL_HOLIDAYS.filter(h => h.country === country && h.date.startsWith(yearMonth))
 }

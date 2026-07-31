@@ -15,7 +15,18 @@ import {
     Briefcase,
     X,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    AlertTriangle,
+    Grid,
+    List,
+    Copy,
+    Sun,
+    Moon,
+    Zap,
+    Check,
+    Globe,
+    ArrowUpRight,
+    ArrowDownRight
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
@@ -24,12 +35,20 @@ import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode } from "./type
 import { CURRENCIES, formatCurrency } from "./types"
 import {
     getHourlyRate,
+    getMonthlySalary,
+    getStandardMonthlyHours,
     calculateDayPay,
     calculatePayroll,
-    getAutoDayType
+    getAutoDayType,
+    is22WorkDay
 } from "./salaryCalculator"
 import { estimateTax } from "./taxCalculator"
-import { checkHoliday } from "./holidays"
+import {
+    checkHoliday,
+    getHolidaysForCountry,
+    getUpcomingHolidays
+} from "./holidays"
+import { convertCurrency, type ExchangeRates } from "./currency"
 
 interface SalarySectionProps {
     profiles: WorkProfile[]
@@ -37,6 +56,7 @@ interface SalarySectionProps {
     wallets: Wallet[]
     showAmounts: boolean
     baseCurrency: CurrencyCode
+    rates?: ExchangeRates
     onAddProfile: (profile: Omit<WorkProfile, "id" | "created_at">) => Promise<void>
     onUpdateProfile: (id: string, profile: Partial<WorkProfile>) => Promise<void>
     onDeleteProfile: (id: string) => Promise<void>
@@ -45,13 +65,14 @@ interface SalarySectionProps {
     onReceiveIncome: (params: { amount: number; description: string; wallet_id: string; currency: CurrencyCode }) => Promise<void>
 }
 
-type SubTab = "timesheet" | "payroll" | "tax" | "profiles"
+type SubTab = "timesheet" | "payroll" | "tax" | "profiles" | "holidays"
 
 export function SalarySection({
     profiles,
     timeLogs,
     wallets,
     showAmounts,
+    rates,
     onAddProfile,
     onUpdateProfile,
     onDeleteProfile,
@@ -68,6 +89,9 @@ export function SalarySection({
     }, [profiles, selectedProfileId])
 
     const [activeSubTab, setActiveSubTab] = useState<SubTab>("timesheet")
+    const [timesheetViewMode, setTimesheetViewMode] = useState<"list" | "calendar">("list")
+    const [selectedHolidayCountry, setSelectedHolidayCountry] = useState<"TW" | "PH">(() => activeProfile?.country || "TW")
+
     const [selectedMonth, setSelectedMonth] = useState<string>(() => {
         const now = new Date()
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -83,6 +107,7 @@ export function SalarySection({
         shift_hours: 12,
         rate_type: "hourly" as "hourly" | "monthly",
         base_rate: 183,
+        custom_monthly_hours: undefined as number | undefined,
         currency: "NTD" as CurrencyCode,
         wallet_id: "",
         cycle_start_date: new Date().toISOString().split("T")[0],
@@ -103,8 +128,9 @@ export function SalarySection({
     const [daysInCountry, setDaysInCountry] = useState<number>(365)
     const [manualAnnualGross] = useState<string>("")
 
-    // Notification feedback state
+    // Feedback notices
     const [incomeAddedNotice, setIncomeAddedNotice] = useState<string | null>(null)
+    const [copiedPayslipNotice, setCopiedPayslipNotice] = useState(false)
 
     // Filter logs for selected profile & month
     const profileLogs = useMemo(() => {
@@ -122,16 +148,25 @@ export function SalarySection({
         return calculatePayroll(monthlyLogs, activeProfile)
     }, [monthlyLogs, activeProfile])
 
+    // Calculate previous month payroll summary for monthly comparison
+    const prevMonthPayrollSummary = useMemo(() => {
+        if (!activeProfile) return null
+        const [y, m] = selectedMonth.split("-").map(Number)
+        const prevD = new Date(y, m - 2, 1)
+        const prevMonthStr = `${prevD.getFullYear()}-${String(prevD.getMonth() + 1).padStart(2, "0")}`
+        const prevLogs = profileLogs.filter(l => l.date.startsWith(prevMonthStr))
+        if (prevLogs.length === 0) return null
+        return calculatePayroll(prevLogs, activeProfile)
+    }, [profileLogs, selectedMonth, activeProfile])
+
     // Calculate annual tax estimate
     const taxEstimate = useMemo(() => {
         if (!activeProfile) return null
-        // Calculate total gross from all logged time or fallback to manual input/estimate
         const loggedGrossAnnual = profileLogs.reduce((acc, log) => {
             const dayBreakdown = calculateDayPay(log, activeProfile)
             return acc + dayBreakdown.totalPay
         }, 0)
 
-        // If manual gross is set, use it; otherwise use logged gross or projected monthly × 12
         let grossToUse = loggedGrossAnnual
         if (manualAnnualGross && !isNaN(parseFloat(manualAnnualGross))) {
             grossToUse = parseFloat(manualAnnualGross)
@@ -145,7 +180,38 @@ export function SalarySection({
         return estimateTax(activeProfile, grossToUse, daysInCountry)
     }, [activeProfile, profileLogs, manualAnnualGross, payrollSummary, daysInCountry])
 
-    // Quick profile setup helpers
+    // Missing Shift Detector (computes expected work days vs logged days)
+    const missingWorkDays = useMemo(() => {
+        if (!activeProfile || monthlyLogs.length === 0) return []
+        const [year, month] = selectedMonth.split("-").map(Number)
+        const daysInMonthCount = new Date(year, month, 0).getDate()
+        const todayStr = new Date().toISOString().split("T")[0]
+
+        const missing: string[] = []
+        const loggedDatesSet = new Set(monthlyLogs.map(l => l.date))
+
+        for (let day = 1; day <= daysInMonthCount; day++) {
+            const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+            // Only check days up to today or all days if past month
+            if (dateStr > todayStr) continue
+
+            if (!loggedDatesSet.has(dateStr)) {
+                let isWorkDay = false
+                if (activeProfile.schedule_type === "2-2" && activeProfile.cycle_start_date) {
+                    isWorkDay = is22WorkDay(dateStr, activeProfile.cycle_start_date)
+                } else if (activeProfile.schedule_type === "5-2") {
+                    const dayOfWeek = new Date(dateStr).getDay()
+                    isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5
+                }
+                if (isWorkDay) {
+                    missing.push(dateStr)
+                }
+            }
+        }
+        return missing
+    }, [activeProfile, monthlyLogs, selectedMonth])
+
+    // Quick profile setup presets
     const handleQuickPreset = (preset: "TW_2_2" | "PH_5_2") => {
         if (preset === "TW_2_2") {
             setProfileFormData({
@@ -154,7 +220,8 @@ export function SalarySection({
                 schedule_type: "2-2",
                 shift_hours: 12,
                 rate_type: "hourly",
-                base_rate: 183, // Standard minimum NTD hourly rate
+                base_rate: 183,
+                custom_monthly_hours: undefined,
                 currency: "NTD",
                 wallet_id: wallets[0]?.id || "",
                 cycle_start_date: new Date().toISOString().split("T")[0],
@@ -168,6 +235,7 @@ export function SalarySection({
                 shift_hours: 8,
                 rate_type: "monthly",
                 base_rate: 30000,
+                custom_monthly_hours: undefined,
                 currency: "PHP",
                 wallet_id: wallets[0]?.id || "",
                 cycle_start_date: "",
@@ -226,6 +294,37 @@ export function SalarySection({
         }))
     }
 
+    // Quick 1-tap shift log helper
+    const handleQuickShiftLog = async (type: "day" | "night", dateOverride?: string) => {
+        if (!activeProfile) return
+        const targetDate = dateOverride || new Date().toISOString().split("T")[0]
+        const shiftHours = activeProfile.shift_hours || 12
+        let timeIn = "08:00"
+        let timeOut = "20:00"
+
+        if (type === "night") {
+            timeIn = "20:00"
+            timeOut = "08:00"
+        } else if (shiftHours === 8) {
+            timeIn = "08:00"
+            timeOut = "17:00"
+        }
+
+        const autoType = getAutoDayType(targetDate, activeProfile)
+        try {
+            await onAddTimeLog({
+                profile_id: activeProfile.id,
+                date: targetDate,
+                time_in: timeIn,
+                time_out: timeOut,
+                day_type: autoType,
+                notes: `Quick Logged (${type} shift)`
+            })
+        } catch (err) {
+            console.error("Error in quick shift log:", err)
+        }
+    }
+
     const handleReceiveSalary = async () => {
         if (!payrollSummary || !activeProfile) return
         const walletId = activeProfile.wallet_id || wallets[0]?.id
@@ -249,6 +348,37 @@ export function SalarySection({
         } catch (err) {
             console.error("Error receiving income:", err)
         }
+    }
+
+    // Export Payslip Text Generator
+    const handleExportPayslip = () => {
+        if (!payrollSummary || !activeProfile) return
+        const monthTitle = new Date(`${selectedMonth}-01`).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+        const currency = activeProfile.currency
+        const phpConverted = rates ? convertCurrency(payrollSummary.netPay, currency, "PHP", rates) : 0
+
+        const payslipText = `
+═══ PAYSLIP SUMMARY (${monthTitle}) ═══
+Work Profile: ${activeProfile.label} (${activeProfile.country === "TW" ? "Taiwan 🇹🇼" : "Philippines 🇵🇭"})
+Schedule: ${activeProfile.schedule_type} (${activeProfile.shift_hours}h shifts)
+
+EARNINGS BREAKDOWN:
+• Days Worked: ${payrollSummary.totalDaysWorked} days
+• Regular Hours: ${payrollSummary.totalRegularHours.toFixed(1)}h ➔ ${formatCurrency(payrollSummary.totalRegularPay, currency)}
+• Overtime Hours: ${payrollSummary.totalOvertimeHours.toFixed(1)}h ➔ ${formatCurrency(payrollSummary.totalOvertimePay, currency)}
+• Night Differential: ${payrollSummary.totalNightHours.toFixed(1)}h ➔ ${formatCurrency(payrollSummary.totalNightPay, currency)}
+${payrollSummary.totalHolidayPremium > 0 ? `• Holiday Premiums: ➔ ${formatCurrency(payrollSummary.totalHolidayPremium, currency)}\n` : ""}
+──────────────────────────────────────
+GROSS EARNINGS: ${formatCurrency(payrollSummary.grossPay, currency)}
+TAX WITHHELD: -${formatCurrency(payrollSummary.taxWithheld, currency)}
+──────────────────────────────────────
+NET PAYOUT: ${formatCurrency(payrollSummary.netPay, currency)}
+${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PHP` : ""}
+`.trim()
+
+        navigator.clipboard.writeText(payslipText)
+        setCopiedPayslipNotice(true)
+        setTimeout(() => setCopiedPayslipNotice(false), 3000)
     }
 
     // Navigation month controls
@@ -275,7 +405,7 @@ export function SalarySection({
                             <h2 className="text-xl font-black tracking-tight">Salary & Overtime Calculator</h2>
                         </div>
                         <p className="text-xs text-muted-foreground font-medium mt-1">
-                            Track time-in/out, Taiwan 2-2 schedules, overtime, night differential & August tax refunds.
+                            Track shifts, Taiwan 2-2 schedules, overtime, night differential, holidays & tax refunds.
                         </p>
                     </div>
 
@@ -284,7 +414,11 @@ export function SalarySection({
                         {profiles.length > 0 && (
                             <select
                                 value={selectedProfileId}
-                                onChange={e => setSelectedProfileId(e.target.value)}
+                                onChange={e => {
+                                    setSelectedProfileId(e.target.value)
+                                    const prof = profiles.find(p => p.id === e.target.value)
+                                    if (prof) setSelectedHolidayCountry(prof.country)
+                                }}
                                 className="px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
                             >
                                 {profiles.map(p => (
@@ -315,6 +449,7 @@ export function SalarySection({
                         { key: "timesheet", label: "Timesheet Logs", icon: Calendar },
                         { key: "payroll", label: "Payroll Breakdown", icon: Calculator },
                         { key: "tax", label: "Tax & Refund Estimator", icon: DollarSign },
+                        { key: "holidays", label: "Official Holidays", icon: Sparkles },
                         { key: "profiles", label: "Job Settings", icon: SettingsIcon },
                     ].map(tab => (
                         <button
@@ -354,7 +489,7 @@ export function SalarySection({
                 )}
             </AnimatePresence>
 
-            {!activeProfile && activeSubTab !== "profiles" ? (
+            {!activeProfile && activeSubTab !== "profiles" && activeSubTab !== "holidays" ? (
                 <div className="bg-card/60 border border-border/30 rounded-2xl p-10 text-center space-y-3">
                     <Briefcase className="h-10 w-10 text-muted-foreground mx-auto" />
                     <h3 className="text-base font-bold">No Work Profile Configured</h3>
@@ -376,8 +511,8 @@ export function SalarySection({
                     {/* TAB 1: TIMESHEET LOGS */}
                     {activeSubTab === "timesheet" && activeProfile && (
                         <div className="space-y-4">
-                            {/* Month Selector Bar */}
-                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex items-center justify-between">
+                            {/* Month Selector Bar & View Toggle */}
+                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={handlePrevMonth}
@@ -396,18 +531,100 @@ export function SalarySection({
                                     </button>
                                 </div>
 
-                                <Button
-                                    onClick={() => {
-                                        const autoType = getAutoDayType(logFormData.date, activeProfile)
-                                        setLogFormData(prev => ({ ...prev, day_type: autoType }))
-                                        setShowLogModal(true)
-                                    }}
-                                    className="bg-primary text-primary-foreground font-bold rounded-xl text-xs gap-1.5 shadow-md shadow-primary/20"
-                                    size="sm"
-                                >
-                                    <Plus className="h-4 w-4" /> Log Shift
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    {/* View Toggle */}
+                                    <div className="bg-muted/50 p-1 rounded-xl flex items-center gap-1 border border-border/30">
+                                        <button
+                                            onClick={() => setTimesheetViewMode("list")}
+                                            className={cn(
+                                                "p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
+                                                timesheetViewMode === "list" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                                            )}
+                                        >
+                                            <List className="h-3.5 w-3.5" /> List
+                                        </button>
+                                        <button
+                                            onClick={() => setTimesheetViewMode("calendar")}
+                                            className={cn(
+                                                "p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
+                                                timesheetViewMode === "calendar" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                                            )}
+                                        >
+                                            <Grid className="h-3.5 w-3.5" /> Calendar
+                                        </button>
+                                    </div>
+
+                                    <Button
+                                        onClick={() => {
+                                            const autoType = getAutoDayType(logFormData.date, activeProfile)
+                                            setLogFormData(prev => ({ ...prev, day_type: autoType }))
+                                            setShowLogModal(true)
+                                        }}
+                                        className="bg-primary text-primary-foreground font-bold rounded-xl text-xs gap-1.5 shadow-md shadow-primary/20"
+                                        size="sm"
+                                    >
+                                        <Plus className="h-4 w-4" /> Log Shift
+                                    </Button>
+                                </div>
                             </div>
+
+                            {/* Quick Shift Log Buttons (1-Tap Today Shift) */}
+                            <div className="bg-card/40 border border-border/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 font-bold text-muted-foreground">
+                                    <Zap className="h-4 w-4 text-amber-500" />
+                                    <span>Quick Log Today ({new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}):</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickShiftLog("day")}
+                                        className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs"
+                                    >
+                                        <Sun className="h-3.5 w-3.5" /> ☀️ Day Shift ({activeProfile.shift_hours === 12 ? "08:00-20:00" : "08:00-17:00"})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickShiftLog("night")}
+                                        className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs"
+                                    >
+                                        <Moon className="h-3.5 w-3.5" /> 🌙 Night Shift ({activeProfile.shift_hours === 12 ? "20:00-08:00" : "22:00-06:00"})
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Missing Shift Detector Alert */}
+                            {missingWorkDays.length > 0 && (
+                                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2 text-amber-500 text-xs font-medium">
+                                    <div className="flex items-center gap-2 font-bold text-amber-500">
+                                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                                        <span>Missing Shift Logs Detected ({missingWorkDays.length} scheduled work day{missingWorkDays.length > 1 ? "s" : ""} not logged)</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                        {missingWorkDays.slice(0, 6).map(dateStr => (
+                                            <button
+                                                key={dateStr}
+                                                onClick={() => {
+                                                    const autoType = getAutoDayType(dateStr, activeProfile)
+                                                    setLogFormData({
+                                                        date: dateStr,
+                                                        time_in: "08:00",
+                                                        time_out: activeProfile.shift_hours === 12 ? "20:00" : "17:00",
+                                                        day_type: autoType,
+                                                        notes: ""
+                                                    })
+                                                    setShowLogModal(true)
+                                                }}
+                                                className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 rounded-lg text-[10px] font-bold border border-amber-500/30 transition-all flex items-center gap-1"
+                                            >
+                                                + Log {new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                            </button>
+                                        ))}
+                                        {missingWorkDays.length > 6 && (
+                                            <span className="text-[10px] self-center font-bold text-amber-500/80">+{missingWorkDays.length - 6} more...</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Monthly Quick Stats */}
                             {payrollSummary && (
@@ -433,82 +650,189 @@ export function SalarySection({
                                 </div>
                             )}
 
-                            {/* Logs List Table */}
-                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
-                                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Logged Shifts ({monthlyLogs.length})</h3>
+                            {/* TIMESHEET VIEW: LIST VS CALENDAR */}
+                            {timesheetViewMode === "list" ? (
+                                /* List View */
+                                <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
+                                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Logged Shifts ({monthlyLogs.length})</h3>
 
-                                {monthlyLogs.length === 0 ? (
-                                    <div className="py-8 text-center text-muted-foreground text-xs font-medium">
-                                        No time logs recorded for {new Date(`${selectedMonth}-01`).toLocaleDateString("en-US", { month: "long" })}. Click "Log Shift" above to add your time.
+                                    {monthlyLogs.length === 0 ? (
+                                        <div className="py-8 text-center text-muted-foreground text-xs font-medium">
+                                            No time logs recorded for {new Date(`${selectedMonth}-01`).toLocaleDateString("en-US", { month: "long" })}. Click "Log Shift" above to add your time.
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y divide-border/20">
+                                            {monthlyLogs.map(log => {
+                                                const dayCalc = calculateDayPay(log, activeProfile)
+                                                const holidayMatch = checkHoliday(log.date, activeProfile.country)
+
+                                                return (
+                                                    <div key={log.id} className="py-3 flex items-center justify-between gap-3 text-xs">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <div className={cn(
+                                                                "p-2 rounded-xl shrink-0 font-bold text-center w-12",
+                                                                log.day_type === "regular" && "bg-emerald-500/10 text-emerald-500",
+                                                                log.day_type === "rest_day" && "bg-amber-500/10 text-amber-500",
+                                                                (log.day_type === "regular_holiday" || log.day_type === "special_holiday") && "bg-rose-500/10 text-rose-500"
+                                                            )}>
+                                                                <div className="text-[10px] uppercase font-bold">
+                                                                    {new Date(log.date).toLocaleDateString("en-US", { weekday: "short" })}
+                                                                </div>
+                                                                <div className="text-xs font-black">
+                                                                    {new Date(log.date).getDate()}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="min-w-0">
+                                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                                    <span className="font-bold">{log.time_in} – {log.time_out}</span>
+                                                                    <span className={cn(
+                                                                        "text-[9px] font-black uppercase px-2 py-0.5 rounded-md",
+                                                                        log.day_type === "regular" && "bg-emerald-500/20 text-emerald-500",
+                                                                        log.day_type === "rest_day" && "bg-amber-500/20 text-amber-500",
+                                                                        log.day_type === "regular_holiday" && "bg-rose-500/20 text-rose-500",
+                                                                        log.day_type === "special_holiday" && "bg-purple-500/20 text-purple-500",
+                                                                        log.day_type === "typhoon_disaster_day" && "bg-sky-500/20 text-sky-400 font-black"
+                                                                    )}>
+                                                                        {log.day_type === "typhoon_disaster_day" ? "🌀 Typhoon Work Day (2.0x)" : log.day_type.replace(/_/g, " ")}
+                                                                    </span>
+
+                                                                    {/* Official Holiday Badge if matched */}
+                                                                    {holidayMatch && (
+                                                                        <span className="text-[9px] font-bold bg-rose-500/10 text-rose-500 border border-rose-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                                                            🎉 {holidayMatch.name}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5 font-medium">
+                                                                    <span>Total: {dayCalc.totalHours.toFixed(1)}h</span>
+                                                                    {dayCalc.overtimeHours > 0 && <span className="text-amber-500 font-bold">OT: {dayCalc.overtimeHours.toFixed(1)}h</span>}
+                                                                    {dayCalc.nightHours > 0 && <span className="text-indigo-400 font-bold">Night: {dayCalc.nightHours.toFixed(1)}h</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-3 shrink-0">
+                                                            <div className="text-right">
+                                                                <span className="font-black tabular-nums text-emerald-500 block">
+                                                                    +{formatCurrency(dayCalc.totalPay, activeProfile.currency, showAmounts)}
+                                                                </span>
+                                                                {dayCalc.overtimePay > 0 && (
+                                                                    <span className="text-[9px] text-muted-foreground block font-bold">
+                                                                        OT: {formatCurrency(dayCalc.overtimePay, activeProfile.currency, showAmounts)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            <button
+                                                                onClick={() => onDeleteTimeLog(log.id)}
+                                                                className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                /* Calendar Grid View */
+                                <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
+                                    <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+                                        <span>Monthly Shift Calendar</span>
+                                        <div className="flex items-center gap-3 text-[10px]">
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Regular</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Rest/OT</span>
+                                            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Holiday</span>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div className="divide-y divide-border/20">
-                                        {monthlyLogs.map(log => {
-                                            const dayCalc = calculateDayPay(log, activeProfile)
+
+                                    {/* 7-column calendar grid */}
+                                    <div className="grid grid-cols-7 gap-1 text-center">
+                                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
+                                            <div key={d} className="text-[10px] font-bold text-muted-foreground uppercase py-1">
+                                                {d}
+                                            </div>
+                                        ))}
+
+                                        {(() => {
+                                            const [year, month] = selectedMonth.split("-").map(Number)
+                                            const daysInMonth = new Date(year, month, 0).getDate()
+                                            const firstDayIndex = (new Date(year, month - 1, 1).getDay() + 6) % 7 // Mon = 0
+
+                                            const emptyCells = Array.from({ length: firstDayIndex })
+                                            const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+                                            const loggedMap = new Map(monthlyLogs.map(l => [l.date, l]))
+
                                             return (
-                                                <div key={log.id} className="py-3 flex items-center justify-between gap-3 text-xs">
-                                                    <div className="flex items-center gap-3 min-w-0">
-                                                        <div className={cn(
-                                                            "p-2 rounded-xl shrink-0 font-bold text-center w-12",
-                                                            log.day_type === "regular" && "bg-emerald-500/10 text-emerald-500",
-                                                            log.day_type === "rest_day" && "bg-amber-500/10 text-amber-500",
-                                                            (log.day_type === "regular_holiday" || log.day_type === "special_holiday") && "bg-rose-500/10 text-rose-500"
-                                                        )}>
-                                                            <div className="text-[10px] uppercase font-bold">
-                                                                {new Date(log.date).toLocaleDateString("en-US", { weekday: "short" })}
-                                                            </div>
-                                                            <div className="text-xs font-black">
-                                                                {new Date(log.date).getDate()}
-                                                            </div>
-                                                        </div>
+                                                <>
+                                                    {emptyCells.map((_, i) => (
+                                                        <div key={`empty-${i}`} className="h-16 bg-muted/10 rounded-xl border border-border/10"></div>
+                                                    ))}
+                                                    {monthDays.map(day => {
+                                                        const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                                                        const log = loggedMap.get(dateStr)
+                                                        const holiday = checkHoliday(dateStr, activeProfile.country)
+                                                        let expected22Work = false
+                                                        if (activeProfile.schedule_type === "2-2" && activeProfile.cycle_start_date) {
+                                                            expected22Work = is22WorkDay(dateStr, activeProfile.cycle_start_date)
+                                                        }
 
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-bold">{log.time_in} – {log.time_out}</span>
-                                                                <span className={cn(
-                                                                    "text-[9px] font-black uppercase px-2 py-0.5 rounded-md",
-                                                                    log.day_type === "regular" && "bg-emerald-500/20 text-emerald-500",
-                                                                    log.day_type === "rest_day" && "bg-amber-500/20 text-amber-500",
-                                                                    log.day_type === "regular_holiday" && "bg-rose-500/20 text-rose-500",
-                                                                    log.day_type === "special_holiday" && "bg-purple-500/20 text-purple-500",
-                                                                    log.day_type === "typhoon_disaster_day" && "bg-sky-500/20 text-sky-400 font-black"
-                                                                )}>
-                                                                    {log.day_type === "typhoon_disaster_day" ? "🌀 Typhoon Work Day (2.0x)" : log.day_type.replace(/_/g, " ")}
-                                                                </span>
-                                                            </div>
-                                                            <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5 font-medium">
-                                                                <span>Total: {dayCalc.totalHours.toFixed(1)}h</span>
-                                                                {dayCalc.overtimeHours > 0 && <span className="text-amber-500 font-bold">OT: {dayCalc.overtimeHours.toFixed(1)}h</span>}
-                                                                {dayCalc.nightHours > 0 && <span className="text-indigo-400 font-bold">Night: {dayCalc.nightHours.toFixed(1)}h</span>}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                        return (
+                                                            <div
+                                                                key={dateStr}
+                                                                onClick={() => {
+                                                                    if (!log) {
+                                                                        const autoType = getAutoDayType(dateStr, activeProfile)
+                                                                        setLogFormData({
+                                                                            date: dateStr,
+                                                                            time_in: "08:00",
+                                                                            time_out: activeProfile.shift_hours === 12 ? "20:00" : "17:00",
+                                                                            day_type: autoType,
+                                                                            notes: ""
+                                                                        })
+                                                                        setShowLogModal(true)
+                                                                    }
+                                                                }}
+                                                                className={cn(
+                                                                    "h-16 p-1 rounded-xl border transition-all text-left flex flex-col justify-between cursor-pointer relative overflow-hidden",
+                                                                    log
+                                                                        ? log.day_type === "regular"
+                                                                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
+                                                                            : log.day_type === "rest_day"
+                                                                                ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                                                                                : "bg-rose-500/10 border-rose-500/30 text-rose-500"
+                                                                        : expected22Work
+                                                                            ? "bg-muted/40 border-dashed border-muted-foreground/30 hover:border-primary/50"
+                                                                            : "bg-card/40 border-border/20 hover:border-primary/30"
+                                                                )}
+                                                            >
+                                                                <div className="flex justify-between items-center text-[10px] font-black">
+                                                                    <span>{day}</span>
+                                                                    {holiday && <span className="text-[9px]">🎉</span>}
+                                                                </div>
 
-                                                    <div className="flex items-center gap-3 shrink-0">
-                                                        <div className="text-right">
-                                                            <span className="font-black tabular-nums text-emerald-500 block">
-                                                                +{formatCurrency(dayCalc.totalPay, activeProfile.currency, showAmounts)}
-                                                            </span>
-                                                            {dayCalc.overtimePay > 0 && (
-                                                                <span className="text-[9px] text-muted-foreground block font-bold">
-                                                                    OT: {formatCurrency(dayCalc.overtimePay, activeProfile.currency, showAmounts)}
-                                                                </span>
-                                                            )}
-                                                        </div>
-
-                                                        <button
-                                                            onClick={() => onDeleteTimeLog(log.id)}
-                                                            className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                                {log ? (
+                                                                    <div className="text-[9px] font-bold tracking-tighter truncate">
+                                                                        <div>{log.time_in.slice(0, 5)}</div>
+                                                                        <div className="text-foreground/80">+{formatCurrency(calculateDayPay(log, activeProfile).totalPay, activeProfile.currency, showAmounts)}</div>
+                                                                    </div>
+                                                                ) : expected22Work ? (
+                                                                    <div className="text-[8px] text-muted-foreground font-bold uppercase text-center py-1">
+                                                                        Work Day
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </>
                                             )
-                                        })}
+                                        })()}
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -516,7 +840,7 @@ export function SalarySection({
                     {activeSubTab === "payroll" && activeProfile && payrollSummary && (
                         <div className="space-y-4">
                             {/* Monthly Selector */}
-                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex items-center justify-between">
+                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
                                 <div className="flex items-center gap-2">
                                     <button onClick={handlePrevMonth} className="p-1.5 hover:bg-muted rounded-xl transition-all">
                                         <ChevronLeft className="h-4 w-4" />
@@ -527,16 +851,49 @@ export function SalarySection({
                                     <button onClick={handleNextMonth} className="p-1.5 hover:bg-muted rounded-xl transition-all">
                                         <ChevronRight className="h-4 w-4" />
                                     </button>
+
+                                    {/* Monthly Comparison Delta Badge */}
+                                    {prevMonthPayrollSummary && (
+                                        <div className={cn(
+                                            "ml-2 text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1",
+                                            payrollSummary.grossPay >= prevMonthPayrollSummary.grossPay
+                                                ? "bg-emerald-500/20 text-emerald-500"
+                                                : "bg-rose-500/20 text-rose-500"
+                                        )}>
+                                            {payrollSummary.grossPay >= prevMonthPayrollSummary.grossPay ? (
+                                                <ArrowUpRight className="h-3 w-3" />
+                                            ) : (
+                                                <ArrowDownRight className="h-3 w-3" />
+                                            )}
+                                            <span>
+                                                {payrollSummary.grossPay >= prevMonthPayrollSummary.grossPay ? "+" : ""}
+                                                {formatCurrency(payrollSummary.grossPay - prevMonthPayrollSummary.grossPay, activeProfile.currency, showAmounts)} vs Prev Month
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <Button
-                                    onClick={handleReceiveSalary}
-                                    disabled={payrollSummary.netPay <= 0}
-                                    className="bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl text-xs gap-1.5 shadow-md shadow-emerald-500/20"
-                                    size="sm"
-                                >
-                                    <TrendingUp className="h-4 w-4" /> Deposit to Wallet
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    {/* Export Payslip Button */}
+                                    <Button
+                                        onClick={handleExportPayslip}
+                                        variant="outline"
+                                        className="font-bold rounded-xl text-xs gap-1.5"
+                                        size="sm"
+                                    >
+                                        {copiedPayslipNotice ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                                        {copiedPayslipNotice ? "Copied!" : "Export Payslip"}
+                                    </Button>
+
+                                    <Button
+                                        onClick={handleReceiveSalary}
+                                        disabled={payrollSummary.netPay <= 0}
+                                        className="bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl text-xs gap-1.5 shadow-md shadow-emerald-500/20"
+                                        size="sm"
+                                    >
+                                        <TrendingUp className="h-4 w-4" /> Deposit to Wallet
+                                    </Button>
+                                </div>
                             </div>
 
                             {/* Detailed Breakdown Card */}
@@ -545,7 +902,7 @@ export function SalarySection({
                                     <div>
                                         <h3 className="text-base font-black tracking-tight">{activeProfile.label}</h3>
                                         <p className="text-xs text-muted-foreground">
-                                            Rate: {formatCurrency(activeProfile.base_rate, activeProfile.currency)} / {activeProfile.rate_type} ({activeProfile.country === "TW" ? "Taiwan Labor Rules" : "PH DOLE Rules"})
+                                            Rate: {formatCurrency(activeProfile.base_rate, activeProfile.currency)} / {activeProfile.rate_type} ({formatCurrency(getHourlyRate(activeProfile), activeProfile.currency)}/hr base)
                                         </p>
                                     </div>
                                     <div className="text-right">
@@ -555,6 +912,24 @@ export function SalarySection({
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Remittance Conversion Card (e.g. NTD -> PHP) */}
+                                {activeProfile.currency !== "PHP" && rates && (
+                                    <div className="bg-gradient-to-r from-sky-500/10 to-indigo-500/10 border border-sky-500/30 rounded-xl p-3.5 flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <Globe className="h-4 w-4 text-sky-500" />
+                                            <div>
+                                                <span className="font-bold block">🇵🇭 Estimated Philippine Remittance Value</span>
+                                                <span className="text-[10px] text-muted-foreground font-medium">
+                                                    Rate: 1 {activeProfile.currency} ≈ {((rates.PHP || 58.5) / (rates[activeProfile.currency] || 1)).toFixed(2)} PHP
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right font-black text-sky-500 text-sm tabular-nums">
+                                            ₱{convertCurrency(payrollSummary.netPay, activeProfile.currency, "PHP", rates).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PHP
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium">
                                     <div className="space-y-2 bg-muted/40 p-3.5 rounded-xl border border-border/20">
@@ -710,7 +1085,141 @@ export function SalarySection({
                         </div>
                     )}
 
-                    {/* TAB 4: JOB PROFILES SETTINGS */}
+                    {/* TAB 4: OFFICIAL HOLIDAYS SUBTAB */}
+                    {activeSubTab === "holidays" && (
+                        <div className="space-y-4">
+                            {/* Top Country Selector & Summary Header */}
+                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="h-5 w-5 text-amber-500" />
+                                        <h3 className="text-base font-black tracking-tight">Official Statutory Holidays Calendar</h3>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Check statutory double pay (2.0x) holidays, calculate potential earnings, and 1-click log shift.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setSelectedHolidayCountry("TW")}
+                                        className={cn(
+                                            "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+                                            selectedHolidayCountry === "TW" ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "bg-muted text-muted-foreground"
+                                        )}
+                                    >
+                                        🇹🇼 Taiwan (16 Statutory Days)
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedHolidayCountry("PH")}
+                                        className={cn(
+                                            "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+                                            selectedHolidayCountry === "PH" ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "bg-muted text-muted-foreground"
+                                        )}
+                                    >
+                                        🇵🇭 Philippines (19 Holidays)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Upcoming Holidays Countdown Banner */}
+                            {(() => {
+                                const upcoming = getUpcomingHolidays(selectedHolidayCountry, 2)
+                                if (upcoming.length === 0) return null
+                                return (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {upcoming.map(h => (
+                                            <div key={h.date} className="bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-primary/10 border border-rose-500/30 rounded-2xl p-4 flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-black uppercase text-rose-500 tracking-wider block">
+                                                        ⏳ Next Upcoming Holiday ({h.daysAway === 0 ? "Today!" : `in ${h.daysAway} days`})
+                                                    </span>
+                                                    <div className="text-sm font-black tracking-tight">{h.name}</div>
+                                                    <div className="text-xs text-muted-foreground font-medium">
+                                                        {new Date(h.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setLogFormData({
+                                                            date: h.date,
+                                                            time_in: "08:00",
+                                                            time_out: activeProfile?.shift_hours === 12 ? "20:00" : "17:00",
+                                                            day_type: h.type,
+                                                            notes: ""
+                                                        })
+                                                        setShowLogModal(true)
+                                                    }}
+                                                    className="bg-rose-500 text-white hover:bg-rose-600 font-bold rounded-xl text-xs shrink-0"
+                                                >
+                                                    + Log Shift
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )
+                            })()}
+
+                            {/* Holidays List Card Grouped by Month */}
+                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-5 space-y-4">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    All 2026 {selectedHolidayCountry === "TW" ? "Taiwan (勞基法 §37)" : "Philippines (Proclamation 1006)"} Statutory Holidays
+                                </h4>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {getHolidaysForCountry(selectedHolidayCountry).map(h => {
+                                        const hRate = activeProfile ? getHourlyRate(activeProfile) : (selectedHolidayCountry === "TW" ? 183 : 170.45)
+                                        const shiftHrs = activeProfile?.shift_hours || (selectedHolidayCountry === "TW" ? 12 : 8)
+                                        const currency = activeProfile?.currency || (selectedHolidayCountry === "TW" ? "NTD" : "PHP")
+                                        const holidayMultiplier = h.type === "regular_holiday" ? 2.0 : 1.30
+                                        const estimatedPay = hRate * shiftHrs * holidayMultiplier
+
+                                        return (
+                                            <div key={`${h.country}-${h.date}`} className="bg-background/80 border border-border/30 rounded-xl p-3.5 flex items-center justify-between gap-3 text-xs">
+                                                <div className="min-w-0 space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-black text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg text-[10px]">
+                                                            {new Date(h.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                                        </span>
+                                                        <span className={cn(
+                                                            "text-[9px] font-black uppercase px-2 py-0.5 rounded-md",
+                                                            h.type === "regular_holiday" ? "bg-rose-500/20 text-rose-500" : "bg-purple-500/20 text-purple-400"
+                                                        )}>
+                                                            {h.type.replace(/_/g, " ")}
+                                                        </span>
+                                                    </div>
+                                                    <div className="font-bold text-foreground truncate">{h.name}</div>
+                                                    {/* Holiday Pay Preview */}
+                                                    <div className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
+                                                        💰 Potential Pay ({shiftHrs}h shift): <span className="font-black tabular-nums">{formatCurrency(estimatedPay, currency, showAmounts)}</span> ({holidayMultiplier.toFixed(1)}x)
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setLogFormData({
+                                                            date: h.date,
+                                                            time_in: "08:00",
+                                                            time_out: shiftHrs === 12 ? "20:00" : "17:00",
+                                                            day_type: h.type,
+                                                            notes: ""
+                                                        })
+                                                        setShowLogModal(true)
+                                                    }}
+                                                    className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl font-bold text-xs shrink-0 transition-all"
+                                                >
+                                                    + Log
+                                                </button>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB 5: JOB PROFILES SETTINGS */}
                     {activeSubTab === "profiles" && (
                         <div className="space-y-4">
                             <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex justify-between items-center">
@@ -729,68 +1238,87 @@ export function SalarySection({
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {profiles.map(p => (
-                                    <div key={p.id} className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-lg">{p.country === "TW" ? "🇹🇼" : "🇵🇭"}</span>
-                                                <div>
-                                                    <h4 className="text-sm font-black">{p.label}</h4>
-                                                    <span className="text-[10px] text-muted-foreground font-bold uppercase">{p.schedule_type} Schedule ({p.shift_hours}h shift)</span>
+                                {profiles.map(p => {
+                                    const hRate = getHourlyRate(p)
+                                    const mSalary = getMonthlySalary(p)
+                                    const stdHours = getStandardMonthlyHours(p)
+
+                                    return (
+                                        <div key={p.id} className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg">{p.country === "TW" ? "🇹🇼" : "🇵🇭"}</span>
+                                                    <div>
+                                                        <h4 className="text-sm font-black">{p.label}</h4>
+                                                        <span className="text-[10px] text-muted-foreground font-bold uppercase">{p.schedule_type} Schedule ({p.shift_hours}h shift)</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingProfile(p)
+                                                            setProfileFormData({
+                                                                label: p.label,
+                                                                country: p.country,
+                                                                schedule_type: p.schedule_type,
+                                                                shift_hours: p.shift_hours,
+                                                                rate_type: p.rate_type,
+                                                                base_rate: p.base_rate,
+                                                                custom_monthly_hours: p.custom_monthly_hours,
+                                                                currency: p.currency,
+                                                                wallet_id: p.wallet_id || "",
+                                                                cycle_start_date: p.cycle_start_date || new Date().toISOString().split("T")[0],
+                                                                year_end_bonus_multiplier: p.year_end_bonus_multiplier || 1.0,
+                                                            })
+                                                            setShowProfileModal(true)
+                                                        }}
+                                                        className="p-1.5 hover:bg-muted text-muted-foreground rounded-lg transition-all"
+                                                    >
+                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => onDeleteProfile(p.id)}
+                                                        className="p-1.5 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 rounded-lg transition-all"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    onClick={() => {
-                                                        setEditingProfile(p)
-                                                        setProfileFormData({
-                                                            label: p.label,
-                                                            country: p.country,
-                                                            schedule_type: p.schedule_type,
-                                                            shift_hours: p.shift_hours,
-                                                            rate_type: p.rate_type,
-                                                            base_rate: p.base_rate,
-                                                            currency: p.currency,
-                                                            wallet_id: p.wallet_id || "",
-                                                            cycle_start_date: p.cycle_start_date || new Date().toISOString().split("T")[0],
-                                                            year_end_bonus_multiplier: p.year_end_bonus_multiplier || 1.0,
-                                                        })
-                                                        setShowProfileModal(true)
-                                                    }}
-                                                    className="p-1.5 hover:bg-muted text-muted-foreground rounded-lg transition-all"
-                                                >
-                                                    <Edit2 className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => onDeleteProfile(p.id)}
-                                                    className="p-1.5 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 rounded-lg transition-all"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                        </div>
+                                            {/* Dual Rate Summary Card */}
+                                            <div className="border-t border-border/20 pt-2 text-xs space-y-1.5 font-medium text-muted-foreground">
+                                                <div className="bg-muted/40 p-2.5 rounded-xl border border-border/20 grid grid-cols-2 gap-2 text-[11px]">
+                                                    <div>
+                                                        <span className="text-[9px] uppercase font-bold text-muted-foreground block">Monthly Salary</span>
+                                                        <span className="font-black text-sky-500 tabular-nums">{formatCurrency(mSalary, p.currency)} / mo</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[9px] uppercase font-bold text-muted-foreground block">Hourly Base Rate</span>
+                                                        <span className="font-black text-emerald-500 tabular-nums">{formatCurrency(hRate, p.currency)} / hr</span>
+                                                    </div>
+                                                </div>
 
-                                        <div className="border-t border-border/20 pt-2 text-xs space-y-1 font-medium text-muted-foreground">
-                                            <div className="flex justify-between">
-                                                <span>Base Rate:</span>
-                                                <span className="font-bold text-foreground">{formatCurrency(p.base_rate, p.currency)} / {p.rate_type}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span>Target Payout Wallet:</span>
-                                                <span className="font-bold text-foreground">
-                                                    {wallets.find(w => w.id === p.wallet_id)?.name || "Not selected"}
-                                                </span>
-                                            </div>
-                                            {p.schedule_type === "2-2" && (
+                                                <div className="flex justify-between pt-1">
+                                                    <span>Standard Monthly Hours:</span>
+                                                    <span className="font-bold text-foreground">{stdHours} hrs/month</span>
+                                                </div>
                                                 <div className="flex justify-between">
-                                                    <span>Cycle Start Date:</span>
-                                                    <span className="font-bold text-foreground">{p.cycle_start_date || "Not set"}</span>
+                                                    <span>Target Payout Wallet:</span>
+                                                    <span className="font-bold text-foreground">
+                                                        {wallets.find(w => w.id === p.wallet_id)?.name || "Not selected"}
+                                                    </span>
                                                 </div>
-                                            )}
+                                                {p.schedule_type === "2-2" && (
+                                                    <div className="flex justify-between">
+                                                        <span>Cycle Start Date:</span>
+                                                        <span className="font-bold text-foreground">{p.cycle_start_date || "Not set"}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         </div>
                     )}
@@ -868,20 +1396,23 @@ export function SalarySection({
                             <select
                                 value={profileFormData.rate_type}
                                 onChange={e => setProfileFormData({ ...profileFormData, rate_type: e.target.value as any })}
-                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none"
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none font-bold text-xs"
                             >
-                                <option value="hourly">Hourly</option>
-                                <option value="monthly">Monthly</option>
+                                <option value="monthly">Monthly Salary</option>
+                                <option value="hourly">Hourly Rate</option>
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Base Rate</label>
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                                {profileFormData.rate_type === "monthly" ? "Monthly Salary" : "Hourly Base Rate"}
+                            </label>
                             <input
                                 type="number"
                                 step="any"
                                 value={profileFormData.base_rate}
                                 onChange={e => setProfileFormData({ ...profileFormData, base_rate: parseFloat(e.target.value) || 0 })}
-                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none"
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none font-bold text-xs"
+                                placeholder={profileFormData.rate_type === "monthly" ? "e.g. 31707" : "e.g. 183"}
                                 required
                             />
                         </div>
@@ -890,7 +1421,7 @@ export function SalarySection({
                             <select
                                 value={profileFormData.currency}
                                 onChange={e => setProfileFormData({ ...profileFormData, currency: e.target.value as CurrencyCode })}
-                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none"
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none font-bold text-xs"
                             >
                                 {Object.keys(CURRENCIES).map(code => (
                                     <option key={code} value={code}>{CURRENCIES[code as CurrencyCode].flag} {code}</option>
@@ -898,6 +1429,70 @@ export function SalarySection({
                             </select>
                         </div>
                     </div>
+
+                    {/* Custom Standard Monthly Hours Optional Override */}
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                            Standard Monthly Working Hours (Optional Override)
+                        </label>
+                        <input
+                            type="number"
+                            step="any"
+                            value={profileFormData.custom_monthly_hours || ""}
+                            onChange={e => setProfileFormData({ ...profileFormData, custom_monthly_hours: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none text-xs"
+                            placeholder={profileFormData.country === "TW" ? "Default: 173.2 hrs (TW)" : "Default: 176 hrs (PH)"}
+                        />
+                    </div>
+
+                    {/* Live Salary Computation Preview Card */}
+                    {(() => {
+                        const monthlyHours = profileFormData.custom_monthly_hours && profileFormData.custom_monthly_hours > 0
+                            ? profileFormData.custom_monthly_hours
+                            : (profileFormData.country === "TW" ? 173.2 : 176)
+
+                        const computedHourly = profileFormData.rate_type === "hourly"
+                            ? profileFormData.base_rate
+                            : (profileFormData.base_rate > 0 ? profileFormData.base_rate / monthlyHours : 0)
+
+                        const computedMonthly = profileFormData.rate_type === "monthly"
+                            ? profileFormData.base_rate
+                            : profileFormData.base_rate * monthlyHours
+
+                        const computedDaily = computedHourly * (profileFormData.shift_hours || 8)
+
+                        return (
+                            <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-2 text-xs">
+                                <div className="flex justify-between items-center text-muted-foreground font-bold text-[10px] uppercase tracking-wider">
+                                    <span>⚡ Auto-Calculated Base Rates</span>
+                                    <span className="text-primary font-bold">{monthlyHours} hrs/month</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 border-t border-border/20 pt-2">
+                                    <div className="bg-background/80 p-2 rounded-lg border border-border/30">
+                                        <span className="text-[9px] text-muted-foreground font-bold uppercase block">Monthly Base</span>
+                                        <span className="text-xs font-black text-sky-500 tabular-nums">
+                                            {formatCurrency(computedMonthly, profileFormData.currency)}
+                                        </span>
+                                    </div>
+                                    <div className="bg-background/80 p-2 rounded-lg border border-border/30">
+                                        <span className="text-[9px] text-muted-foreground font-bold uppercase block">Hourly Base Rate</span>
+                                        <span className="text-xs font-black text-emerald-500 tabular-nums">
+                                            {formatCurrency(computedHourly, profileFormData.currency)}
+                                        </span>
+                                    </div>
+                                    <div className="bg-background/80 p-2 rounded-lg border border-border/30">
+                                        <span className="text-[9px] text-muted-foreground font-bold uppercase block">Daily Shift Rate</span>
+                                        <span className="text-xs font-black text-amber-500 tabular-nums">
+                                            {formatCurrency(computedDaily, profileFormData.currency)}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-medium pt-0.5">
+                                    💡 Formula: {formatCurrency(computedMonthly, profileFormData.currency)} ÷ {monthlyHours} hrs = <span className="font-bold text-emerald-500">{formatCurrency(computedHourly, profileFormData.currency)}/hr</span> base for OT & Night shift.
+                                </div>
+                            </div>
+                        )
+                    })()}
 
                     <div>
                         <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Target Payout Wallet</label>

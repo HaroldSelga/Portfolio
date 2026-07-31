@@ -152,6 +152,7 @@ export interface WorkProfile {
     shift_hours: number
     rate_type: RateType
     base_rate: number
+    custom_monthly_hours?: number
     currency: CurrencyCode
     wallet_id: string | null
     cycle_start_date: string | null

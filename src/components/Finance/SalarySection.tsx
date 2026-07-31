@@ -40,8 +40,7 @@ import {
     getStandardMonthlyHours,
     calculateDayPay,
     calculatePayroll,
-    getAutoDayType,
-    is22WorkDay
+    getAutoDayType
 } from "./salaryCalculator"
 import { estimateTax } from "./taxCalculator"
 import {
@@ -50,6 +49,25 @@ import {
     getUpcomingHolidays
 } from "./holidays"
 import { convertCurrency, type ExchangeRates } from "./currency"
+
+/** Auto-compute shift time-in/time-out based on shift type and hours */
+function getShiftTimes(type: "day" | "night", shiftHours: number): { timeIn: string; timeOut: string } {
+    if (type === "night") {
+        // Night shift starts at 20:00 for 12hr, 22:00 for 8hr, etc
+        const startHour = shiftHours >= 12 ? 20 : 24 - shiftHours
+        const endHour = (startHour + shiftHours) % 24
+        return {
+            timeIn: `${String(startHour % 24).padStart(2, "0")}:00`,
+            timeOut: `${String(endHour).padStart(2, "0")}:00`
+        }
+    }
+    // Day shift starts at 08:00
+    const endHour = 8 + shiftHours
+    return {
+        timeIn: "08:00",
+        timeOut: `${String(endHour % 24).padStart(2, "0")}:00`
+    }
+}
 
 interface SalarySectionProps {
     profiles: WorkProfile[]
@@ -300,16 +318,7 @@ export function SalarySection({
         if (!activeProfile) return
         const targetDate = dateOverride || new Date().toISOString().split("T")[0]
         const shiftHours = activeProfile.shift_hours || 12
-        let timeIn = "08:00"
-        let timeOut = "20:00"
-
-        if (type === "night") {
-            timeIn = "20:00"
-            timeOut = "08:00"
-        } else if (shiftHours === 8) {
-            timeIn = "08:00"
-            timeOut = "17:00"
-        }
+        const { timeIn, timeOut } = getShiftTimes(type, shiftHours)
 
         const autoType = getAutoDayType(targetDate, activeProfile)
         try {
@@ -634,28 +643,34 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                             </div>
 
                             {/* Quick Shift Log Buttons (1-Tap Today Shift) */}
-                            <div className="bg-card/40 border border-border/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <div className="flex items-center gap-1.5 font-bold text-muted-foreground">
-                                    <Zap className="h-4 w-4 text-amber-500" />
-                                    <span>Quick Log Today ({new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}):</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleQuickShiftLog("day")}
-                                        className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs"
-                                    >
-                                        <Sun className="h-3.5 w-3.5" /> ☀️ Day Shift ({activeProfile.shift_hours === 12 ? "08:00-20:00" : "08:00-17:00"})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleQuickShiftLog("night")}
-                                        className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs"
-                                    >
-                                        <Moon className="h-3.5 w-3.5" /> 🌙 Night Shift ({activeProfile.shift_hours === 12 ? "20:00-08:00" : "22:00-06:00"})
-                                    </button>
-                                </div>
-                            </div>
+                            {(() => {
+                                const dayTimes = getShiftTimes("day", activeProfile.shift_hours)
+                                const nightTimes = getShiftTimes("night", activeProfile.shift_hours)
+                                return (
+                                    <div className="bg-card/40 border border-border/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                        <div className="flex items-center gap-1.5 font-bold text-muted-foreground">
+                                            <Zap className="h-4 w-4 text-amber-500" />
+                                            <span>Quick Log Today ({new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}):</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleQuickShiftLog("day")}
+                                                className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs"
+                                            >
+                                                <Sun className="h-3.5 w-3.5" /> ☀️ Day Shift ({dayTimes.timeIn}-{dayTimes.timeOut})
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleQuickShiftLog("night")}
+                                                className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs"
+                                            >
+                                                <Moon className="h-3.5 w-3.5" /> 🌙 Night Shift ({nightTimes.timeIn}-{nightTimes.timeOut})
+                                            </button>
+                                        </div>
+                                    </div>
+                                )
+                            })()}
 
                             {/* Missing Shift Detector Alert */}
                             {missingWorkDays.length > 0 && (
@@ -840,10 +855,8 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                         const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                                                         const log = loggedMap.get(dateStr)
                                                         const holiday = checkHoliday(dateStr, activeProfile.country)
-                                                        let expected22Work = false
-                                                        if (activeProfile.schedule_type === "2-2" && activeProfile.cycle_start_date) {
-                                                            expected22Work = is22WorkDay(dateStr, activeProfile.cycle_start_date)
-                                                        }
+                                                        const expectedDayType = getAutoDayType(dateStr, activeProfile)
+                                                        const expectedWork = expectedDayType === "regular"
 
                                                         return (
                                                             <div
@@ -869,7 +882,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                             : log.day_type === "rest_day"
                                                                                 ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
                                                                                 : "bg-rose-500/10 border-rose-500/30 text-rose-500"
-                                                                        : expected22Work
+                                                                        : expectedWork
                                                                             ? "bg-muted/40 border-dashed border-muted-foreground/30 hover:border-primary/50"
                                                                             : "bg-card/40 border-border/20 hover:border-primary/30"
                                                                 )}
@@ -884,9 +897,13 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                         <div>{log.time_in.slice(0, 5)}</div>
                                                                         <div className="text-foreground/80">+{formatCurrency(calculateDayPay(log, activeProfile).totalPay, activeProfile.currency, showAmounts)}</div>
                                                                     </div>
-                                                                ) : expected22Work ? (
+                                                                ) : expectedWork ? (
                                                                     <div className="text-[8px] text-muted-foreground font-bold uppercase text-center py-1">
                                                                         Work Day
+                                                                    </div>
+                                                                ) : !expectedWork && expectedDayType === "rest_day" ? (
+                                                                    <div className="text-[8px] text-muted-foreground/50 font-bold uppercase text-center py-1">
+                                                                        Rest
                                                                     </div>
                                                                 ) : null}
                                                             </div>
@@ -1353,36 +1370,82 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                 </div>
                                             </div>
 
-                                            {/* Dual Rate Summary Card */}
-                                            <div className="border-t border-border/20 pt-2 text-xs space-y-1.5 font-medium text-muted-foreground">
-                                                <div className="bg-muted/40 p-2.5 rounded-xl border border-border/20 grid grid-cols-2 gap-2 text-[11px]">
-                                                    <div>
-                                                        <span className="text-[9px] uppercase font-bold text-muted-foreground block">Monthly Salary</span>
-                                                        <span className="font-black text-sky-500 tabular-nums">{formatCurrency(mSalary, p.currency)} / mo</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[9px] uppercase font-bold text-muted-foreground block">Hourly Base Rate</span>
-                                                        <span className="font-black text-emerald-500 tabular-nums">{formatCurrency(hRate, p.currency)} / hr</span>
-                                                    </div>
-                                                </div>
+                                            {/* Comprehensive Rate Summary Card */}
+                                            {(() => {
+                                                const dRate = getDailyRate(p)
+                                                const isRotation = p.schedule_type !== "5-2"
+                                                // OT multiplier rates
+                                                const ot1Rate = hRate * (p.country === "TW" ? 1.34 : 1.25)
+                                                const ot2Rate = hRate * (p.country === "TW" ? 1.67 : 1.25)
+                                                const nightRate = p.country === "TW" ? 20 : hRate * 0.10
+                                                const holidayMultiplier = 2.0
 
-                                                <div className="flex justify-between pt-1">
-                                                    <span>Standard Monthly Hours:</span>
-                                                    <span className="font-bold text-foreground">{stdHours} hrs/month</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span>Target Payout Wallet:</span>
-                                                    <span className="font-bold text-foreground">
-                                                        {wallets.find(w => w.id === p.wallet_id)?.name || "Not selected"}
-                                                    </span>
-                                                </div>
-                                                {p.schedule_type === "2-2" && (
-                                                    <div className="flex justify-between">
-                                                        <span>Cycle Start Date:</span>
-                                                        <span className="font-bold text-foreground">{p.cycle_start_date || "Not set"}</span>
+                                                return (
+                                                    <div className="border-t border-border/20 pt-2 text-xs space-y-1.5 font-medium text-muted-foreground">
+                                                        <div className="bg-muted/40 p-2.5 rounded-xl border border-border/20 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                                                            <div>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">Monthly Salary</span>
+                                                                <span className="font-black text-sky-500 tabular-nums">{formatCurrency(mSalary, p.currency)} / mo</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">Hourly Base Rate</span>
+                                                                <span className="font-black text-emerald-500 tabular-nums">{formatCurrency(hRate, p.currency)} / hr</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">Daily Shift Rate</span>
+                                                                <span className="font-black text-amber-500 tabular-nums">{formatCurrency(dRate, p.currency)} / day</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">Holiday Rate (2.0x)</span>
+                                                                <span className="font-black text-rose-500 tabular-nums">{formatCurrency(hRate * holidayMultiplier * p.shift_hours, p.currency)} / day</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* OT & Night Rates */}
+                                                        <div className="bg-muted/40 p-2.5 rounded-xl border border-border/20 grid grid-cols-3 gap-2 text-[11px]">
+                                                            <div>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">
+                                                                    OT 1st 2hrs ({p.country === "TW" ? "1.34x" : "1.25x"})
+                                                                </span>
+                                                                <span className="font-black text-amber-500 tabular-nums">{formatCurrency(ot1Rate, p.currency)} / hr</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">
+                                                                    OT Next ({p.country === "TW" ? "1.67x" : "1.25x"})
+                                                                </span>
+                                                                <span className="font-black text-amber-500 tabular-nums">{formatCurrency(ot2Rate, p.currency)} / hr</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">
+                                                                    Night Diff ({p.country === "TW" ? "NT$20/hr" : "10%"})
+                                                                </span>
+                                                                <span className="font-black text-indigo-400 tabular-nums">+{formatCurrency(nightRate, p.currency)} / hr</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex justify-between pt-1">
+                                                            <span>Standard Monthly Hours:</span>
+                                                            <span className="font-bold text-foreground">{stdHours} hrs/month</span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span>Schedule Type:</span>
+                                                            <span className="font-bold text-foreground">{p.schedule_type} ({p.shift_hours}h shift)</span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span>Target Payout Wallet:</span>
+                                                            <span className="font-bold text-foreground">
+                                                                {wallets.find(w => w.id === p.wallet_id)?.name || "Not selected"}
+                                                            </span>
+                                                        </div>
+                                                        {isRotation && (
+                                                            <div className="flex justify-between">
+                                                                <span>Cycle Start Date:</span>
+                                                                <span className="font-bold text-foreground">{p.cycle_start_date || "Not set"}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
+                                                )
+                                            })()}
                                         </div>
                                     )
                                 })}

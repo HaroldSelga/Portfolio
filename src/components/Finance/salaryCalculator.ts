@@ -210,7 +210,7 @@ function calculateDayPayPH(
             break
         }
         case "rest_day": {
-            // Rest day: 1.30x base, OT = 1.30 × 1.25 = 1.625 (rounded to 1.69 per DOLE)
+            // Rest day: 1.30x base, OT = 1.30 × 1.30 = 1.69 per DOLE
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 

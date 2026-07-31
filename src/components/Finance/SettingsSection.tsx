@@ -1,20 +1,34 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, Check, X, Star } from "lucide-react"
+import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, X, Star, Globe, RefreshCw } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { Wallet, CategoryBudget } from "./types"
-import { WALLET_TYPES, WALLET_PRESETS, EXPENSE_CATEGORIES } from "./types"
+import type { Wallet, CategoryBudget, CurrencyCode } from "./types"
+import { WALLET_TYPES, WALLET_PRESETS, EXPENSE_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
+import {
+    getExchangeRates,
+    saveCustomExchangeRates,
+    savePrimaryBaseCurrency,
+    DEFAULT_RATES_IN_USD,
+    getDirectRate,
+    type ExchangeRates
+} from "./currency"
 
 interface SettingsSectionProps {
     wallets: Wallet[]
     budgets: CategoryBudget[]
+    rates: ExchangeRates
+    customRates: Partial<ExchangeRates>
+    baseCurrency: CurrencyCode
+    showAmounts?: boolean
     onAddWallet: (wallet: Omit<Wallet, "id" | "created_at">) => void
     onUpdateWallet: (wallet: Wallet) => void
     onDeleteWallet: (id: string) => void
     onAddBudget: (budget: Omit<CategoryBudget, "id" | "created_at">) => void
     onDeleteBudget: (id: string) => void
+    onUpdateRates: (rates: ExchangeRates, customRates: Partial<ExchangeRates>) => void
+    onUpdateBaseCurrency: (currency: CurrencyCode) => void
 }
 
 const WALLET_ICONS: Record<string, React.ElementType> = {
@@ -23,19 +37,31 @@ const WALLET_ICONS: Record<string, React.ElementType> = {
     banknote: Banknote,
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet, onDeleteWallet, onAddBudget, onDeleteBudget }: SettingsSectionProps) {
+export function SettingsSection({
+    wallets,
+    budgets,
+    rates,
+    customRates,
+    baseCurrency,
+    showAmounts = true,
+    onAddWallet,
+    onUpdateWallet,
+    onDeleteWallet,
+    onAddBudget,
+    onDeleteBudget,
+    onUpdateRates,
+    onUpdateBaseCurrency,
+}: SettingsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [showBudgetForm, setShowBudgetForm] = useState(false)
+    const [showRateModal, setShowRateModal] = useState(false)
     const [editWallet, setEditWallet] = useState<Wallet | null>(null)
     const [deleteConfirmWallet, setDeleteConfirmWallet] = useState<Wallet | null>(null)
 
     const [newWallet, setNewWallet] = useState({
         name: "",
         icon: "building" as "building" | "smartphone" | "banknote",
+        currency: "PHP" as CurrencyCode,
         balance: "",
     })
 
@@ -47,8 +73,13 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
     const [editForm, setEditForm] = useState({
         name: "",
         icon: "building" as "building" | "smartphone" | "banknote",
+        currency: "PHP" as CurrencyCode,
         balance: "",
     })
+
+    // Custom rates editing state
+    const [rateInputs, setRateInputs] = useState<Record<string, string>>({})
+    const [isRefreshingRates, setIsRefreshingRates] = useState(false)
 
     const handleAddSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -57,17 +88,19 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
         onAddWallet({
             name: newWallet.name,
             icon: newWallet.icon,
+            currency: newWallet.currency,
             balance: parseFloat(newWallet.balance || "0"),
         })
 
-        setNewWallet({ name: "", icon: "building", balance: "" })
+        setNewWallet({ name: "", icon: "building", currency: "PHP", balance: "" })
         setShowAddForm(false)
     }
 
-    const handleQuickAdd = (preset: { name: string; icon: string }) => {
+    const handleQuickAdd = (preset: { name: string; icon: string; currency?: CurrencyCode }) => {
         onAddWallet({
             name: preset.name,
             icon: preset.icon as any,
+            currency: preset.currency || "PHP",
             balance: 0,
         })
     }
@@ -80,6 +113,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
             ...editWallet,
             name: editForm.name,
             icon: editForm.icon,
+            currency: editForm.currency,
             balance: parseFloat(editForm.balance || "0"),
         })
 
@@ -91,6 +125,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
         setEditForm({
             name: wallet.name,
             icon: wallet.icon as any,
+            currency: wallet.currency || "PHP",
             balance: wallet.balance.toString(),
         })
     }
@@ -114,10 +149,64 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
         setShowBudgetForm(false)
     }
 
+    const handleOpenRateModal = () => {
+        const initialInputs: Record<string, string> = {}
+        Object.keys(CURRENCIES).forEach(code => {
+            const cCode = code as CurrencyCode
+            const direct = getDirectRate(cCode, "PHP", rates, customRates)
+            initialInputs[cCode] = direct ? direct.toFixed(4) : ""
+        })
+        setRateInputs(initialInputs)
+        setShowRateModal(true)
+    }
+
+    const handleRefreshRates = async () => {
+        setIsRefreshingRates(true)
+        localStorage.removeItem("finance_exchange_rates")
+        const freshRates = await getExchangeRates()
+        onUpdateRates(freshRates, customRates)
+        
+        // Update input fields
+        const freshInputs: Record<string, string> = {}
+        Object.keys(CURRENCIES).forEach(code => {
+            const cCode = code as CurrencyCode
+            const direct = getDirectRate(cCode, "PHP", freshRates, customRates)
+            freshInputs[cCode] = direct ? direct.toFixed(4) : ""
+        })
+        setRateInputs(freshInputs)
+        setIsRefreshingRates(false)
+    }
+
+    const handleSaveCustomRates = (e: React.FormEvent) => {
+        e.preventDefault()
+        const newCustomRates: Partial<ExchangeRates> = { ...customRates }
+
+        Object.entries(rateInputs).forEach(([code, value]) => {
+            const cCode = code as CurrencyCode
+            const phpVal = parseFloat(value)
+            if (cCode === "PHP") return
+            if (phpVal > 0) {
+                // If 1 NTD = 1.8 PHP, then in USD: USD_rate = PHP_rate_in_USD / 1.8
+                const phpInUSD = rates.PHP || DEFAULT_RATES_IN_USD.PHP
+                newCustomRates[cCode] = phpInUSD / phpVal
+            }
+        })
+
+        saveCustomExchangeRates(newCustomRates)
+        onUpdateRates(rates, newCustomRates)
+        setShowRateModal(false)
+    }
+
+    const handleResetCustomRates = () => {
+        saveCustomExchangeRates({})
+        onUpdateRates(rates, {})
+        setShowRateModal(false)
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-stone-500/10 rounded-xl">
                         <Plus className="h-5 w-5 text-stone-400" />
@@ -125,11 +214,19 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Finance Settings</h3>
                         <p className="text-xs font-bold text-muted-foreground">
-                            Manage accounts, bank lists, e-wallets, and monthly category budgets
+                            Multi-currency wallets, live exchange rates, and category budgets
                         </p>
                     </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        onClick={handleOpenRateModal}
+                        className="font-bold rounded-xl gap-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-500 border border-sky-500/30"
+                        size="sm"
+                    >
+                        <Globe className="h-4 w-4" />
+                        Exchange Rates
+                    </Button>
                     <Button
                         onClick={() => setShowBudgetForm(!showBudgetForm)}
                         className={cn(
@@ -141,7 +238,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                         size="sm"
                     >
                         {showBudgetForm ? <X className="h-4 w-4" /> : <Star className="h-4 w-4 text-white" />}
-                        {showBudgetForm ? "Cancel" : "Set Category Budget"}
+                        {showBudgetForm ? "Cancel" : "Set Budget Limit"}
                     </Button>
                     <Button
                         onClick={() => setShowAddForm(!showAddForm)}
@@ -159,6 +256,33 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                 </div>
             </div>
 
+            {/* Base Currency Selector Bar */}
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                        <Globe className="h-4 w-4 text-primary" /> Primary Base Currency
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                        All portfolio totals and summary reports are aggregated into this currency.
+                    </p>
+                </div>
+                <select
+                    value={baseCurrency}
+                    onChange={e => {
+                        const newCurr = e.target.value as CurrencyCode
+                        savePrimaryBaseCurrency(newCurr)
+                        onUpdateBaseCurrency(newCurr)
+                    }}
+                    className="px-3.5 py-2 bg-background border border-border/60 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shrink-0"
+                >
+                    {Object.values(CURRENCIES).map(curr => (
+                        <option key={curr.code} value={curr.code}>
+                            {curr.flag} {curr.code} — {curr.name} ({curr.symbol})
+                        </option>
+                    ))}
+                </select>
+            </div>
+
             {/* Add Wallet Form */}
             <AnimatePresence>
                 {showAddForm && (
@@ -171,12 +295,12 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                         className="overflow-hidden"
                     >
                         <div className="bg-card/60 backdrop-blur-sm border border-primary/20 rounded-2xl p-4 space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">Wallet / Bank Name</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div className="sm:col-span-2">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Wallet / Bank Name</label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. BDO, EastWest, Maya"
+                                        placeholder="e.g. BDO, Taiwan Cathay Bank, Binance"
                                         value={newWallet.name}
                                         onChange={e => setNewWallet({ ...newWallet, name: e.target.value })}
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -184,7 +308,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">Wallet Type</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Wallet Type</label>
                                     <select
                                         value={newWallet.icon}
                                         onChange={e => setNewWallet({ ...newWallet, icon: e.target.value as any })}
@@ -198,51 +322,76 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">Starting Balance (₱)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        placeholder="0.00"
-                                        value={newWallet.balance}
-                                        onChange={e => setNewWallet({ ...newWallet, balance: e.target.value })}
-                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                    />
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Currency</label>
+                                    <select
+                                        value={newWallet.currency}
+                                        onChange={e => setNewWallet({ ...newWallet, currency: e.target.value as CurrencyCode })}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                    >
+                                        <optgroup label="Fiat Currencies">
+                                            {Object.values(CURRENCIES).filter(c => !c.isCrypto).map(c => (
+                                                <option key={c.code} value={c.code}>
+                                                    {c.flag} {c.code} ({c.symbol})
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                        <optgroup label="Cryptocurrencies">
+                                            {Object.values(CURRENCIES).filter(c => c.isCrypto).map(c => (
+                                                <option key={c.code} value={c.code}>
+                                                    {c.flag} {c.code} ({c.symbol})
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    </select>
                                 </div>
                             </div>
 
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Starting Balance ({CURRENCIES[newWallet.currency]?.symbol})</label>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    placeholder="0.00"
+                                    value={newWallet.balance}
+                                    onChange={e => setNewWallet({ ...newWallet, balance: e.target.value })}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                />
+                            </div>
+
                             <div className="space-y-2 border-t border-border/10 pt-3">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quick Suggest Preset Names (₱0 start):</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quick Suggest Presets:</span>
                                 <div className="flex flex-wrap gap-1.5">
                                     {WALLET_PRESETS.banks.slice(0, 4).map(p => (
                                         <button
                                             key={p.name}
                                             type="button"
-                                            onClick={() => handleQuickAdd(p)}
+                                            onClick={() => handleQuickAdd({ ...p, currency: "PHP" })}
                                             className="px-2 py-1 text-[11px] font-bold rounded-lg border border-border/50 hover:bg-muted/50 transition-colors"
                                         >
-                                            🏦 {p.name}
+                                            🏦 {p.name} (PHP)
                                         </button>
                                     ))}
-                                    {WALLET_PRESETS.ewallets.slice(0, 3).map(p => (
-                                        <button
-                                            key={p.name}
-                                            type="button"
-                                            onClick={() => handleQuickAdd(p)}
-                                            className="px-2 py-1 text-[11px] font-bold rounded-lg border border-border/50 hover:bg-muted/50 transition-colors"
-                                        >
-                                            📱 {p.name}
-                                        </button>
-                                    ))}
-                                    {WALLET_PRESETS.cash.slice(0, 1).map(p => (
-                                        <button
-                                            key={p.name}
-                                            type="button"
-                                            onClick={() => handleQuickAdd(p)}
-                                            className="px-2 py-1 text-[11px] font-bold rounded-lg border border-border/50 hover:bg-muted/50 transition-colors"
-                                        >
-                                            💵 {p.name}
-                                        </button>
-                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickAdd({ name: "Taiwan Bank (NTD)", icon: "building", currency: "NTD" })}
+                                        className="px-2 py-1 text-[11px] font-bold rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
+                                    >
+                                        🇹🇼 NTD Bank Wallet
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickAdd({ name: "USD Bank Account", icon: "building", currency: "USD" })}
+                                        className="px-2 py-1 text-[11px] font-bold rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20 transition-colors"
+                                    >
+                                        🇺🇸 USD Wallet
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickAdd({ name: "Crypto Wallet (BTC)", icon: "smartphone", currency: "BTC" })}
+                                        className="px-2 py-1 text-[11px] font-bold rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors"
+                                    >
+                                        🪙 BTC Crypto Wallet
+                                    </button>
                                 </div>
                             </div>
 
@@ -263,7 +412,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                     <motion.form
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
+                        exit={{ opacity: 1, height: "auto" }}
                         transition={{ duration: 0.3 }}
                         onSubmit={handleAddBudgetSubmit}
                         className="overflow-hidden"
@@ -271,7 +420,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                         <div className="bg-card/60 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-4 space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">Expense Category</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Expense Category</label>
                                     <select
                                         value={newBudget.category}
                                         onChange={e => setNewBudget({ ...newBudget, category: e.target.value })}
@@ -285,7 +434,9 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">Monthly Limit Amount (₱)</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block font-sans">
+                                        Monthly Limit Amount ({CURRENCIES[baseCurrency]?.symbol})
+                                    </label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -315,6 +466,9 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {wallets.map(wallet => {
                         const IconComponent = WALLET_ICONS[wallet.icon] || HelpCircle
+                        const currencyCode = wallet.currency || "PHP"
+                        const currConfig = CURRENCIES[currencyCode] || CURRENCIES.PHP
+
                         return (
                             <div
                                 key={wallet.id}
@@ -325,19 +479,24 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                                         <div className="p-2 bg-muted rounded-xl shrink-0">
                                             <IconComponent className="h-4.5 w-4.5 text-muted-foreground" />
                                         </div>
-                                        <span className="font-bold text-sm truncate uppercase tracking-tight">{wallet.name}</span>
+                                        <div className="min-w-0">
+                                            <span className="font-bold text-sm truncate uppercase tracking-tight block">{wallet.name}</span>
+                                            <span className="text-[10px] font-black text-muted-foreground">
+                                                {currConfig.flag} {currencyCode}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => handleOpenEdit(wallet)}
-                                            className="p-1 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                                            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
                                             title="Edit Wallet Settings"
                                         >
                                             <Edit2 className="h-3.5 w-3.5" />
                                         </button>
                                         <button
                                             onClick={() => setDeleteConfirmWallet(wallet)}
-                                            className="p-1 rounded-lg text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                                            className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
                                             title="Delete Wallet"
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
@@ -346,7 +505,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                                 </div>
                                 <div className="border-t border-border/10 pt-2 flex justify-between items-center text-xs">
                                     <span className="text-muted-foreground font-medium">Balance:</span>
-                                    <span className="font-black tabular-nums">{formatPeso(wallet.balance)}</span>
+                                    <span className="font-black tabular-nums">{formatCurrency(wallet.balance, currencyCode, showAmounts)}</span>
                                 </div>
                             </div>
                         )
@@ -381,7 +540,7 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                                     </div>
                                     <div className="text-right flex items-center gap-3">
                                         <div>
-                                            <span className="font-black text-sm block tabular-nums text-emerald-500">{formatPeso(budget.limit_amount)}</span>
+                                            <span className="font-black text-sm block tabular-nums text-emerald-500">{formatCurrency(budget.limit_amount, baseCurrency, showAmounts)}</span>
                                             <span className="text-[9px] text-muted-foreground font-bold">Limit / month</span>
                                         </div>
                                         <button
@@ -403,90 +562,6 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                 )}
             </div>
 
-            {/* Quick-Add Presets Panel */}
-            <div className="bg-card/30 backdrop-blur-sm border border-border/20 rounded-2xl p-4 space-y-4">
-                <div>
-                    <h4 className="text-sm font-bold uppercase tracking-tight">Need to Add More?</h4>
-                    <p className="text-xs text-muted-foreground">Select popular presets to add wallets in one click.</p>
-                </div>
-                <div className="space-y-3">
-                    <div className="space-y-1.5">
-                        <span className="text-[10px] font-black uppercase text-muted-foreground/70">🏦 Banks</span>
-                        <div className="flex flex-wrap gap-1">
-                            {WALLET_PRESETS.banks.map(p => {
-                                const exists = wallets.some(w => w.name.toLowerCase() === p.name.toLowerCase())
-                                return (
-                                    <button
-                                        key={p.name}
-                                        onClick={() => !exists && handleQuickAdd(p)}
-                                        disabled={exists}
-                                        className={cn(
-                                            "px-2.5 py-1 text-xs rounded-xl border font-bold flex items-center gap-1 transition-all",
-                                            exists
-                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 cursor-not-allowed"
-                                                : "border-border/60 hover:border-primary/40 hover:bg-muted/40"
-                                        )}
-                                    >
-                                        {exists && <Check className="h-3 w-3" />}
-                                        {p.name}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <span className="text-[10px] font-black uppercase text-muted-foreground/70">📱 E-Wallets</span>
-                        <div className="flex flex-wrap gap-1">
-                            {WALLET_PRESETS.ewallets.map(p => {
-                                const exists = wallets.some(w => w.name.toLowerCase() === p.name.toLowerCase())
-                                return (
-                                    <button
-                                        key={p.name}
-                                        onClick={() => !exists && handleQuickAdd(p)}
-                                        disabled={exists}
-                                        className={cn(
-                                            "px-2.5 py-1 text-xs rounded-xl border font-bold flex items-center gap-1 transition-all",
-                                            exists
-                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 cursor-not-allowed"
-                                                : "border-border/60 hover:border-primary/40 hover:bg-muted/40"
-                                        )}
-                                    >
-                                        {exists && <Check className="h-3 w-3" />}
-                                        {p.name}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <span className="text-[10px] font-black uppercase text-muted-foreground/70">💵 Cash Presets</span>
-                        <div className="flex flex-wrap gap-1">
-                            {WALLET_PRESETS.cash.map(p => {
-                                const exists = wallets.some(w => w.name.toLowerCase() === p.name.toLowerCase())
-                                return (
-                                    <button
-                                        key={p.name}
-                                        onClick={() => !exists && handleQuickAdd(p)}
-                                        disabled={exists}
-                                        className={cn(
-                                            "px-2.5 py-1 text-xs rounded-xl border font-bold flex items-center gap-1 transition-all",
-                                            exists
-                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 cursor-not-allowed"
-                                                : "border-border/60 hover:border-primary/40 hover:bg-muted/40"
-                                        )}
-                                    >
-                                        {exists && <Check className="h-3 w-3" />}
-                                        {p.name}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* Edit Wallet Modal */}
             <Modal
                 isOpen={editWallet !== null}
@@ -505,25 +580,41 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                             required
                         />
                     </div>
-                    <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Icon Type</label>
-                        <select
-                            value={editForm.icon}
-                            onChange={e => setEditForm({ ...editForm, icon: e.target.value as any })}
-                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                        >
-                            {WALLET_TYPES.map(t => (
-                                <option key={t.value} value={t.value}>
-                                    {t.emoji} {t.label}
-                                </option>
-                            ))}
-                        </select>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Icon Type</label>
+                            <select
+                                value={editForm.icon}
+                                onChange={e => setEditForm({ ...editForm, icon: e.target.value as any })}
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            >
+                                {WALLET_TYPES.map(t => (
+                                    <option key={t.value} value={t.value}>
+                                        {t.emoji} {t.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Currency</label>
+                            <select
+                                value={editForm.currency}
+                                onChange={e => setEditForm({ ...editForm, currency: e.target.value as CurrencyCode })}
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            >
+                                {Object.values(CURRENCIES).map(c => (
+                                    <option key={c.code} value={c.code}>
+                                        {c.flag} {c.code}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                     <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Adjust Balance (₱)</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Adjust Balance ({CURRENCIES[editForm.currency]?.symbol})</label>
                         <input
                             type="number"
-                            step="0.01"
+                            step="any"
                             value={editForm.balance}
                             onChange={e => setEditForm({ ...editForm, balance: e.target.value })}
                             className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -539,6 +630,71 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                 </form>
             </Modal>
 
+            {/* Exchange Rate Manager Modal */}
+            <Modal
+                isOpen={showRateModal}
+                onClose={() => setShowRateModal(false)}
+                title="Manage Exchange Rates (Direct to PHP)"
+                className="max-w-lg"
+            >
+                <form onSubmit={handleSaveCustomRates} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                    <div className="flex items-center justify-between bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-500 font-medium">
+                        <span>Set direct rates relative to 1 Currency = X PHP (e.g. 1 NTD = 1.78 PHP).</span>
+                        <button
+                            type="button"
+                            onClick={handleRefreshRates}
+                            disabled={isRefreshingRates}
+                            className="p-1 rounded-lg hover:bg-sky-500/20 transition-colors shrink-0 flex items-center gap-1 font-bold"
+                            title="Fetch latest live market rates"
+                        >
+                            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshingRates && "animate-spin")} />
+                            Sync Live
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {Object.values(CURRENCIES).filter(c => c.code !== "PHP").map(c => {
+                            const isCustom = customRates[c.code] !== undefined
+                            return (
+                                <div key={c.code} className="space-y-1">
+                                    <label className="text-[11px] font-black uppercase text-muted-foreground flex justify-between">
+                                        <span>{c.flag} 1 {c.code} = (PHP ₱)</span>
+                                        {isCustom && <span className="text-amber-500 font-bold">Custom</span>}
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₱</span>
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            placeholder="0.00"
+                                            value={rateInputs[c.code] || ""}
+                                            onChange={e => setRateInputs({ ...rateInputs, [c.code]: e.target.value })}
+                                            className="w-full pl-7 pr-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                        />
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    <div className="flex gap-2 pt-3 border-t border-border/20">
+                        <Button
+                            type="button"
+                            onClick={handleResetCustomRates}
+                            className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl text-xs"
+                        >
+                            Reset to Live Rates
+                        </Button>
+                        <Button
+                            type="submit"
+                            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs shadow-lg"
+                        >
+                            Save Custom Rates
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
+
             {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={deleteConfirmWallet !== null}
@@ -551,14 +707,14 @@ export function SettingsSection({ wallets, budgets, onAddWallet, onUpdateWallet,
                         <AlertTriangle className="h-5 w-5 shrink-0" />
                         <div>
                             <p className="text-sm font-black uppercase tracking-wider">Warning</p>
-                            <p className="text-xs font-semibold">Deleting a wallet is permanent. All transaction history linked to this wallet will remain in history but will no longer point to this wallet.</p>
+                            <p className="text-xs font-semibold">Deleting a wallet is permanent. All transaction history linked to this wallet will remain in history.</p>
                         </div>
                     </div>
                     <p className="text-sm font-bold text-foreground">
                         Are you sure you want to delete <span className="text-rose-500 uppercase">"{deleteConfirmWallet?.name}"</span>?
                     </p>
                     <p className="text-xs text-muted-foreground">
-                        Current Balance: <span className="font-bold">{deleteConfirmWallet ? formatPeso(deleteConfirmWallet.balance) : ""}</span>
+                        Current Balance: <span className="font-bold">{deleteConfirmWallet ? formatCurrency(deleteConfirmWallet.balance, deleteConfirmWallet.currency || "PHP", showAmounts) : ""}</span>
                     </p>
                     <div className="flex gap-2">
                         <Button

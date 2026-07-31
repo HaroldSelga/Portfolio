@@ -1,24 +1,30 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Trash2, TrendingDown, X, AlertCircle, Sparkles } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
-import type { FinanceEntry, Wallet, CategoryBudget } from "./types"
-import { EXPENSE_CATEGORIES } from "./types"
+import type { FinanceEntry, Wallet, CategoryBudget, CurrencyCode } from "./types"
+import { EXPENSE_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
 
 interface ExpenseSectionProps {
     entries: FinanceEntry[]
     wallets: Wallet[]
     budgets: CategoryBudget[]
+    showAmounts?: boolean
+    baseCurrency?: CurrencyCode
     onAdd: (entry: Omit<FinanceEntry, "id" | "created_at">) => void
     onDelete: (id: string) => void
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: ExpenseSectionProps) {
+export function ExpenseSection({
+    entries,
+    wallets,
+    budgets,
+    showAmounts = true,
+    baseCurrency = "PHP",
+    onAdd,
+    onDelete
+}: ExpenseSectionProps) {
     const [showForm, setShowForm] = useState(false)
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split("T")[0],
@@ -28,17 +34,21 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
         wallet_id: wallets[0]?.id || "",
     })
 
+    const selectedWallet = wallets.find(w => w.id === formData.wallet_id)
+    const walletCurrency: CurrencyCode = selectedWallet?.currency || "PHP"
+    const currInfo = CURRENCIES[walletCurrency] || CURRENCIES.PHP
+
     const currentMonthPrefix = useMemo(() => {
         const d = new Date()
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
     }, [])
 
     // Calculate current spending for a specific category this month
-    const getCategorySpentThisMonth = (category: string) => {
+    const getCategorySpentThisMonth = useCallback((category: string) => {
         return entries
             .filter(e => e.type === "expense" && e.category === category && e.date.startsWith(currentMonthPrefix))
             .reduce((sum, e) => sum + e.amount, 0)
-    }
+    }, [entries, currentMonthPrefix])
 
     // Active budget warning for selected category in the form
     const activeBudget = useMemo(() => {
@@ -59,7 +69,7 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
             isOver: totalProjected > limit,
             isNear: totalProjected >= limit * 0.8 && totalProjected <= limit,
         }
-    }, [formData.category, formData.amount, budgets, entries, currentMonthPrefix])
+    }, [formData.category, formData.amount, budgets, getCategorySpentThisMonth])
 
     // List of budgets that are close to or exceeding limits
     const budgetAlerts = useMemo(() => {
@@ -69,7 +79,7 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
             const catInfo = EXPENSE_CATEGORIES.find(c => c.value === budget.category)
             return { budget, spent, percent, catInfo }
         }).filter(item => item.percent >= 80)
-    }, [budgets, entries, currentMonthPrefix])
+    }, [budgets, getCategorySpentThisMonth])
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -82,6 +92,7 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
             description: formData.description || EXPENSE_CATEGORIES.find(c => c.value === formData.category)?.label || "Expense",
             amount: parseFloat(formData.amount),
             wallet_id: formData.wallet_id,
+            currency: walletCurrency,
         })
 
         setFormData({
@@ -95,7 +106,6 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
     }
 
     const expenseEntries = entries.filter(e => e.type === "expense").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    const totalExpenses = expenseEntries.reduce((sum, e) => sum + e.amount, 0)
 
     return (
         <div className="space-y-4">
@@ -107,8 +117,8 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                     </div>
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Expenses</h3>
-                        <p className="text-xs font-bold text-muted-foreground tabular-nums">
-                            Total: <span className="text-rose-500">{formatPeso(totalExpenses)}</span>
+                        <p className="text-xs font-bold text-muted-foreground">
+                            Track daily spending, food, bills, and monthly category budgets
                         </p>
                     </div>
                 </div>
@@ -161,8 +171,8 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                                         />
                                     </div>
                                     <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
-                                        <span>Spent: {formatPeso(spent)}</span>
-                                        <span>Limit: {formatPeso(budget.limit_amount)}</span>
+                                        <span>Spent: {formatCurrency(spent, baseCurrency, showAmounts)}</span>
+                                        <span>Limit: {formatCurrency(budget.limit_amount, baseCurrency, showAmounts)}</span>
                                     </div>
                                 </div>
                             )
@@ -209,11 +219,13 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount (₱)</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                                        Amount ({currInfo.symbol} {walletCurrency})
+                                    </label>
                                     <input
                                         type="number"
-                                        step="0.01"
-                                        min="0.01"
+                                        step="any"
+                                        min="0.000001"
                                         placeholder="0.00"
                                         value={formData.amount}
                                         onChange={e => setFormData({ ...formData, amount: e.target.value })}
@@ -222,15 +234,21 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Wallet</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Pay From Wallet</label>
                                     <select
                                         value={formData.wallet_id}
                                         onChange={e => setFormData({ ...formData, wallet_id: e.target.value })}
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
                                     >
-                                        {wallets.map(w => (
-                                            <option key={w.id} value={w.id}>{w.name}</option>
-                                        ))}
+                                        {wallets.map(w => {
+                                            const wCurr = w.currency || "PHP"
+                                            const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                            return (
+                                                <option key={w.id} value={w.id}>
+                                                    {flag} {w.name} ({wCurr})
+                                                </option>
+                                            )
+                                        })}
                                     </select>
                                 </div>
                             </div>
@@ -238,7 +256,7 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Description (optional)</label>
                                 <input
                                     type="text"
-                                    placeholder="e.g. Grab ride to work"
+                                    placeholder="e.g. Grab ride to work, Lunch with team"
                                     value={formData.description}
                                     onChange={e => setFormData({ ...formData, description: e.target.value })}
                                     className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
@@ -264,7 +282,7 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                                                 Monthly Budget Progress
                                             </span>
                                             <span>
-                                                {formatPeso(activeBudget.totalProjected)} / {formatPeso(activeBudget.limit)}
+                                                {formatCurrency(activeBudget.totalProjected, baseCurrency, showAmounts)} / {formatCurrency(activeBudget.limit, baseCurrency, showAmounts)}
                                             </span>
                                         </div>
                                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -307,6 +325,7 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                         {expenseEntries.map((entry, i) => {
                             const cat = EXPENSE_CATEGORIES.find(c => c.value === entry.category)
                             const wallet = wallets.find(w => w.id === entry.wallet_id)
+                            const entryCurrency = entry.currency || wallet?.currency || "PHP"
 
                             return (
                                 <motion.div
@@ -328,18 +347,22 @@ export function ExpenseSection({ entries, wallets, budgets, onAdd, onDelete }: E
                                             {wallet && (
                                                 <>
                                                     <span>·</span>
-                                                    <span>{wallet.name}</span>
+                                                    <span className="font-semibold text-foreground/80">{wallet.name}</span>
                                                 </>
                                             )}
                                         </div>
                                     </div>
                                     <span className="text-sm font-black tabular-nums text-rose-500">
-                                        -{formatPeso(entry.amount)}
+                                        -{formatCurrency(entry.amount, entryCurrency, showAmounts)}
                                     </span>
                                     <button
-                                        onClick={() => onDelete(entry.id)}
+                                        onClick={() => {
+                                            if (confirm("Are you sure you want to delete this expense entry?")) {
+                                                onDelete(entry.id)
+                                            }
+                                        }}
                                         className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
-                                        title="Remove"
+                                        title="Remove entry"
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                     </button>

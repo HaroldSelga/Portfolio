@@ -4,21 +4,20 @@ import { Plus, Target, Check, Trash2, X, AlertTriangle, Calendar } from "lucide-
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { WishlistItem, Wallet } from "./types"
+import type { WishlistItem, Wallet, CurrencyCode } from "./types"
+import { formatCurrency } from "./types"
 
 interface WishlistSectionProps {
     items: WishlistItem[]
     wallets: Wallet[]
+    showAmounts?: boolean
+    baseCurrency?: CurrencyCode
     onAddItem: (item: Omit<WishlistItem, "id" | "created_at" | "is_purchased" | "actual_price" | "purchased_date" | "wallet_id">) => void
     onPurchaseItem: (id: string, actualPrice: number, walletId: string, notes: string | null, date: string) => void
     onDeleteItem: (id: string) => void
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onDeleteItem }: WishlistSectionProps) {
+export function WishlistSection({ items, wallets, showAmounts = true, baseCurrency = "PHP", onAddItem, onPurchaseItem, onDeleteItem }: WishlistSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [purchaseModalItem, setPurchaseModalItem] = useState<WishlistItem | null>(null)
     const [newWishlist, setNewWishlist] = useState({
@@ -103,7 +102,7 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Wishlist / Buy Soon</h3>
                         <p className="text-xs font-bold text-muted-foreground">
-                            Estimated: <span className="text-sky-500">{formatPeso(totalEstimatedActive)}</span> remaining
+                            Estimated: <span className="text-sky-500">{formatCurrency(totalEstimatedActive, baseCurrency, showAmounts)}</span> remaining
                         </p>
                     </div>
                 </div>
@@ -147,10 +146,10 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Estimated Price (₱)</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Estimated Price</label>
                                     <input
                                         type="number"
-                                        step="0.01"
+                                        step="any"
                                         min="0.01"
                                         placeholder="0.00"
                                         value={newWishlist.estimated_price}
@@ -247,7 +246,7 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
                                         {item.notes && <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-2">{item.notes}</p>}
                                     </div>
                                     <span className="text-sm font-black tabular-nums text-foreground">
-                                        {formatPeso(item.estimated_price)}
+                                        {formatCurrency(item.estimated_price, baseCurrency, showAmounts)}
                                     </span>
                                 </div>
 
@@ -276,7 +275,7 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
                 {/* Purchased Items */}
                 <div className="space-y-3">
                     <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                        Bought / Completed ({purchasedItems.length}) — Spent: <span className="text-emerald-500">{formatPeso(totalActualPurchased)}</span>
+                        Bought / Completed ({purchasedItems.length}) — Spent: <span className="text-emerald-500">{formatCurrency(totalActualPurchased, baseCurrency, showAmounts)}</span>
                     </h4>
                     {purchasedItems.length === 0 ? (
                         <div className="bg-card/40 border border-border/20 rounded-2xl flex flex-col items-center justify-center py-10 text-center">
@@ -284,48 +283,52 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
                             <p className="text-xs font-bold text-muted-foreground">No purchases recorded yet</p>
                         </div>
                     ) : (
-                        purchasedItems.map(item => (
-                            <div
-                                key={item.id}
-                                className="bg-card/30 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-4 flex flex-col justify-between gap-2 shadow-sm opacity-80"
-                            >
-                                <div className="flex justify-between items-start gap-2">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 flex items-center gap-1">
-                                                <Check className="h-3 w-3" /> BOUGHT
-                                            </span>
-                                            {item.purchased_date && (
-                                                <span className="text-[10px] text-muted-foreground">
-                                                    on {new Date(item.purchased_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                        purchasedItems.map(item => {
+                            const pWallet = wallets.find(w => w.id === item.wallet_id)
+                            const pCurr = pWallet?.currency || "PHP"
+                            return (
+                                <div
+                                    key={item.id}
+                                    className="bg-card/30 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-4 flex flex-col justify-between gap-2 shadow-sm opacity-80"
+                                >
+                                    <div className="flex justify-between items-start gap-2">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 flex items-center gap-1">
+                                                    <Check className="h-3 w-3" /> BOUGHT
                                                 </span>
-                                            )}
+                                                {item.purchased_date && (
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        on {new Date(item.purchased_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h5 className="font-bold text-sm uppercase tracking-tight text-muted-foreground mt-1.5 line-through">
+                                                {item.label}
+                                            </h5>
                                         </div>
-                                        <h5 className="font-bold text-sm uppercase tracking-tight text-muted-foreground mt-1.5 line-through">
-                                            {item.label}
-                                        </h5>
+                                        <div className="text-right">
+                                            <span className="text-xs text-muted-foreground line-through block font-medium">Est: {formatCurrency(item.estimated_price, baseCurrency, showAmounts)}</span>
+                                            <span className="text-sm font-black tabular-nums text-emerald-500">
+                                                Paid: {formatCurrency(item.actual_price || 0, pCurr, showAmounts)}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="text-xs text-muted-foreground line-through block font-medium">Est: {formatPeso(item.estimated_price)}</span>
-                                        <span className="text-sm font-black tabular-nums text-emerald-500">
-                                            Paid: {formatPeso(item.actual_price || 0)}
+                                    <div className="flex items-center justify-between border-t border-border/10 pt-2.5 mt-1 text-[11px] text-muted-foreground/75 font-semibold">
+                                        <span>
+                                            Wallet: {pWallet?.name || "Unknown"}
                                         </span>
+                                        <button
+                                            onClick={() => onDeleteItem(item.id)}
+                                            className="p-1 rounded-md text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
+                                            title="Delete wishlist record"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between border-t border-border/10 pt-2.5 mt-1 text-[11px] text-muted-foreground/75 font-semibold">
-                                    <span>
-                                        Wallet: {wallets.find(w => w.id === item.wallet_id)?.name || "Unknown"}
-                                    </span>
-                                    <button
-                                        onClick={() => onDeleteItem(item.id)}
-                                        className="p-1 rounded-md text-muted-foreground/30 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
-                                        title="Delete wishlist record"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))
+                            )
+                        })
                     )}
                 </div>
             </div>
@@ -341,15 +344,15 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
                     <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-3 text-center">
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Estimated Cost</p>
                         <p className="text-lg font-black tabular-nums text-sky-500 mt-0.5">
-                            {purchaseModalItem ? formatPeso(purchaseModalItem.estimated_price) : ""}
+                            {purchaseModalItem ? formatCurrency(purchaseModalItem.estimated_price, baseCurrency, showAmounts) : ""}
                         </p>
                     </div>
 
                     <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Actual Amount Paid (₱)</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Actual Amount Paid</label>
                         <input
                             type="number"
-                            step="0.01"
+                            step="any"
                             min="0.01"
                             placeholder="0.00"
                             value={purchaseForm.actual_price}
@@ -370,7 +373,7 @@ export function WishlistSection({ items, wallets, onAddItem, onPurchaseItem, onD
                         >
                             <option value="">Select wallet...</option>
                             {wallets.map(w => (
-                                <option key={w.id} value={w.id}>{w.name} ({formatPeso(w.balance)})</option>
+                                <option key={w.id} value={w.id}>{w.name} ({formatCurrency(w.balance, w.currency || "PHP", showAmounts)})</option>
                             ))}
                         </select>
                         {isOverdraft && (

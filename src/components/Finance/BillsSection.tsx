@@ -4,24 +4,22 @@ import { Plus, Check, Trash2, Receipt, X, Edit2, AlertTriangle, Clock, CalendarD
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { BillTemplate, Wallet, FinanceEntry } from "./types"
-import { EXPENSE_CATEGORIES } from "./types"
+import type { BillTemplate, Wallet, FinanceEntry, CurrencyCode } from "./types"
+import { EXPENSE_CATEGORIES, formatCurrency } from "./types"
 
 interface BillsSectionProps {
     bills: BillTemplate[]
     wallets: Wallet[]
     entries: FinanceEntry[]
+    showAmounts?: boolean
+    baseCurrency?: CurrencyCode
     onAddBill: (bill: Omit<BillTemplate, "id" | "created_at">) => void
     onUpdateBill: (bill: BillTemplate) => void
     onDeleteBill: (id: string) => void
     onPayBill: (bill: BillTemplate, walletId: string) => void
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill, onDeleteBill, onPayBill }: BillsSectionProps) {
+export function BillsSection({ bills, wallets, entries, showAmounts = true, baseCurrency = "PHP", onAddBill, onUpdateBill, onDeleteBill, onPayBill }: BillsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [payModalBill, setPayModalBill] = useState<BillTemplate | null>(null)
     const [selectedWalletId, setSelectedWalletId] = useState(wallets[0]?.id || "")
@@ -315,17 +313,17 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                                     {catInfo?.label || bill.category}
                                                 </span>
                                                 <span>·</span>
-                                                <span className="font-bold tabular-nums text-foreground/80">{formatPeso(bill.amount)}</span>
+                                                <span className="font-bold tabular-nums text-foreground/80">{formatCurrency(bill.amount, baseCurrency, showAmounts)}</span>
                                                 {bill.penalty_amount && bill.penalty_amount > 0 && info.status === "overdue" && (
                                                     <>
                                                         <span>·</span>
-                                                        <span className="text-rose-500 font-black tabular-nums">+{formatPeso(bill.penalty_amount)} penalty</span>
+                                                        <span className="text-rose-500 font-black tabular-nums">+{formatCurrency(bill.penalty_amount, baseCurrency, showAmounts)} penalty</span>
                                                     </>
                                                 )}
                                             </div>
                                             {bill.penalty_amount && bill.penalty_amount > 0 && info.status === "overdue" && (
                                                 <div className="mt-1 px-2 py-1 bg-rose-500/10 rounded-lg text-[10px] font-bold text-rose-500 tabular-nums">
-                                                    ⚠️ Total with penalty: {formatPeso(bill.amount + bill.penalty_amount)}
+                                                    ⚠️ Total with penalty: {formatCurrency(bill.amount + bill.penalty_amount, baseCurrency, showAmounts)}
                                                 </div>
                                             )}
                                         </div>
@@ -359,7 +357,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                                         )}
                                         {bill.penalty_amount && bill.penalty_amount > 0 && info.status !== "overdue" && (
                                             <span className="text-[10px] text-muted-foreground/60 font-medium">
-                                                Late fee: {formatPeso(bill.penalty_amount)}
+                                                Late fee: {formatCurrency(bill.penalty_amount, baseCurrency, showAmounts)}
                                             </span>
                                         )}
                                     </div>
@@ -440,15 +438,15 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                             <div className="mt-2 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 space-y-1">
                                 <div className="flex justify-between text-[11px] font-semibold text-muted-foreground">
                                     <span>Base amount</span>
-                                    <span className="tabular-nums">{formatPeso(payModalBill.amount)}</span>
+                                    <span className="tabular-nums">{formatCurrency(payModalBill.amount, baseCurrency, showAmounts)}</span>
                                 </div>
                                 <div className="flex justify-between text-[11px] font-bold text-rose-500">
                                     <span>⚠️ Late penalty</span>
-                                    <span className="tabular-nums">+{formatPeso(payModalBill.penalty_amount)}</span>
+                                    <span className="tabular-nums">+{formatCurrency(payModalBill.penalty_amount, baseCurrency, showAmounts)}</span>
                                 </div>
                                 <div className="border-t border-rose-500/20 pt-1 flex justify-between text-xs font-black text-foreground">
                                     <span>Total due</span>
-                                    <span className="tabular-nums">{formatPeso(payModalBill.amount + payModalBill.penalty_amount)}</span>
+                                    <span className="tabular-nums">{formatCurrency(payModalBill.amount + payModalBill.penalty_amount, baseCurrency, showAmounts)}</span>
                                 </div>
                             </div>
                         ) : (
@@ -467,7 +465,7 @@ export function BillsSection({ bills, wallets, entries, onAddBill, onUpdateBill,
                             required
                         >
                             {wallets.map(w => (
-                                <option key={w.id} value={w.id}>{w.name} ({formatPeso(w.balance)})</option>
+                                <option key={w.id} value={w.id}>{w.name} ({formatCurrency(w.balance, w.currency || "PHP", showAmounts)})</option>
                             ))}
                         </select>
                     </div>

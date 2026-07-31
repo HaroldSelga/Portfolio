@@ -4,22 +4,21 @@ import { Plus, CreditCard, ChevronDown, ChevronUp, Check, X, AlertTriangle } fro
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { Debt, DebtPayment, Wallet } from "./types"
+import type { Debt, DebtPayment, Wallet, CurrencyCode } from "./types"
+import { formatCurrency } from "./types"
 
 interface DebtSectionProps {
     debts: Debt[]
     payments: DebtPayment[]
     wallets: Wallet[]
+    showAmounts?: boolean
+    baseCurrency?: CurrencyCode
     onAddDebt: (debt: Omit<Debt, "id" | "created_at" | "paid_amount" | "is_settled">) => void
     onAddPayment: (payment: Omit<DebtPayment, "id" | "created_at">) => void
     onDeleteDebt: (id: string) => void
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment, onDeleteDebt }: DebtSectionProps) {
+export function DebtSection({ debts, payments, wallets, showAmounts = true, baseCurrency = "PHP", onAddDebt, onAddPayment, onDeleteDebt }: DebtSectionProps) {
     const [expandedDebt, setExpandedDebt] = useState<string | null>(null)
     const [showAddDebt, setShowAddDebt] = useState(false)
     const [paymentModal, setPaymentModal] = useState<string | null>(null)
@@ -88,8 +87,8 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Debts</h3>
                         <p className="text-xs font-bold text-muted-foreground tabular-nums">
-                            Remaining: <span className="text-orange-500">{formatPeso(totalRemaining)}</span>
-                            <span className="text-muted-foreground/60 ml-2">of {formatPeso(totalDebt)}</span>
+                            Remaining: <span className="text-orange-500">{formatCurrency(totalRemaining, baseCurrency, showAmounts)}</span>
+                            <span className="text-muted-foreground/60 ml-2">of {formatCurrency(totalDebt, baseCurrency, showAmounts)}</span>
                         </p>
                     </div>
                 </div>
@@ -125,8 +124,8 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                     />
                 </div>
                 <div className="flex justify-between mt-2 text-xs font-bold tabular-nums text-muted-foreground">
-                    <span>Paid: <span className="text-emerald-500">{formatPeso(totalPaid)}</span></span>
-                    <span>Left: <span className="text-orange-500">{formatPeso(totalRemaining)}</span></span>
+                    <span>Paid: <span className="text-emerald-500">{formatCurrency(totalPaid, baseCurrency, showAmounts)}</span></span>
+                    <span>Left: <span className="text-orange-500">{formatCurrency(totalRemaining, baseCurrency, showAmounts)}</span></span>
                 </div>
             </div>
 
@@ -243,7 +242,11 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                                                 </Button>
                                             )}
                                             <button
-                                                onClick={() => onDeleteDebt(debt.id)}
+                                                onClick={() => {
+                                                    if (confirm(`Are you sure you want to remove debt "${debt.label}"?`)) {
+                                                        onDeleteDebt(debt.id)
+                                                    }
+                                                }}
                                                 className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
                                                 title="Remove debt"
                                             >
@@ -273,14 +276,14 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                                         </div>
                                         <div className="flex justify-between mt-1.5 text-xs tabular-nums">
                                             <span className="font-bold text-muted-foreground">
-                                                Paid: <span className="text-emerald-500">{formatPeso(debt.paid_amount)}</span>
+                                                Paid: <span className="text-emerald-500">{formatCurrency(debt.paid_amount, baseCurrency, showAmounts)}</span>
                                             </span>
                                             <span className="font-black text-foreground/80">{Math.round(percent)}%</span>
                                             <span className="font-bold text-muted-foreground">
                                                 {debt.is_settled ? (
                                                     <span className="text-emerald-500">Settled ✓</span>
                                                 ) : (
-                                                    <>Left: <span className="text-orange-500">{formatPeso(remaining)}</span></>
+                                                    <>Left: <span className="text-orange-500">{formatCurrency(remaining, baseCurrency, showAmounts)}</span></>
                                                 )}
                                             </span>
                                         </div>
@@ -323,7 +326,7 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                                                                 {p.notes && <p className="text-xs text-muted-foreground/60 mt-0.5">{p.notes}</p>}
                                                             </div>
                                                             <span className="text-xs font-black tabular-nums text-emerald-500">
-                                                                -{formatPeso(p.amount)}
+                                                                -{formatCurrency(p.amount, pWallet?.currency || "PHP", showAmounts)}
                                                             </span>
                                                         </div>
                                                     )
@@ -350,7 +353,7 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                     {currentDebt && (
                         <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-3 text-center">
                             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Remaining Balance</p>
-                            <p className="text-lg font-black tabular-nums text-orange-500 mt-0.5">{formatPeso(currentRemaining)}</p>
+                            <p className="text-lg font-black tabular-nums text-orange-500 mt-0.5">{formatCurrency(currentRemaining, baseCurrency, showAmounts)}</p>
                         </div>
                     )}
                     <div>
@@ -364,10 +367,10 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                         />
                     </div>
                     <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount (₱)</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount</label>
                         <input
                             type="number"
-                            step="0.01"
+                            step="any"
                             min="0.01"
                             max={currentRemaining}
                             placeholder="0.00"
@@ -385,7 +388,7 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                         {isOverpaying && (
                             <p className="flex items-center gap-1 text-xs text-amber-500 font-bold mt-1.5">
                                 <AlertTriangle className="h-3 w-3" />
-                                Amount exceeds remaining ({formatPeso(currentRemaining)}). Will be capped automatically.
+                                Amount exceeds remaining ({formatCurrency(currentRemaining, baseCurrency, showAmounts)}). Will be capped automatically.
                             </p>
                         )}
                     </div>
@@ -399,7 +402,7 @@ export function DebtSection({ debts, payments, wallets, onAddDebt, onAddPayment,
                         >
                             <option value="">Select wallet...</option>
                             {wallets.map(w => (
-                                <option key={w.id} value={w.id}>{w.name} ({formatPeso(w.balance)})</option>
+                                <option key={w.id} value={w.id}>{w.name} ({formatCurrency(w.balance, w.currency || "PHP", showAmounts)})</option>
                             ))}
                         </select>
                         {isOverdraft && (

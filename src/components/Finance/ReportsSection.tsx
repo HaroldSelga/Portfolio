@@ -2,8 +2,9 @@ import { useState, useMemo } from "react"
 import { motion } from "framer-motion"
 import { BarChart3, PieChart, TrendingUp, TrendingDown, Wallet as WalletIcon, Star, ArrowUp, ArrowDown, Minus, Calendar, ChevronLeft, ChevronRight, PiggyBank, Download } from "lucide-react"
 import { cn } from "../../lib/utils"
-import type { FinanceEntry, Wallet, Debt, SavingsFund, BillTemplate } from "./types"
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "./types"
+import type { FinanceEntry, Wallet, Debt, SavingsFund, BillTemplate, CurrencyCode } from "./types"
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, formatCurrency } from "./types"
+import { convertCurrency, DEFAULT_RATES_IN_USD, type ExchangeRates } from "./currency"
 
 interface ReportsSectionProps {
     entries: FinanceEntry[]
@@ -11,10 +12,10 @@ interface ReportsSectionProps {
     debts: Debt[]
     funds: SavingsFund[]
     bills: BillTemplate[]
-}
-
-function formatPeso(amount: number): string {
-    return `₱${Math.abs(amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    showAmounts?: boolean
+    baseCurrency?: CurrencyCode
+    rates?: ExchangeRates
+    customRates?: Partial<ExchangeRates>
 }
 
 function getMonthKey(date: Date): string {
@@ -29,7 +30,17 @@ function getShortMonthLabel(key: string): string {
     return new Date(key + "-01").toLocaleDateString("en-PH", { month: "short", year: "2-digit" })
 }
 
-export function ReportsSection({ entries, wallets, debts, funds, bills }: ReportsSectionProps) {
+export function ReportsSection({
+    entries,
+    wallets,
+    debts,
+    funds,
+    bills,
+    showAmounts = true,
+    baseCurrency = "PHP",
+    rates = DEFAULT_RATES_IN_USD,
+    customRates = {}
+}: ReportsSectionProps) {
     const now = new Date()
     const currentMonthKey = getMonthKey(now)
 
@@ -82,6 +93,13 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
     const goNewer = () => { if (canGoNewer) setSelectedMonthKey(allMonths[selectedIdx - 1]) }
     const goOlder = () => { if (canGoOlder) setSelectedMonthKey(allMonths[selectedIdx + 1]) }
 
+    // Helper function to get entry amount in primary base currency
+    const getConvertedAmount = (entry: FinanceEntry) => {
+        const wallet = wallets.find(w => w.id === entry.wallet_id)
+        const entryCurr = entry.currency || wallet?.currency || "PHP"
+        return convertCurrency(entry.amount, entryCurr, baseCurrency, rates, customRates)
+    }
+
     // Compute month data (excluding transfers and virtual savings deposits/withdrawals from core spending)
     const getMonthData = (monthKey: string) => {
         const monthEntries = entries.filter(e => e.date.startsWith(monthKey) && e.category !== "transfer")
@@ -89,21 +107,21 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
         // Income (excluding fund withdrawals which are just returns to wallets)
         const income = monthEntries
             .filter(e => e.type === "income" && e.category !== "savings_withdraw")
-            .reduce((s, e) => s + e.amount, 0)
+            .reduce((s, e) => s + getConvertedAmount(e), 0)
             
         // Expense (excluding fund deposits which are savings allocations)
         const expense = monthEntries
             .filter(e => e.type === "expense" && e.category !== "savings_deposit")
-            .reduce((s, e) => s + e.amount, 0)
+            .reduce((s, e) => s + getConvertedAmount(e), 0)
 
         // Savings entries recorded this month
         const savedToFunds = monthEntries
             .filter(e => e.category === "savings_deposit")
-            .reduce((s, e) => s + e.amount, 0)
+            .reduce((s, e) => s + getConvertedAmount(e), 0)
 
         const withdrawnFromFunds = monthEntries
             .filter(e => e.category === "savings_withdraw")
-            .reduce((s, e) => s + e.amount, 0)
+            .reduce((s, e) => s + getConvertedAmount(e), 0)
 
         // Net saved includes standard surplus + net funds savings
         const netSavingsVolume = (income - expense) + (savedToFunds - withdrawnFromFunds)
@@ -162,7 +180,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
     const categoryData = useMemo(() => {
         const cats: Record<string, number> = {}
         selectedData.entries.filter(e => e.type === "expense" && e.category !== "savings_deposit").forEach(e => {
-            cats[e.category] = (cats[e.category] || 0) + e.amount
+            cats[e.category] = (cats[e.category] || 0) + getConvertedAmount(e)
         })
         const total = Object.values(cats).reduce((sum, v) => sum + v, 0)
         return Object.entries(cats)
@@ -179,7 +197,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
     const incomeSourceData = useMemo(() => {
         const cats: Record<string, number> = {}
         selectedData.entries.filter(e => e.type === "income" && e.category !== "savings_withdraw").forEach(e => {
-            cats[e.category] = (cats[e.category] || 0) + e.amount
+            cats[e.category] = (cats[e.category] || 0) + getConvertedAmount(e)
         })
         const total = Object.values(cats).reduce((sum, v) => sum + v, 0)
         return Object.entries(cats)
@@ -199,11 +217,12 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
             if (e.category === "transfer") return
             const key = e.date.substring(0, 7)
             if (!months[key]) months[key] = { income: 0, expense: 0 }
+            const cAmt = getConvertedAmount(e)
             
             if (e.type === "income") {
-                if (e.category !== "savings_withdraw") months[key].income += e.amount
+                if (e.category !== "savings_withdraw") months[key].income += cAmt
             } else {
-                if (e.category !== "savings_deposit") months[key].expense += e.amount
+                if (e.category !== "savings_deposit") months[key].expense += cAmt
             }
         })
         return Object.entries(months)
@@ -346,11 +365,11 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         <TrendingUp className="h-4 w-4 text-emerald-500" />
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Income</p>
-                    <p className="text-lg font-black tabular-nums tracking-tight text-emerald-500 mt-0.5">{formatPeso(selectedData.income)}</p>
+                    <p className="text-lg font-black tabular-nums tracking-tight text-emerald-500 mt-0.5">{formatCurrency(selectedData.income, baseCurrency, showAmounts)}</p>
                     <div className="flex items-center gap-1 mt-1.5">
                         <DeltaArrow value={incomeDelta} />
                         <span className={cn("text-[10px] font-bold tabular-nums", incomeDelta >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                            {incomeDelta >= 0 ? "+" : "-"}{formatPeso(incomeDelta)} ({incomePercent >= 0 ? "+" : ""}{Math.round(incomePercent)}%)
+                            {incomeDelta >= 0 ? "+" : "-"}{formatCurrency(incomeDelta, baseCurrency, showAmounts)} ({incomePercent >= 0 ? "+" : ""}{Math.round(incomePercent)}%)
                         </span>
                     </div>
                 </motion.div>
@@ -364,11 +383,11 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         <TrendingDown className="h-4 w-4 text-rose-500" />
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Spend</p>
-                    <p className="text-lg font-black tabular-nums tracking-tight text-rose-500 mt-0.5">{formatPeso(selectedData.expense)}</p>
+                    <p className="text-lg font-black tabular-nums tracking-tight text-rose-500 mt-0.5">{formatCurrency(selectedData.expense, baseCurrency, showAmounts)}</p>
                     <div className="flex items-center gap-1 mt-1.5">
                         <DeltaArrow value={expenseDelta} invert />
                         <span className={cn("text-[10px] font-bold tabular-nums", expenseDelta <= 0 ? "text-emerald-500" : "text-rose-500")}>
-                            {expenseDelta >= 0 ? "+" : "-"}{formatPeso(expenseDelta)} ({expensePercent >= 0 ? "+" : ""}{Math.round(expensePercent)}%)
+                            {expenseDelta >= 0 ? "+" : "-"}{formatCurrency(expenseDelta, baseCurrency, showAmounts)} ({expensePercent >= 0 ? "+" : ""}{Math.round(expensePercent)}%)
                         </span>
                     </div>
                 </motion.div>
@@ -383,12 +402,12 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Net Savings Vol.</p>
                     <p className={cn("text-lg font-black tabular-nums tracking-tight mt-0.5", selectedData.netSavingsVolume >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                        {selectedData.netSavingsVolume < 0 && "-"}{formatPeso(selectedData.netSavingsVolume)}
+                        {selectedData.netSavingsVolume < 0 && "-"}{formatCurrency(selectedData.netSavingsVolume, baseCurrency, showAmounts)}
                     </p>
                     <div className="flex items-center gap-1 mt-1.5">
                         <DeltaArrow value={netDelta} />
                         <span className={cn("text-[10px] font-bold tabular-nums", netDelta >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                            {netDelta >= 0 ? "+" : "-"}{formatPeso(netDelta)}
+                            {netDelta >= 0 ? "+" : "-"}{formatCurrency(netDelta, baseCurrency, showAmounts)}
                         </span>
                     </div>
                 </motion.div>
@@ -402,7 +421,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         <BarChart3 className="h-4 w-4 text-amber-500" />
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Daily Avg Spend</p>
-                    <p className="text-lg font-black tabular-nums tracking-tight text-amber-500 mt-0.5">{formatPeso(selectedData.dailyAvg)}</p>
+                    <p className="text-lg font-black tabular-nums tracking-tight text-amber-500 mt-0.5">{formatCurrency(selectedData.dailyAvg, baseCurrency, showAmounts)}</p>
                     <p className="text-[10px] text-muted-foreground font-bold mt-1.5">
                         {selectedData.daysSoFar} of {selectedData.daysInMonth} days
                     </p>
@@ -435,10 +454,10 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                     <span>PiggyBank Activity:</span>
                     <div className="flex gap-4">
                         {selectedData.savedToFunds > 0 && (
-                            <span>Deposited to Funds: <span className="text-emerald-500">+{formatPeso(selectedData.savedToFunds)}</span></span>
+                            <span>Deposited to Funds: <span className="text-emerald-500">+{formatCurrency(selectedData.savedToFunds, baseCurrency, showAmounts)}</span></span>
                         )}
                         {selectedData.withdrawnFromFunds > 0 && (
-                            <span>Withdrawn: <span className="text-rose-500">-{formatPeso(selectedData.withdrawnFromFunds)}</span></span>
+                            <span>Withdrawn: <span className="text-rose-500">-{formatCurrency(selectedData.withdrawnFromFunds, baseCurrency, showAmounts)}</span></span>
                         )}
                     </div>
                 </div>
@@ -517,22 +536,22 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         <div className="space-y-1.5 pt-1 border-t border-border/20">
                             <div className="flex justify-between text-xs font-semibold">
                                 <span className="text-muted-foreground">Total Monthly Bills</span>
-                                <span className="tabular-nums font-black">{formatPeso(totalBillObligation)}</span>
+                                <span className="tabular-nums font-black">{formatCurrency(totalBillObligation, baseCurrency, showAmounts)}</span>
                             </div>
                             <div className="flex justify-between text-xs font-semibold">
                                 <span className="text-emerald-500">✅ Paid this month</span>
-                                <span className="tabular-nums font-black text-emerald-500">{formatPeso(totalPaid)}</span>
+                                <span className="tabular-nums font-black text-emerald-500">{formatCurrency(totalPaid, baseCurrency, showAmounts)}</span>
                             </div>
                             {totalOverdueAmount > 0 && (
                                 <div className="flex justify-between text-xs font-semibold">
                                     <span className="text-rose-500">🔴 Overdue balance</span>
-                                    <span className="tabular-nums font-black text-rose-500">{formatPeso(totalOverdueAmount)}</span>
+                                    <span className="tabular-nums font-black text-rose-500">{formatCurrency(totalOverdueAmount, baseCurrency, showAmounts)}</span>
                                 </div>
                             )}
                             {totalPenalties > 0 && (
                                 <div className="flex justify-between text-xs font-bold bg-rose-500/10 rounded-lg px-2 py-1.5">
                                     <span className="text-rose-500">⚠️ Late Penalties Incurred</span>
-                                    <span className="tabular-nums font-black text-rose-500">+{formatPeso(totalPenalties)}</span>
+                                    <span className="tabular-nums font-black text-rose-500">+{formatCurrency(totalPenalties, baseCurrency, showAmounts)}</span>
                                 </div>
                             )}
                         </div>
@@ -569,6 +588,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         {top3Expenses.map((entry, i) => {
                             const cat = EXPENSE_CATEGORIES.find(c => c.value === entry.category)
                             const wallet = wallets.find(w => w.id === entry.wallet_id)
+                            const eCurr = entry.currency || wallet?.currency || "PHP"
                             return (
                                 <motion.div
                                     key={entry.id}
@@ -588,7 +608,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                                         </p>
                                     </div>
                                     <span className="text-sm font-black tabular-nums text-rose-500 shrink-0">
-                                        -{formatPeso(entry.amount)}
+                                        -{formatCurrency(entry.amount, eCurr, showAmounts)}
                                     </span>
                                 </motion.div>
                             )
@@ -638,7 +658,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                                     </div>
                                 </div>
                                 <span className="text-xs font-black tabular-nums text-rose-500 w-20 text-right shrink-0">
-                                    {formatPeso(cat.amount)}
+                                    {formatCurrency(cat.amount, baseCurrency, showAmounts)}
                                 </span>
                             </motion.div>
                         ))}
@@ -687,7 +707,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                                     </div>
                                 </div>
                                 <span className="text-xs font-black tabular-nums text-emerald-500 w-20 text-right shrink-0">
-                                    {formatPeso(cat.amount)}
+                                    {formatCurrency(cat.amount, baseCurrency, showAmounts)}
                                 </span>
                             </motion.div>
                         ))}
@@ -730,7 +750,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                                             "text-xs font-black tabular-nums",
                                             month.net >= 0 ? "text-emerald-500" : "text-rose-500"
                                         )}>
-                                            {month.net >= 0 ? "+" : "-"}{formatPeso(month.net)}
+                                            {month.net >= 0 ? "+" : "-"}{formatCurrency(month.net, baseCurrency, showAmounts)}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -744,7 +764,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                                             />
                                         </div>
                                         <span className="text-[10px] font-bold tabular-nums text-muted-foreground w-20 text-right">
-                                            {formatPeso(month.income)}
+                                            {formatCurrency(month.income, baseCurrency, showAmounts)}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -758,7 +778,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                                             />
                                         </div>
                                         <span className="text-[10px] font-bold tabular-nums text-muted-foreground w-20 text-right">
-                                            {formatPeso(month.expense)}
+                                            {formatCurrency(month.expense, baseCurrency, showAmounts)}
                                         </span>
                                     </div>
                                 </motion.div>
@@ -778,17 +798,20 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         <WalletIcon className="h-4.5 w-4.5 text-emerald-500" /> Wallet Balances
                     </h3>
                     <div className="divide-y divide-border/10 max-h-[250px] overflow-y-auto scrollbar-none pr-1">
-                        {wallets.map(w => (
-                            <div key={w.id} className="flex items-center justify-between py-2 text-xs">
-                                <span className="font-bold text-muted-foreground">{w.name}</span>
-                                <span className={cn(
-                                    "font-black tabular-nums",
-                                    w.balance >= 0 ? "text-emerald-500" : "text-rose-500"
-                                )}>
-                                    {w.balance < 0 && "-"}{formatPeso(w.balance)}
-                                </span>
-                            </div>
-                        ))}
+                        {wallets.map(w => {
+                            const wCurr = w.currency || "PHP"
+                            return (
+                                <div key={w.id} className="flex items-center justify-between py-2 text-xs">
+                                    <span className="font-bold text-muted-foreground">{w.name}</span>
+                                    <span className={cn(
+                                        "font-black tabular-nums",
+                                        w.balance >= 0 ? "text-emerald-500" : "text-rose-500"
+                                    )}>
+                                        {w.balance < 0 && "-"}{formatCurrency(w.balance, wCurr, showAmounts)}
+                                    </span>
+                                </div>
+                            )
+                        })}
                     </div>
                     <div className="border-t border-border/30 pt-2 flex items-center justify-between text-xs">
                         <span className="font-black">Net Worth</span>
@@ -796,7 +819,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                             "font-black tabular-nums",
                             netWorth >= 0 ? "text-emerald-500" : "text-rose-500"
                         )}>
-                            {netWorth < 0 && "-"}{formatPeso(netWorth)}
+                            {netWorth < 0 && "-"}{formatCurrency(netWorth, baseCurrency, showAmounts)}
                         </span>
                     </div>
                 </div>
@@ -810,7 +833,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         </h3>
                         <div className="flex justify-between items-center text-xs">
                             <span className="font-bold text-muted-foreground font-sans">Total Saved in Funds:</span>
-                            <span className="font-black text-emerald-500">{formatPeso(totalSavedFunds)}</span>
+                            <span className="font-black text-emerald-500">{formatCurrency(totalSavedFunds, baseCurrency, showAmounts)}</span>
                         </div>
                         {totalTargetFunds > 0 && (
                             <div>
@@ -822,7 +845,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                                 </div>
                                 <div className="flex justify-between text-[9px] text-muted-foreground font-bold mt-1">
                                     <span>{Math.round((totalSavedFunds / totalTargetFunds) * 100)}% Complete</span>
-                                    <span>Target: {formatPeso(totalTargetFunds)}</span>
+                                    <span>Target: {formatCurrency(totalTargetFunds, baseCurrency, showAmounts)}</span>
                                 </div>
                             </div>
                         )}
@@ -839,7 +862,7 @@ export function ReportsSection({ entries, wallets, debts, funds, bills }: Report
                         </div>
                         <div className="flex justify-between items-center text-xs">
                             <span className="font-bold text-muted-foreground">Total Spent:</span>
-                            <span className="font-black text-emerald-500">{formatPeso(wishlistStats.totalSpent)}</span>
+                            <span className="font-black text-emerald-500">{formatCurrency(wishlistStats.totalSpent, baseCurrency, showAmounts)}</span>
                         </div>
                     </div>
                 </div>

@@ -1,8 +1,38 @@
+export type CurrencyCode = "PHP" | "NTD" | "USD" | "EUR" | "JPY" | "GBP" | "CAD" | "AUD" | "SGD" | "HKD" | "KRW" | "BTC" | "ETH" | "USDT" | "SOL"
+
+export interface CurrencyConfig {
+    code: CurrencyCode
+    symbol: string
+    name: string
+    flag: string
+    decimals: number
+    isCrypto?: boolean
+}
+
+export const CURRENCIES: Record<CurrencyCode, CurrencyConfig> = {
+    PHP: { code: "PHP", symbol: "₱", name: "Philippine Peso", flag: "🇵🇭", decimals: 2 },
+    NTD: { code: "NTD", symbol: "NT$", name: "New Taiwan Dollar", flag: "🇹🇼", decimals: 2 },
+    USD: { code: "USD", symbol: "$", name: "US Dollar", flag: "🇺🇸", decimals: 2 },
+    EUR: { code: "EUR", symbol: "€", name: "Euro", flag: "🇪🇺", decimals: 2 },
+    JPY: { code: "JPY", symbol: "¥", name: "Japanese Yen", flag: "🇯🇵", decimals: 0 },
+    GBP: { code: "GBP", symbol: "£", name: "British Pound", flag: "🇬🇧", decimals: 2 },
+    CAD: { code: "CAD", symbol: "CA$", name: "Canadian Dollar", flag: "🇨🇦", decimals: 2 },
+    AUD: { code: "AUD", symbol: "AU$", name: "Australian Dollar", flag: "🇦🇺", decimals: 2 },
+    SGD: { code: "SGD", symbol: "S$", name: "Singapore Dollar", flag: "🇸🇬", decimals: 2 },
+    HKD: { code: "HKD", symbol: "HK$", name: "Hong Kong Dollar", flag: "🇭🇰", decimals: 2 },
+    KRW: { code: "KRW", symbol: "₩", name: "South Korean Won", flag: "🇰🇷", decimals: 0 },
+    BTC: { code: "BTC", symbol: "₿", name: "Bitcoin", flag: "🪙", decimals: 6, isCrypto: true },
+    ETH: { code: "ETH", symbol: "Ξ", name: "Ethereum", flag: "🔷", decimals: 4, isCrypto: true },
+    USDT: { code: "USDT", symbol: "₮", name: "Tether USD", flag: "💵", decimals: 2, isCrypto: true },
+    SOL: { code: "SOL", symbol: "◎", name: "Solana", flag: "🟣", decimals: 4, isCrypto: true },
+}
+
 export interface Wallet {
     id: string
     name: string
     icon: string
     balance: number
+    currency?: CurrencyCode
     created_at: string
 }
 
@@ -14,7 +44,35 @@ export interface FinanceEntry {
     description: string
     amount: number
     wallet_id: string
+    currency?: CurrencyCode
+    exchange_rate?: number
     created_at: string
+}
+
+export function formatCurrency(
+    amount: number,
+    currencyCode: CurrencyCode = "PHP",
+    showAmounts: boolean = true
+): string {
+    if (!showAmounts) {
+        const symbol = CURRENCIES[currencyCode]?.symbol || "₱"
+        return `${symbol} ••••••`
+    }
+
+    const config = CURRENCIES[currencyCode] || CURRENCIES.PHP
+    const absAmount = Math.abs(amount)
+    
+    // Custom number formatting based on decimals
+    const formattedNumber = absAmount.toLocaleString("en-US", {
+        minimumFractionDigits: config.decimals,
+        maximumFractionDigits: config.decimals,
+    })
+
+    return `${config.symbol}${formattedNumber}`
+}
+
+export function formatPeso(amount: number, showAmounts: boolean = true): string {
+    return formatCurrency(amount, "PHP", showAmounts)
 }
 
 export interface Debt {
@@ -75,6 +133,90 @@ export interface CategoryBudget {
     category: string
     limit_amount: number
     created_at: string
+}
+
+// ═══════════════════════════════════════════
+// SALARY CALCULATOR TYPES
+// ═══════════════════════════════════════════
+
+export type WorkCountry = "TW" | "PH"
+export type ScheduleType = "2-2" | "5-2" | "custom"
+export type RateType = "hourly" | "monthly"
+export type DayType = "regular" | "rest_day" | "special_holiday" | "regular_holiday" | "typhoon_disaster_day"
+
+export interface WorkProfile {
+    id: string
+    label: string
+    country: WorkCountry
+    schedule_type: ScheduleType
+    shift_hours: number
+    rate_type: RateType
+    base_rate: number
+    currency: CurrencyCode
+    wallet_id: string | null
+    cycle_start_date: string | null
+    year_end_bonus_multiplier: number
+    created_at: string
+}
+
+export interface TimeLog {
+    id: string
+    profile_id: string
+    date: string
+    time_in: string
+    time_out: string
+    day_type: DayType
+    notes: string | null
+    created_at: string
+}
+
+export interface DayPayBreakdown {
+    date: string
+    dayType: DayType
+    timeIn: string
+    timeOut: string
+    totalHours: number
+    regularHours: number
+    overtimeHours: number
+    nightHours: number
+    regularPay: number
+    overtimePay: number
+    nightPay: number
+    holidayPremium: number
+    totalPay: number
+}
+
+export interface PayrollSummary {
+    totalDaysWorked: number
+    totalRegularHours: number
+    totalOvertimeHours: number
+    totalNightHours: number
+    totalRegularPay: number
+    totalOvertimePay: number
+    totalNightPay: number
+    totalHolidayPremium: number
+    grossPay: number
+    taxWithheld: number
+    netPay: number
+    thirteenthMonthAccrued: number
+    yearEndBonusEstimate: number
+    days: DayPayBreakdown[]
+}
+
+export interface TaxEstimate {
+    annualGross: number
+    totalDeductions: number
+    taxableIncome: number
+    actualTaxOwed: number
+    totalWithheld: number
+    estimatedRefund: number
+    effectiveRate: number
+    withholdingRate: number
+    isResident: boolean
+    daysInCountry: number
+    thirteenthMonth: number
+    thirteenthMonthTaxable: number
+    yearEndBonus: number
 }
 
 export const EXPENSE_CATEGORIES = [

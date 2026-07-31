@@ -1,12 +1,17 @@
 import { motion } from "framer-motion"
 import { Building, Smartphone, Banknote, ArrowRightLeft, Wallet, HelpCircle } from "lucide-react"
 import { cn } from "../../lib/utils"
-import type { Wallet as WalletType } from "./types"
+import type { Wallet as WalletType, CurrencyCode } from "./types"
+import { CURRENCIES, formatCurrency } from "./types"
+import { convertCurrency, DEFAULT_RATES_IN_USD, type ExchangeRates } from "./currency"
 
 interface WalletCardsProps {
     wallets: WalletType[]
     onTransfer: () => void
     showAmounts?: boolean
+    baseCurrency?: CurrencyCode
+    rates?: ExchangeRates
+    customRates?: Partial<ExchangeRates>
 }
 
 const WALLET_ICONS: Record<string, React.ElementType> = {
@@ -103,13 +108,22 @@ function getWalletTheme(name: string, icon: string) {
     }
 }
 
-function formatPeso(amount: number, showAmounts = true): string {
-    if (!showAmounts) return "₱ ••••••"
-    return `₱${Math.abs(amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
+export function WalletCards({
+    wallets,
+    onTransfer,
+    showAmounts = true,
+    baseCurrency = "PHP",
+    rates = DEFAULT_RATES_IN_USD,
+    customRates = {}
+}: WalletCardsProps) {
+    // Calculate total net balance converted into base currency
+    const totalInBase = wallets.reduce((sum, w) => {
+        const curr = w.currency || "PHP"
+        const converted = convertCurrency(w.balance, curr, baseCurrency, rates, customRates)
+        return sum + converted
+    }, 0)
 
-export function WalletCards({ wallets, onTransfer, showAmounts = true }: WalletCardsProps) {
-    const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0)
+    const baseConfig = CURRENCIES[baseCurrency] || CURRENCIES.PHP
 
     return (
         <div className="space-y-4">
@@ -120,19 +134,21 @@ export function WalletCards({ wallets, onTransfer, showAmounts = true }: WalletC
                         <Wallet className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Balance</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                            Total Portfolio Balance <span className="text-[10px] px-1.5 py-0.2 bg-muted rounded font-black">{baseConfig.flag} {baseCurrency}</span>
+                        </p>
                         <p className={cn(
                             "text-2xl font-black tabular-nums tracking-tight",
-                            totalBalance >= 0 ? "text-emerald-500" : "text-rose-500"
+                            totalInBase >= 0 ? "text-emerald-500" : "text-rose-500"
                         )}>
-                            {totalBalance < 0 && showAmounts && "-"}{formatPeso(totalBalance, showAmounts)}
+                            {totalInBase < 0 && showAmounts && "-"}{formatCurrency(totalInBase, baseCurrency, showAmounts)}
                         </p>
                     </div>
                 </div>
                 {wallets.length >= 2 && (
                     <button
                         onClick={onTransfer}
-                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted border border-border/40 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground transition-all"
+                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted border border-border/40 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground transition-all shadow-sm"
                     >
                         <ArrowRightLeft className="h-4 w-4" />
                         <span>Transfer</span>
@@ -145,6 +161,13 @@ export function WalletCards({ wallets, onTransfer, showAmounts = true }: WalletC
                 {wallets.map((wallet, index) => {
                     const Icon = WALLET_ICONS[wallet.icon] || HelpCircle
                     const colors = getWalletTheme(wallet.name, wallet.icon)
+                    const currencyCode = wallet.currency || "PHP"
+                    const currInfo = CURRENCIES[currencyCode] || CURRENCIES.PHP
+                    
+                    const isDifferentFromBase = currencyCode !== baseCurrency
+                    const convertedVal = isDifferentFromBase
+                        ? convertCurrency(wallet.balance, currencyCode, baseCurrency, rates, customRates)
+                        : wallet.balance
 
                     return (
                         <motion.div
@@ -153,7 +176,7 @@ export function WalletCards({ wallets, onTransfer, showAmounts = true }: WalletC
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.4, delay: index * 0.05 }}
                             className={cn(
-                                "relative overflow-hidden bg-card/60 backdrop-blur-sm border rounded-2xl p-4 shadow-md transition-all hover:shadow-lg",
+                                "relative overflow-hidden bg-card/60 backdrop-blur-sm border rounded-2xl p-4 shadow-md transition-all hover:shadow-lg flex flex-col justify-between gap-2",
                                 colors.border,
                                 colors.glow
                             )}
@@ -161,20 +184,32 @@ export function WalletCards({ wallets, onTransfer, showAmounts = true }: WalletC
                             {/* Background glow */}
                             <div className={cn("absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none", colors.bg)} />
 
-                            <div className="relative flex items-center gap-3">
-                                <div className={cn("p-2.5 rounded-xl", colors.bg)}>
+                            <div className="relative flex items-start gap-3">
+                                <div className={cn("p-2.5 rounded-xl shrink-0 mt-0.5", colors.bg)}>
                                     <Icon className={cn("h-5 w-5", colors.text)} />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground truncate">
-                                        {wallet.name}
-                                    </p>
+                                    <div className="flex items-center justify-between gap-1">
+                                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground truncate">
+                                            {wallet.name}
+                                        </p>
+                                        <span className="text-[10px] font-black px-1.5 py-0.5 bg-muted/80 rounded-md text-foreground/80 shrink-0">
+                                            {currInfo.flag} {currencyCode}
+                                        </span>
+                                    </div>
                                     <p className={cn(
-                                        "text-lg font-black tabular-nums tracking-tight",
+                                        "text-lg font-black tabular-nums tracking-tight mt-0.5",
                                         wallet.balance >= 0 ? "text-foreground" : "text-rose-500"
                                     )}>
-                                        {wallet.balance < 0 && showAmounts && "-"}{formatPeso(wallet.balance, showAmounts)}
+                                        {wallet.balance < 0 && showAmounts && "-"}{formatCurrency(wallet.balance, currencyCode, showAmounts)}
                                     </p>
+
+                                    {/* Secondary converted base currency display */}
+                                    {isDifferentFromBase && (
+                                        <p className="text-[11px] font-bold text-muted-foreground/80 tabular-nums mt-0.5">
+                                            ≈ {convertedVal < 0 && showAmounts && "-"}{formatCurrency(convertedVal, baseCurrency, showAmounts)}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </motion.div>
@@ -184,4 +219,3 @@ export function WalletCards({ wallets, onTransfer, showAmounts = true }: WalletC
         </div>
     )
 }
-

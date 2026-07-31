@@ -13,7 +13,8 @@ import {
     Settings,
     PiggyBank,
     Eye,
-    EyeOff
+    EyeOff,
+    Clock
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -29,14 +30,25 @@ import { HistorySection } from "./HistorySection"
 import { WishlistSection } from "./WishlistSection"
 import { SettingsSection } from "./SettingsSection"
 import { FundsSection } from "./FundsSection"
-import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, CategoryBudget } from "./types"
+import { SalarySection } from "./SalarySection"
+import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, CategoryBudget, CurrencyCode, WorkProfile, TimeLog } from "./types"
+import { CURRENCIES, formatCurrency } from "./types"
+import {
+    getExchangeRates,
+    getCustomExchangeRates,
+    getPrimaryBaseCurrency,
+    convertCurrency,
+    DEFAULT_RATES_IN_USD,
+    type ExchangeRates
+} from "./currency"
 
-type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "funds" | "wishlist" | "reports" | "settings"
+type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "funds" | "wishlist" | "salary" | "reports" | "settings"
 
 const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[] = [
     { key: "income", label: "Income", icon: TrendingUp, color: "text-emerald-500" },
     { key: "expenses", label: "Expenses", icon: TrendingDown, color: "text-rose-500" },
     { key: "history", label: "History", icon: HistoryIcon, color: "text-stone-400" },
+    { key: "salary", label: "Salary & OT", icon: Clock, color: "text-amber-400" },
     { key: "bills", label: "Bills", icon: Receipt, color: "text-amber-500" },
     { key: "debts", label: "Debts", icon: CreditCard, color: "text-orange-500" },
     { key: "funds", label: "Savings Goals", icon: PiggyBank, color: "text-emerald-400" },
@@ -51,6 +63,12 @@ export default function FinanceTracker() {
     const [showAmounts, setShowAmounts] = useState(() => {
         return localStorage.getItem("finance_show_amounts") !== "false"
     })
+    
+    // Exchange rates & base currency state
+    const [baseCurrency, setBaseCurrency] = useState<CurrencyCode>(() => getPrimaryBaseCurrency())
+    const [rates, setRates] = useState<ExchangeRates>(DEFAULT_RATES_IN_USD)
+    const [customRates, setCustomRates] = useState<Partial<ExchangeRates>>(() => getCustomExchangeRates())
+
     const [wallets, setWallets] = useState<Wallet[]>([])
     const [entries, setEntries] = useState<FinanceEntry[]>([])
     const [debts, setDebts] = useState<Debt[]>([])
@@ -59,10 +77,21 @@ export default function FinanceTracker() {
     const [wishlist, setWishlist] = useState<WishlistItem[]>([])
     const [funds, setFunds] = useState<SavingsFund[]>([])
     const [budgets, setBudgets] = useState<CategoryBudget[]>([])
+    const [workProfiles, setWorkProfiles] = useState<WorkProfile[]>([])
+    const [timeLogs, setTimeLogs] = useState<TimeLog[]>([])
+
+    // Load rates on mount
+    useEffect(() => {
+        getExchangeRates().then(fetchedRates => {
+            setRates(fetchedRates)
+        })
+    }, [])
     
     const [useLocalStorageWishlist, setUseLocalStorageWishlist] = useState(false)
     const [useLocalStorageFunds, setUseLocalStorageFunds] = useState(false)
     const [useLocalStorageBudgets, setUseLocalStorageBudgets] = useState(false)
+    const [useLocalStorageProfiles, setUseLocalStorageProfiles] = useState(false)
+    const [useLocalStorageLogs, setUseLocalStorageLogs] = useState(false)
 
     const togglePrivacyMode = () => {
         setShowAmounts(prev => {
@@ -169,6 +198,56 @@ export default function FinanceTracker() {
                 const localData = localStorage.getItem("category_budgets")
                 if (localData) {
                     setBudgets(JSON.parse(localData))
+                }
+            }
+
+            // Work Profiles fetch
+            let profilesData: WorkProfile[] | null = null
+            let hasProfilesTable = false
+            try {
+                const { data, error } = await supabase.from("work_profiles").select("*").order("created_at")
+                if (error) throw error
+                if (data) {
+                    profilesData = data
+                    hasProfilesTable = true
+                }
+            } catch (err) {
+                console.warn("Work profiles table not found, falling back to LocalStorage:", err)
+            }
+
+            if (hasProfilesTable && profilesData) {
+                setWorkProfiles(profilesData)
+                setUseLocalStorageProfiles(false)
+            } else {
+                setUseLocalStorageProfiles(true)
+                const localProfiles = localStorage.getItem("work_profiles")
+                if (localProfiles) {
+                    setWorkProfiles(JSON.parse(localProfiles))
+                }
+            }
+
+            // Time Logs fetch
+            let logsData: TimeLog[] | null = null
+            let hasLogsTable = false
+            try {
+                const { data, error } = await supabase.from("time_logs").select("*").order("date", { ascending: false })
+                if (error) throw error
+                if (data) {
+                    logsData = data
+                    hasLogsTable = true
+                }
+            } catch (err) {
+                console.warn("Time logs table not found, falling back to LocalStorage:", err)
+            }
+
+            if (hasLogsTable && logsData) {
+                setTimeLogs(logsData)
+                setUseLocalStorageLogs(false)
+            } else {
+                setUseLocalStorageLogs(true)
+                const localLogs = localStorage.getItem("time_logs")
+                if (localLogs) {
+                    setTimeLogs(JSON.parse(localLogs))
                 }
             }
         } catch (e) {
@@ -436,34 +515,50 @@ export default function FinanceTracker() {
         })
     }
 
-    // Transfer between wallets
+    // Transfer between wallets (supports multi-currency conversion)
     const handleTransfer = async (e: React.FormEvent) => {
         e.preventDefault()
         const { from, to, amount: amtStr } = transferData
-        const amount = parseFloat(amtStr)
-        if (!from || !to || from === to || !amount || amount <= 0) return
+        const fromAmount = parseFloat(amtStr)
+        if (!from || !to || from === to || !fromAmount || fromAmount <= 0) return
 
         try {
             const fromWallet = wallets.find(w => w.id === from)
             const toWallet = wallets.find(w => w.id === to)
             if (!fromWallet || !toWallet) return
 
+            const fromCurr = fromWallet.currency || "PHP"
+            const toCurr = toWallet.currency || "PHP"
+            
+            // Calculate converted amount for destination wallet if currencies differ
+            const targetAmount = fromCurr === toCurr 
+                ? fromAmount 
+                : convertCurrency(fromAmount, fromCurr, toCurr, rates, customRates)
+
+            // Deduct from source wallet (expense)
             await handleAddEntry({
                 type: "expense",
                 date: new Date().toISOString().split("T")[0],
                 category: "transfer",
-                description: `Transfer to ${toWallet.name}`,
-                amount: amount,
+                description: fromCurr !== toCurr 
+                    ? `Transfer to ${toWallet.name} (${formatCurrency(targetAmount, toCurr)})`
+                    : `Transfer to ${toWallet.name}`,
+                amount: fromAmount,
                 wallet_id: from,
+                currency: fromCurr,
             })
 
+            // Deposit to destination wallet (income)
             await handleAddEntry({
                 type: "income",
                 date: new Date().toISOString().split("T")[0],
                 category: "transfer",
-                description: `Transfer from ${fromWallet.name}`,
-                amount: amount,
+                description: fromCurr !== toCurr 
+                    ? `Transfer from ${fromWallet.name} (${formatCurrency(fromAmount, fromCurr)})`
+                    : `Transfer from ${fromWallet.name}`,
+                amount: targetAmount,
                 wallet_id: to,
+                currency: toCurr,
             })
 
             setTransferData({ from: "", to: "", amount: "" })
@@ -753,6 +848,130 @@ export default function FinanceTracker() {
         }
     }
 
+    // Work Profile CRUD
+    const handleAddProfile = async (profile: Omit<WorkProfile, "id" | "created_at">) => {
+        const newProfile: WorkProfile = {
+            ...profile,
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString()
+        }
+
+        if (useLocalStorageProfiles) {
+            const updated = [...workProfiles, newProfile]
+            setWorkProfiles(updated)
+            localStorage.setItem("work_profiles", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("work_profiles")
+                    .insert(profile)
+                    .select()
+                    .single()
+                if (error) throw error
+                if (data) setWorkProfiles(prev => [...prev, data])
+            } catch (err) {
+                console.warn("Supabase profile insert failed, storing locally:", err)
+                const updated = [...workProfiles, newProfile]
+                setWorkProfiles(updated)
+                localStorage.setItem("work_profiles", JSON.stringify(updated))
+                setUseLocalStorageProfiles(true)
+            }
+        }
+    }
+
+    const handleUpdateProfile = async (id: string, updates: Partial<WorkProfile>) => {
+        if (useLocalStorageProfiles) {
+            const updated = workProfiles.map(p => p.id === id ? { ...p, ...updates } : p)
+            setWorkProfiles(updated)
+            localStorage.setItem("work_profiles", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("work_profiles")
+                    .update(updates)
+                    .eq("id", id)
+                    .select()
+                    .single()
+                if (error) throw error
+                if (data) setWorkProfiles(prev => prev.map(p => p.id === id ? data : p))
+            } catch (err) {
+                console.error("Error updating profile:", err)
+                const updated = workProfiles.map(p => p.id === id ? { ...p, ...updates } : p)
+                setWorkProfiles(updated)
+                localStorage.setItem("work_profiles", JSON.stringify(updated))
+            }
+        }
+    }
+
+    const handleDeleteProfile = async (id: string) => {
+        if (useLocalStorageProfiles) {
+            const updated = workProfiles.filter(p => p.id !== id)
+            setWorkProfiles(updated)
+            localStorage.setItem("work_profiles", JSON.stringify(updated))
+        } else {
+            try {
+                const { error } = await supabase.from("work_profiles").delete().eq("id", id)
+                if (error) throw error
+                setWorkProfiles(prev => prev.filter(p => p.id !== id))
+            } catch (err) {
+                console.error("Error deleting profile:", err)
+                const updated = workProfiles.filter(p => p.id !== id)
+                setWorkProfiles(updated)
+                localStorage.setItem("work_profiles", JSON.stringify(updated))
+            }
+        }
+    }
+
+    // TimeLog CRUD
+    const handleAddTimeLog = async (log: Omit<TimeLog, "id" | "created_at">) => {
+        const newLog: TimeLog = {
+            ...log,
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString()
+        }
+
+        if (useLocalStorageLogs) {
+            const updated = [newLog, ...timeLogs]
+            setTimeLogs(updated)
+            localStorage.setItem("time_logs", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("time_logs")
+                    .insert(log)
+                    .select()
+                    .single()
+                if (error) throw error
+                if (data) setTimeLogs(prev => [data, ...prev])
+            } catch (err) {
+                console.warn("Supabase timelog insert failed, storing locally:", err)
+                const updated = [newLog, ...timeLogs]
+                setTimeLogs(updated)
+                localStorage.setItem("time_logs", JSON.stringify(updated))
+                setUseLocalStorageLogs(true)
+            }
+        }
+    }
+
+    const handleDeleteTimeLog = async (id: string) => {
+        if (useLocalStorageLogs) {
+            const updated = timeLogs.filter(l => l.id !== id)
+            setTimeLogs(updated)
+            localStorage.setItem("time_logs", JSON.stringify(updated))
+        } else {
+            try {
+                const { error } = await supabase.from("time_logs").delete().eq("id", id)
+                if (error) throw error
+                setTimeLogs(prev => prev.filter(l => l.id !== id))
+            } catch (err) {
+                console.error("Error deleting time log:", err)
+                const updated = timeLogs.filter(l => l.id !== id)
+                setTimeLogs(updated)
+                localStorage.setItem("time_logs", JSON.stringify(updated))
+            }
+        }
+    }
+
     // Add Category Budget Limit
     const handleAddBudget = async (budget: Omit<CategoryBudget, "id" | "created_at">) => {
         const tempId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)
@@ -881,7 +1100,14 @@ export default function FinanceTracker() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.1 }}
                 >
-                    <WalletCards wallets={wallets} onTransfer={() => setShowTransfer(true)} showAmounts={showAmounts} />
+                    <WalletCards
+                        wallets={wallets}
+                        onTransfer={() => setShowTransfer(true)}
+                        showAmounts={showAmounts}
+                        baseCurrency={baseCurrency}
+                        rates={rates}
+                        customRates={customRates}
+                    />
                 </motion.div>
 
                 {/* Tab Navigation */}
@@ -929,6 +1155,7 @@ export default function FinanceTracker() {
                                 <IncomeSection
                                     entries={entries}
                                     wallets={wallets}
+                                    showAmounts={showAmounts}
                                     onAdd={handleAddEntry}
                                     onDelete={handleDeleteEntry}
                                 />
@@ -938,6 +1165,8 @@ export default function FinanceTracker() {
                                     entries={entries}
                                     wallets={wallets}
                                     budgets={budgets}
+                                    showAmounts={showAmounts}
+                                    baseCurrency={baseCurrency}
                                     onAdd={handleAddEntry}
                                     onDelete={handleDeleteEntry}
                                 />
@@ -946,7 +1175,33 @@ export default function FinanceTracker() {
                                 <HistorySection
                                     entries={entries}
                                     wallets={wallets}
+                                    showAmounts={showAmounts}
                                     onDelete={handleDeleteEntry}
+                                />
+                            )}
+                            {activeTab === "salary" && (
+                                <SalarySection
+                                    profiles={workProfiles}
+                                    timeLogs={timeLogs}
+                                    wallets={wallets}
+                                    showAmounts={showAmounts}
+                                    baseCurrency={baseCurrency}
+                                    onAddProfile={handleAddProfile}
+                                    onUpdateProfile={handleUpdateProfile}
+                                    onDeleteProfile={handleDeleteProfile}
+                                    onAddTimeLog={handleAddTimeLog}
+                                    onDeleteTimeLog={handleDeleteTimeLog}
+                                    onReceiveIncome={async ({ amount, description, wallet_id, currency }) => {
+                                        await handleAddEntry({
+                                            type: "income",
+                                            date: new Date().toISOString().split("T")[0],
+                                            category: "salary",
+                                            description,
+                                            amount,
+                                            wallet_id,
+                                            currency,
+                                        })
+                                    }}
                                 />
                             )}
                             {activeTab === "bills" && (
@@ -954,6 +1209,8 @@ export default function FinanceTracker() {
                                     bills={bills}
                                     wallets={wallets}
                                     entries={entries}
+                                    showAmounts={showAmounts}
+                                    baseCurrency={baseCurrency}
                                     onAddBill={handleAddBill}
                                     onUpdateBill={handleUpdateBill}
                                     onDeleteBill={handleDeleteBill}
@@ -965,6 +1222,8 @@ export default function FinanceTracker() {
                                     debts={debts}
                                     payments={payments}
                                     wallets={wallets}
+                                    showAmounts={showAmounts}
+                                    baseCurrency={baseCurrency}
                                     onAddDebt={handleAddDebt}
                                     onAddPayment={handleAddPayment}
                                     onDeleteDebt={handleDeleteDebt}
@@ -974,6 +1233,8 @@ export default function FinanceTracker() {
                                 <FundsSection
                                     funds={funds}
                                     wallets={wallets}
+                                    showAmounts={showAmounts}
+                                    baseCurrency={baseCurrency}
                                     onAddFund={handleAddFund}
                                     onFundTransaction={handleFundTransaction}
                                     onDeleteFund={handleDeleteFund}
@@ -983,6 +1244,8 @@ export default function FinanceTracker() {
                                 <WishlistSection
                                     items={wishlist}
                                     wallets={wallets}
+                                    showAmounts={showAmounts}
+                                    baseCurrency={baseCurrency}
                                     onAddItem={handleAddWishlistItem}
                                     onPurchaseItem={handlePurchaseWishlistItem}
                                     onDeleteItem={handleDeleteWishlistItem}
@@ -995,17 +1258,30 @@ export default function FinanceTracker() {
                                     debts={debts}
                                     funds={funds}
                                     bills={bills}
+                                    showAmounts={showAmounts}
+                                    baseCurrency={baseCurrency}
+                                    rates={rates}
+                                    customRates={customRates}
                                 />
                             )}
                             {activeTab === "settings" && (
                                 <SettingsSection
                                     wallets={wallets}
                                     budgets={budgets}
+                                    rates={rates}
+                                    customRates={customRates}
+                                    baseCurrency={baseCurrency}
+                                    showAmounts={showAmounts}
                                     onAddWallet={handleAddWallet}
                                     onUpdateWallet={handleUpdateWallet}
                                     onDeleteWallet={handleDeleteWallet}
                                     onAddBudget={handleAddBudget}
                                     onDeleteBudget={handleDeleteBudget}
+                                    onUpdateRates={(newRates, newCustom) => {
+                                        setRates(newRates)
+                                        setCustomRates(newCustom)
+                                    }}
+                                    onUpdateBaseCurrency={newCurr => setBaseCurrency(newCurr)}
                                 />
                             )}
                         </motion.div>
@@ -1022,7 +1298,7 @@ export default function FinanceTracker() {
             >
                 <form onSubmit={handleTransfer} className="p-6 space-y-4">
                     <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">From</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">From Wallet</label>
                         <select
                             value={transferData.from}
                             onChange={e => setTransferData({ ...transferData, from: e.target.value })}
@@ -1030,9 +1306,15 @@ export default function FinanceTracker() {
                             required
                         >
                             <option value="">Select wallet...</option>
-                            {wallets.map(w => (
-                                <option key={w.id} value={w.id}>{w.name} ({formatPeso(w.balance)})</option>
-                            ))}
+                            {wallets.map(w => {
+                                const wCurr = w.currency || "PHP"
+                                const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                return (
+                                    <option key={w.id} value={w.id}>
+                                        {flag} {w.name} ({formatCurrency(w.balance, wCurr, showAmounts)})
+                                    </option>
+                                )
+                            })}
                         </select>
                     </div>
 
@@ -1043,7 +1325,7 @@ export default function FinanceTracker() {
                     </div>
 
                     <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">To</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">To Wallet</label>
                         <select
                             value={transferData.to}
                             onChange={e => setTransferData({ ...transferData, to: e.target.value })}
@@ -1051,18 +1333,26 @@ export default function FinanceTracker() {
                             required
                         >
                             <option value="">Select wallet...</option>
-                            {wallets.filter(w => w.id !== transferData.from).map(w => (
-                                <option key={w.id} value={w.id}>{w.name} ({formatPeso(w.balance)})</option>
-                            ))}
+                            {wallets.filter(w => w.id !== transferData.from).map(w => {
+                                const wCurr = w.currency || "PHP"
+                                const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                return (
+                                    <option key={w.id} value={w.id}>
+                                        {flag} {w.name} ({formatCurrency(w.balance, wCurr, showAmounts)})
+                                    </option>
+                                )
+                            })}
                         </select>
                     </div>
 
                     <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount (₱)</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                            Amount to Transfer ({CURRENCIES[wallets.find(w => w.id === transferData.from)?.currency || "PHP"]?.symbol})
+                        </label>
                         <input
                             type="number"
-                            step="0.01"
-                            min="0.01"
+                            step="any"
+                            min="0.000001"
                             placeholder="0.00"
                             value={transferData.amount}
                             onChange={e => setTransferData({ ...transferData, amount: e.target.value })}
@@ -1070,6 +1360,26 @@ export default function FinanceTracker() {
                             required
                         />
                     </div>
+
+                    {/* Conversion Rate Preview if transferring across different currencies */}
+                    {(() => {
+                        const fromW = wallets.find(w => w.id === transferData.from)
+                        const toW = wallets.find(w => w.id === transferData.to)
+                        const fromC = fromW?.currency || "PHP"
+                        const toC = toW?.currency || "PHP"
+                        const amt = parseFloat(transferData.amount || "0")
+
+                        if (fromW && toW && fromC !== toC && amt > 0) {
+                            const converted = convertCurrency(amt, fromC, toC, rates, customRates)
+                            return (
+                                <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-500 font-medium text-center">
+                                    <span>Recipient receives: </span>
+                                    <span className="font-black tabular-nums">{formatCurrency(converted, toC, showAmounts)}</span>
+                                </div>
+                            )
+                        }
+                        return null
+                    })()}
 
                     <div className="flex gap-2">
                         <Button
@@ -1091,8 +1401,4 @@ export default function FinanceTracker() {
             </Modal>
         </div>
     )
-}
-
-function formatPeso(amount: number): string {
-    return `₱${Math.abs(amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }

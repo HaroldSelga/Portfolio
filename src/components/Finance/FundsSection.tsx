@@ -4,21 +4,20 @@ import { Plus, PiggyBank, ArrowDownRight, ArrowUpRight, Trash2, X, AlertTriangle
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { SavingsFund, Wallet } from "./types"
+import type { SavingsFund, Wallet, CurrencyCode } from "./types"
+import { formatCurrency } from "./types"
 
 interface FundsSectionProps {
     funds: SavingsFund[]
     wallets: Wallet[]
+    showAmounts?: boolean
+    baseCurrency?: CurrencyCode
     onAddFund: (fund: Omit<SavingsFund, "id" | "created_at">) => void
     onFundTransaction: (id: string, amount: number, type: "deposit" | "withdraw", walletId: string, notes: string | null) => void
     onDeleteFund: (id: string) => void
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onDeleteFund }: FundsSectionProps) {
+export function FundsSection({ funds, wallets, showAmounts = true, baseCurrency = "PHP", onAddFund, onFundTransaction, onDeleteFund }: FundsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [txModal, setTxModal] = useState<{ fund: SavingsFund; type: "deposit" | "withdraw" } | null>(null)
     const [deleteModal, setDeleteModal] = useState<SavingsFund | null>(null)
@@ -103,8 +102,8 @@ export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onD
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Savings Funds & Goals</h3>
                         <p className="text-xs font-bold text-muted-foreground">
-                            Saved: <span className="text-emerald-500">{formatPeso(totalSaved)}</span>
-                            {totalTarget > 0 && <span className="text-muted-foreground/60 ml-2">of {formatPeso(totalTarget)} target</span>}
+                            Saved: <span className="text-emerald-500">{formatCurrency(totalSaved, baseCurrency, showAmounts)}</span>
+                            {totalTarget > 0 && <span className="text-muted-foreground/60 ml-2">of {formatCurrency(totalTarget, baseCurrency, showAmounts)} target</span>}
                         </p>
                     </div>
                 </div>
@@ -141,8 +140,8 @@ export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onD
                         />
                     </div>
                     <div className="flex justify-between mt-2 text-xs font-bold tabular-nums text-muted-foreground">
-                        <span>Saved: <span className="text-emerald-500">{formatPeso(totalSaved)}</span></span>
-                        <span>Left: <span className="text-primary">{formatPeso(Math.max(totalTarget - totalSaved, 0))}</span></span>
+                        <span>Saved: <span className="text-emerald-500">{formatCurrency(totalSaved, baseCurrency, showAmounts)}</span></span>
+                        <span>Left: <span className="text-primary">{formatCurrency(Math.max(totalTarget - totalSaved, 0), baseCurrency, showAmounts)}</span></span>
                     </div>
                 </div>
             )}
@@ -274,8 +273,8 @@ export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onD
                                             {fund.notes && <p className="text-xs text-muted-foreground/80 mt-1 font-semibold">{fund.notes}</p>}
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-xs text-muted-foreground block font-bold">Goal: {formatPeso(fund.target_amount)}</span>
-                                            <span className="text-sm font-black text-emerald-500">{formatPeso(fund.current_amount)}</span>
+                                            <span className="text-xs text-muted-foreground block font-bold">Goal: {formatCurrency(fund.target_amount, baseCurrency, showAmounts)}</span>
+                                            <span className="text-sm font-black text-emerald-500">{formatCurrency(fund.current_amount, baseCurrency, showAmounts)}</span>
                                         </div>
                                     </div>
 
@@ -296,7 +295,7 @@ export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onD
                                         </div>
                                         <div className="flex justify-between mt-1 text-[10px] font-bold text-muted-foreground">
                                             <span>{Math.round(pct)}% Saved</span>
-                                            <span>Remaining: {formatPeso(Math.max(fund.target_amount - fund.current_amount, 0))}</span>
+                                            <span>Remaining: {formatCurrency(Math.max(fund.target_amount - fund.current_amount, 0), baseCurrency, showAmounts)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -345,14 +344,14 @@ export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onD
                     <form onSubmit={handleTxSubmit} className="p-6 space-y-4">
                         <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 text-center">
                             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current Saved Fund</p>
-                            <p className="text-lg font-black tabular-nums text-emerald-500 mt-0.5">{formatPeso(txModal.fund.current_amount)}</p>
+                            <p className="text-lg font-black tabular-nums text-emerald-500 mt-0.5">{formatCurrency(txModal.fund.current_amount, baseCurrency, showAmounts)}</p>
                         </div>
 
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount (₱)</label>
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount</label>
                             <input
                                 type="number"
-                                step="0.01"
+                                step="any"
                                 min="0.01"
                                 max={txModal.type === "withdraw" ? txModal.fund.current_amount : undefined}
                                 placeholder="0.00"
@@ -382,7 +381,7 @@ export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onD
                             >
                                 <option value="">Select wallet...</option>
                                 {wallets.map(w => (
-                                    <option key={w.id} value={w.id}>{w.name} ({formatPeso(w.balance)})</option>
+                                    <option key={w.id} value={w.id}>{w.name} ({formatCurrency(w.balance, w.currency || "PHP", showAmounts)})</option>
                                 ))}
                             </select>
                             {isOverdraft && (
@@ -435,7 +434,7 @@ export function FundsSection({ funds, wallets, onAddFund, onFundTransaction, onD
                             Are you sure you want to delete <span className="text-rose-500 uppercase">"{deleteModal.label}"</span>?
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            Saved balance: <span className="font-bold">{formatPeso(deleteModal.current_amount)}</span>
+                            Saved balance: <span className="font-bold">{formatCurrency(deleteModal.current_amount, baseCurrency, showAmounts)}</span>
                         </p>
                         <div className="flex gap-2">
                             <Button

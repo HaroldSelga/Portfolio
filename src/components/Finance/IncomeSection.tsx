@@ -3,21 +3,18 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Trash2, TrendingUp, X } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
-import type { FinanceEntry, Wallet } from "./types"
-import { INCOME_CATEGORIES } from "./types"
+import type { FinanceEntry, Wallet, CurrencyCode } from "./types"
+import { INCOME_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
 
 interface IncomeSectionProps {
     entries: FinanceEntry[]
     wallets: Wallet[]
+    showAmounts?: boolean
     onAdd: (entry: Omit<FinanceEntry, "id" | "created_at">) => void
     onDelete: (id: string) => void
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSectionProps) {
+export function IncomeSection({ entries, wallets, showAmounts = true, onAdd, onDelete }: IncomeSectionProps) {
     const [showForm, setShowForm] = useState(false)
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split("T")[0],
@@ -26,6 +23,10 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
         amount: "",
         wallet_id: wallets[0]?.id || "",
     })
+
+    const selectedWallet = wallets.find(w => w.id === formData.wallet_id)
+    const walletCurrency: CurrencyCode = selectedWallet?.currency || "PHP"
+    const currInfo = CURRENCIES[walletCurrency] || CURRENCIES.PHP
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -38,6 +39,7 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
             description: formData.description || INCOME_CATEGORIES.find(c => c.value === formData.category)?.label || "Income",
             amount: parseFloat(formData.amount),
             wallet_id: formData.wallet_id,
+            currency: walletCurrency,
         })
 
         setFormData({
@@ -51,7 +53,6 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
     }
 
     const incomeEntries = entries.filter(e => e.type === "income").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    const totalIncome = incomeEntries.reduce((sum, e) => sum + e.amount, 0)
 
     return (
         <div className="space-y-4">
@@ -63,8 +64,8 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
                     </div>
                     <div>
                         <h3 className="text-lg font-black uppercase tracking-tight">Income</h3>
-                        <p className="text-xs font-bold text-muted-foreground tabular-nums">
-                            Total: <span className="text-emerald-500">{formatPeso(totalIncome)}</span>
+                        <p className="text-xs font-bold text-muted-foreground">
+                            Record your salary, freelance earnings, or side hustle revenues
                         </p>
                     </div>
                 </div>
@@ -121,11 +122,13 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount (₱)</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                                        Amount ({currInfo.symbol} {walletCurrency})
+                                    </label>
                                     <input
                                         type="number"
-                                        step="0.01"
-                                        min="0.01"
+                                        step="any"
+                                        min="0.000001"
                                         placeholder="0.00"
                                         value={formData.amount}
                                         onChange={e => setFormData({ ...formData, amount: e.target.value })}
@@ -134,15 +137,21 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Wallet</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Deposit To Wallet</label>
                                     <select
                                         value={formData.wallet_id}
                                         onChange={e => setFormData({ ...formData, wallet_id: e.target.value })}
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                                     >
-                                        {wallets.map(w => (
-                                            <option key={w.id} value={w.id}>{w.name}</option>
-                                        ))}
+                                        {wallets.map(w => {
+                                            const wCurr = w.currency || "PHP"
+                                            const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                            return (
+                                                <option key={w.id} value={w.id}>
+                                                    {flag} {w.name} ({wCurr})
+                                                </option>
+                                            )
+                                        })}
                                     </select>
                                 </div>
                             </div>
@@ -150,7 +159,7 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
                                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Description (optional)</label>
                                 <input
                                     type="text"
-                                    placeholder="e.g. June 2026 salary"
+                                    placeholder="e.g. Monthly salary, Freelance project"
                                     value={formData.description}
                                     onChange={e => setFormData({ ...formData, description: e.target.value })}
                                     className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -180,6 +189,7 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
                         {incomeEntries.map((entry, i) => {
                             const cat = INCOME_CATEGORIES.find(c => c.value === entry.category)
                             const wallet = wallets.find(w => w.id === entry.wallet_id)
+                            const entryCurrency = entry.currency || wallet?.currency || "PHP"
 
                             return (
                                 <motion.div
@@ -197,18 +207,22 @@ export function IncomeSection({ entries, wallets, onAdd, onDelete }: IncomeSecti
                                             {wallet && (
                                                 <>
                                                     <span>·</span>
-                                                    <span>{wallet.name}</span>
+                                                    <span className="font-semibold text-foreground/80">{wallet.name}</span>
                                                 </>
                                             )}
                                         </div>
                                     </div>
                                     <span className="text-sm font-black tabular-nums text-emerald-500">
-                                        +{formatPeso(entry.amount)}
+                                        +{formatCurrency(entry.amount, entryCurrency, showAmounts)}
                                     </span>
                                     <button
-                                        onClick={() => onDelete(entry.id)}
+                                        onClick={() => {
+                                            if (confirm("Are you sure you want to delete this income entry?")) {
+                                                onDelete(entry.id)
+                                            }
+                                        }}
                                         className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
-                                        title="Remove"
+                                        title="Remove entry"
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                     </button>

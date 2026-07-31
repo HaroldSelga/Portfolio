@@ -1,21 +1,18 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Search, Trash2, ArrowUpDown, Wallet as WalletIcon } from "lucide-react"
 import { cn } from "../../lib/utils"
 import type { FinanceEntry, Wallet } from "./types"
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "./types"
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, formatCurrency } from "./types"
 
 interface HistorySectionProps {
     entries: FinanceEntry[]
     wallets: Wallet[]
+    showAmounts?: boolean
     onDelete: (id: string) => void
 }
 
-function formatPeso(amount: number): string {
-    return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-export function HistorySection({ entries, wallets, onDelete }: HistorySectionProps) {
+export function HistorySection({ entries, wallets, showAmounts = true, onDelete }: HistorySectionProps) {
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedWallet, setSelectedWallet] = useState("all")
     const [selectedType, setSelectedType] = useState("all") // "all" | "income" | "expense"
@@ -36,8 +33,8 @@ export function HistorySection({ entries, wallets, onDelete }: HistorySectionPro
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     }, [entries, searchQuery, selectedWallet, selectedType])
 
-    // Reset pagination when filter settings change
-    useMemo(() => {
+    // Reset pagination when filter settings change using useEffect instead of useMemo
+    useEffect(() => {
         setVisibleCount(25)
     }, [searchQuery, selectedWallet, selectedType])
 
@@ -102,6 +99,7 @@ export function HistorySection({ entries, wallets, onDelete }: HistorySectionPro
                         {visibleEntries.map((entry, i) => {
                             const isIncome = entry.type === "income"
                             const wallet = wallets.find(w => w.id === entry.wallet_id)
+                            const entryCurrency = entry.currency || wallet?.currency || "PHP"
                             
                             // Find matching category details
                             const catDetails = isIncome
@@ -151,7 +149,7 @@ export function HistorySection({ entries, wallets, onDelete }: HistorySectionPro
                                         "text-sm font-black tabular-nums shrink-0 ml-2",
                                         isIncome ? "text-emerald-500" : "text-rose-500"
                                     )}>
-                                        {isIncome ? "+" : "-"}{formatPeso(entry.amount)}
+                                        {isIncome ? "+" : "-"}{formatCurrency(entry.amount, entryCurrency, showAmounts)}
                                     </span>
 
                                     {/* Delete Button */}

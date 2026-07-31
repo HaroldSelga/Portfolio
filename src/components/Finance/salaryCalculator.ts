@@ -57,9 +57,9 @@ export function getStandardMonthlyHours(profile: WorkProfile): number {
     
     if (profile.country === "TW") {
         // Under Taiwan Labor Standards Act (勞基法 §24):
-        // For monthly-salaried 5-2 office employees, standard divisor is 240 hrs (30 days × 8 hrs).
-        // For 2-2 / 3-3 / 4-2 factory rotation shifts, 173.2 hrs (40 hrs/week × 4.33 weeks) is standard.
-        if (profile.rate_type === "monthly" && profile.schedule_type === "5-2") {
+        // For ALL monthly-salaried employees (月薪制), the statutory hourly rate divisor is 240 hrs (30 days × 8 hrs).
+        // For hourly-rate employees (時薪制), 173.2 hrs (40 hrs/week × 4.33 weeks) is the monthly benchmark.
+        if (profile.rate_type === "monthly") {
             return 240
         }
         return 173.2

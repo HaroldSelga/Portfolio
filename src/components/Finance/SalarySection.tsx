@@ -1719,7 +1719,12 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                 </div>
 
                                 <div className="text-[10px] text-muted-foreground font-medium pt-0.5 leading-relaxed">
-                                    💡 <span className="font-bold text-foreground">Formula:</span> {formatCurrency(computedMonthly, profileFormData.currency)} ÷ {monthlyHours} hrs = <span className="font-bold text-emerald-500">{formatCurrency(computedHourly, profileFormData.currency)}/hr</span> base for OT, night diff & statutory double pay.
+                                    💡 <span className="font-bold text-foreground">Formula ({profileFormData.country === "TW" && profileFormData.rate_type === "monthly" ? "勞基法 §24 Statutory Standard" : "Standard Formula"}):</span> {formatCurrency(computedMonthly, profileFormData.currency)} ÷ {monthlyHours} hrs = <span className="font-bold text-emerald-500">{formatCurrency(computedHourly, profileFormData.currency)}/hr</span> base rate.
+                                    {profileFormData.country === "TW" && profileFormData.rate_type === "monthly" && !profileFormData.custom_monthly_hours && (
+                                        <span className="block text-[9.5px] text-sky-500 font-bold mt-0.5">
+                                            🇹🇼 Taiwan Labor Law (勞基法 §24): Monthly salary uses statutory 240 hrs divisor (30 days × 8h). Type 173.2 above if your factory contract specifies 173.2 hrs!
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         )

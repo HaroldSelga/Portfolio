@@ -1,10 +1,10 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, X, Star, Globe, RefreshCw, Calculator, Calendar as CalendarIcon, DollarSign, ChevronDown, ChevronUp, Check, RotateCcw } from "lucide-react"
+import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, X, Star, Globe, RefreshCw, Calculator, Calendar as CalendarIcon, DollarSign, ChevronDown, ChevronUp, Check, RotateCcw, Download } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { Wallet, CategoryBudget, CurrencyCode, WorkProfile, PayrollDeduction } from "./types"
+import type { Wallet, CategoryBudget, CurrencyCode, WorkProfile, PayrollDeduction, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, TimeLog } from "./types"
 import { WALLET_TYPES, WALLET_PRESETS, EXPENSE_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
 import {
     getExchangeRates,
@@ -38,6 +38,13 @@ interface SettingsSectionProps {
     showAmounts?: boolean
     profiles?: WorkProfile[]
     deductions?: PayrollDeduction[]
+    entries?: FinanceEntry[]
+    debts?: Debt[]
+    payments?: DebtPayment[]
+    bills?: BillTemplate[]
+    wishlist?: WishlistItem[]
+    funds?: SavingsFund[]
+    timeLogs?: TimeLog[]
     onAddWallet: (wallet: Omit<Wallet, "id" | "created_at">) => void
     onUpdateWallet: (wallet: Wallet) => void
     onDeleteWallet: (id: string) => void
@@ -74,7 +81,14 @@ export function SettingsSection({
     onUpdateBaseCurrency,
     onAddDeduction,
     onDeleteDeduction,
-    onToggleDeduction
+    onToggleDeduction,
+    entries = [],
+    debts = [],
+    payments = [],
+    bills = [],
+    wishlist = [],
+    funds = [],
+    timeLogs = []
 }: SettingsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [showBudgetForm, setShowBudgetForm] = useState(false)
@@ -1167,6 +1181,97 @@ export function SettingsSection({
                         </motion.div>
                     )}
                 </AnimatePresence>
+            </div>
+
+            {/* ═══════════════════════════════════════════ */}
+            {/* 📦 FULL DATA BACKUP & RESTORE (Feature 10) */}
+            {/* ═══════════════════════════════════════════ */}
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-md">
+                <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-500">
+                        <Download className="h-4 w-4" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-black uppercase tracking-tight">Full System Backup & Restore</h4>
+                        <p className="text-[10px] text-muted-foreground font-semibold">Export all wallets, transactions, debts, bills, and logs to JSON or restore from a backup</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/20">
+                    <Button
+                        type="button"
+                        onClick={() => {
+                            const backupData = {
+                                version: "1.0",
+                                exportDate: new Date().toISOString(),
+                                wallets,
+                                entries,
+                                debts,
+                                payments,
+                                bills,
+                                wishlist,
+                                funds,
+                                budgets,
+                                profiles,
+                                timeLogs,
+                                deductions,
+                                customRates,
+                                baseCurrency
+                            }
+                            const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" })
+                            const url = URL.createObjectURL(blob)
+                            const link = document.createElement("a")
+                            link.href = url
+                            link.download = `finance_full_backup_${new Date().toISOString().slice(0, 10)}.json`
+                            document.body.appendChild(link)
+                            link.click()
+                            document.body.removeChild(link)
+                            URL.revokeObjectURL(url)
+                        }}
+                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs gap-2 shadow-md"
+                    >
+                        <Download className="h-4 w-4" />
+                        Export Full Backup (.json)
+                    </Button>
+
+                    <label className="w-full">
+                        <input
+                            type="file"
+                            accept=".json"
+                            className="hidden"
+                            onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                const reader = new FileReader()
+                                reader.onload = evt => {
+                                    try {
+                                        const data = JSON.parse(evt.target?.result as string)
+                                        if (confirm("Restore full backup? This will sync all imported tables into your system.")) {
+                                            if (data.wishlist) localStorage.setItem("wishlist_items", JSON.stringify(data.wishlist))
+                                            if (data.funds) localStorage.setItem("savings_funds", JSON.stringify(data.funds))
+                                            if (data.budgets) localStorage.setItem("category_budgets", JSON.stringify(data.budgets))
+                                            if (data.profiles) localStorage.setItem("work_profiles", JSON.stringify(data.profiles))
+                                            if (data.timeLogs) localStorage.setItem("time_logs", JSON.stringify(data.timeLogs))
+                                            if (data.deductions) localStorage.setItem("finance_payroll_deductions", JSON.stringify(data.deductions))
+                                            if (data.customRates) saveCustomExchangeRates(data.customRates)
+                                            if (data.baseCurrency) savePrimaryBaseCurrency(data.baseCurrency)
+
+                                            alert("✅ Backup restored successfully! Reloading page...")
+                                            window.location.reload()
+                                        }
+                                    } catch (err) {
+                                        alert("❌ Invalid JSON backup file.")
+                                    }
+                                }
+                                reader.readAsText(file)
+                            }}
+                        />
+                        <div className="w-full h-9 px-4 bg-card border border-border/50 hover:bg-muted rounded-xl text-xs font-bold text-foreground flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm">
+                            <RefreshCw className="h-4 w-4 text-primary" />
+                            Restore from Backup (.json)
+                        </div>
+                    </label>
+                </div>
             </div>
 
             {/* Edit Wallet Modal */}

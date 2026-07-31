@@ -32,6 +32,7 @@ export function ExpenseSection({
         description: "",
         amount: "",
         wallet_id: getDefaultSmartWallet(wallets),
+        notes: "",
     })
 
     useEffect(() => {
@@ -101,6 +102,7 @@ export function ExpenseSection({
             amount: parseFloat(formData.amount),
             wallet_id: targetWalletId,
             currency: walletCurrency,
+            notes: formData.notes || undefined,
         })
 
         setFormData({
@@ -109,6 +111,7 @@ export function ExpenseSection({
             description: "",
             amount: "",
             wallet_id: getDefaultSmartWallet(wallets),
+            notes: "",
         })
         setShowForm(false)
     }
@@ -271,6 +274,16 @@ export function ExpenseSection({
                                     className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
                                 />
                             </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes / Memo (optional)</label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Additional memo, receipt details..."
+                                    value={formData.notes}
+                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                                />
+                            </div>
 
                             {/* Dynamic Budget Alert within Form */}
                             {activeBudget && (
@@ -347,6 +360,9 @@ export function ExpenseSection({
                                     <span className="text-lg">{cat?.emoji || "📦"}</span>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold truncate">{entry.description || cat?.label || "Expense"}</p>
+                                        {entry.notes && (
+                                            <p className="text-xs text-muted-foreground/80 italic font-normal truncate">{entry.notes}</p>
+                                        )}
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                             <span>{new Date(entry.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
                                             <span>·</span>

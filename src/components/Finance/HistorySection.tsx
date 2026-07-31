@@ -129,6 +129,9 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                                         <p className="text-sm font-bold truncate">
                                             {entry.description || catDetails?.label || entry.category}
                                         </p>
+                                        {entry.notes && (
+                                            <p className="text-xs text-muted-foreground/80 italic font-normal truncate">{entry.notes}</p>
+                                        )}
                                         <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground mt-0.5 font-medium">
                                             <span>
                                                 {new Date(entry.date).toLocaleDateString("en-PH", {

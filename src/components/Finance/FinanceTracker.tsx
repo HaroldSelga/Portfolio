@@ -14,7 +14,10 @@ import {
     PiggyBank,
     Eye,
     EyeOff,
-    Clock
+    Clock,
+    Bell,
+    Plus,
+    Calendar
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -446,12 +449,30 @@ export default function FinanceTracker() {
         try {
             const { data, error } = await supabase
                 .from("debts")
-                .insert({ ...debt, paid_amount: 0, is_settled: false })
+                .insert({ 
+                    label: debt.label,
+                    total_amount: debt.total_amount,
+                    paid_amount: 0, 
+                    is_settled: false,
+                    interest_rate: debt.interest_rate,
+                    due_date: debt.due_date,
+                    min_monthly_payment: debt.min_monthly_payment
+                })
                 .select()
                 .single()
 
-            if (error) throw error
-            if (data) setDebts(prev => [...prev, data])
+            if (error) {
+                // Fallback without optional columns if error occurs
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from("debts")
+                    .insert({ label: debt.label, total_amount: debt.total_amount, paid_amount: 0, is_settled: false })
+                    .select()
+                    .single()
+                if (!fallbackError && fallbackData) setDebts(prev => [...prev, { ...fallbackData, ...debt }])
+                else throw error
+            } else if (data) {
+                setDebts(prev => [...prev, data])
+            }
         } catch (e) {
             console.error("Error adding debt:", e)
         }
@@ -693,6 +714,7 @@ export default function FinanceTracker() {
                         priority: item.priority,
                         notes: item.notes,
                         target_date: item.target_date,
+                        url: item.url,
                         is_purchased: false
                     })
                     .select()
@@ -1239,6 +1261,113 @@ export default function FinanceTracker() {
                     </button>
                 </motion.div>
 
+                {/* Bill Due Date Reminder Banner */}
+                {(() => {
+                    const today = new Date()
+                    const currentDay = today.getDate()
+                    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+                    
+                    const billAlerts = bills.map(bill => {
+                        if (!bill.due_day) return null
+                        const dueDay = bill.due_day
+                        let daysUntilDue: number
+                        
+                        if (dueDay >= currentDay) {
+                            daysUntilDue = dueDay - currentDay
+                        } else {
+                            daysUntilDue = (daysInMonth - currentDay) + dueDay
+                        }
+                        
+                        // Check if already paid this month
+                        const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
+                        const isPaidThisMonth = entries.some(e => 
+                            e.type === "expense" && 
+                            e.date.startsWith(currentMonthKey) && 
+                            e.description.includes(bill.label) &&
+                            (e.category === bill.category || e.category === "bills")
+                        )
+                        
+                        if (isPaidThisMonth) return null
+                        
+                        const isOverdue = dueDay < currentDay && daysUntilDue > 15
+                        const isDueSoon = daysUntilDue <= 5
+                        const isDueToday = daysUntilDue === 0
+                        
+                        if (!isOverdue && !isDueSoon && !isDueToday) return null
+                        
+                        return { bill, daysUntilDue, isOverdue, isDueToday, isDueSoon }
+                    }).filter(Boolean) as { bill: BillTemplate; daysUntilDue: number; isOverdue: boolean; isDueToday: boolean; isDueSoon: boolean }[]
+                    
+                    if (billAlerts.length === 0) return null
+                    
+                    const overdueCount = billAlerts.filter(a => a.isOverdue).length
+                    const dueTodayCount = billAlerts.filter(a => a.isDueToday).length
+                    const dueSoonCount = billAlerts.filter(a => a.isDueSoon && !a.isDueToday).length
+                    
+                    return (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4 }}
+                        >
+                            <button
+                                onClick={() => setActiveTab("bills")}
+                                className={cn(
+                                    "w-full p-3.5 rounded-2xl border flex items-center gap-3 text-left transition-all hover:shadow-md group",
+                                    overdueCount > 0
+                                        ? "bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/15"
+                                        : "bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15"
+                                )}
+                            >
+                                <div className={cn(
+                                    "p-2 rounded-xl shrink-0",
+                                    overdueCount > 0 ? "bg-rose-500/20" : "bg-amber-500/20"
+                                )}>
+                                    <Bell className={cn(
+                                        "h-5 w-5",
+                                        overdueCount > 0 ? "text-rose-500 animate-pulse" : "text-amber-500"
+                                    )} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className={cn(
+                                        "text-sm font-black uppercase tracking-tight",
+                                        overdueCount > 0 ? "text-rose-500" : "text-amber-500"
+                                    )}>
+                                        {overdueCount > 0 && `⚠️ ${overdueCount} overdue bill${overdueCount > 1 ? "s" : ""}! `}
+                                        {dueTodayCount > 0 && `📅 ${dueTodayCount} due today! `}
+                                        {dueSoonCount > 0 && `🔔 ${dueSoonCount} due within 5 days`}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                        {billAlerts.slice(0, 4).map(alert => (
+                                            <span
+                                                key={alert.bill.id}
+                                                className={cn(
+                                                    "px-2 py-0.5 rounded-md text-[10px] font-bold",
+                                                    alert.isOverdue
+                                                        ? "bg-rose-500/20 text-rose-500"
+                                                        : alert.isDueToday
+                                                            ? "bg-amber-500/20 text-amber-600"
+                                                            : "bg-amber-500/10 text-amber-500"
+                                                )}
+                                            >
+                                                {alert.bill.label}
+                                                {alert.isOverdue ? " (OVERDUE)" : alert.isDueToday ? " (TODAY)" : ` (${alert.daysUntilDue}d)`}
+                                            </span>
+                                        ))}
+                                        {billAlerts.length > 4 && (
+                                            <span className="text-[10px] font-bold text-muted-foreground">+{billAlerts.length - 4} more</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <span className={cn(
+                                    "text-xs font-bold shrink-0 group-hover:translate-x-0.5 transition-transform",
+                                    overdueCount > 0 ? "text-rose-500" : "text-amber-500"
+                                )}>View Bills →</span>
+                            </button>
+                        </motion.div>
+                    )
+                })()}
+
                 {/* Wallet Cards */}
                 <motion.div
                     initial={{ opacity: 0, y: 15 }}
@@ -1253,6 +1382,39 @@ export default function FinanceTracker() {
                         rates={rates}
                         customRates={customRates}
                     />
+                </motion.div>
+
+                {/* Quick Actions */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.15 }}
+                    className="flex flex-wrap gap-2"
+                >
+                    <button
+                        onClick={() => setActiveTab("expenses")}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl text-xs font-bold text-rose-500 transition-all"
+                    >
+                        <Plus className="h-3.5 w-3.5" /> Add Expense
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("income")}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-500 transition-all"
+                    >
+                        <Plus className="h-3.5 w-3.5" /> Add Income
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("bills")}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-bold text-amber-500 transition-all"
+                    >
+                        <Receipt className="h-3.5 w-3.5" /> Pay Bill
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("salary")}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-xs font-bold text-sky-500 transition-all"
+                    >
+                        <Calendar className="h-3.5 w-3.5" /> Log Shift
+                    </button>
                 </motion.div>
 
                 {/* Tab Navigation */}
@@ -1422,6 +1584,13 @@ export default function FinanceTracker() {
                                     showAmounts={showAmounts}
                                     profiles={workProfiles}
                                     deductions={payrollDeductions}
+                                    entries={entries}
+                                    debts={debts}
+                                    payments={payments}
+                                    bills={bills}
+                                    wishlist={wishlist}
+                                    funds={funds}
+                                    timeLogs={timeLogs}
                                     onAddWallet={handleAddWallet}
                                     onUpdateWallet={handleUpdateWallet}
                                     onDeleteWallet={handleDeleteWallet}

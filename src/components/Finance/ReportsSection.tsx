@@ -716,6 +716,90 @@ export function ReportsSection({
             </div>
 
             {/* ═══════════════════════════════════════════ */}
+            {/* CALENDAR HEATMAP (Feature 12) */}
+            {/* ═══════════════════════════════════════════ */}
+            {(() => {
+                const [yStr, mStr] = selectedMonthKey.split("-")
+                const year = parseInt(yStr)
+                const month = parseInt(mStr)
+                const totalDays = new Date(year, month, 0).getDate()
+                const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
+
+                const dailyMap: Record<number, number> = {}
+                selectedData.entries
+                    .filter(e => e.type === "expense" && e.category !== "savings_deposit")
+                    .forEach(e => {
+                        const day = parseInt(e.date.substring(8, 10))
+                        dailyMap[day] = (dailyMap[day] || 0) + getConvertedAmount(e)
+                    })
+
+                const maxDailySpend = Math.max(...Object.values(dailyMap), 1)
+
+                return (
+                    <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-amber-500" />
+                                <h3 className="text-sm font-black uppercase tracking-tight">Daily Spending Heatmap</h3>
+                            </div>
+                            <span className="text-[10px] font-bold text-muted-foreground">
+                                {getMonthLabel(selectedMonthKey)}
+                            </span>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-muted-foreground uppercase">
+                                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                            </div>
+
+                            <div className="grid grid-cols-7 gap-1.5">
+                                {Array.from({ length: firstDayOfWeek }).map((_, idx) => (
+                                    <div key={`pad-${idx}`} className="h-8 rounded-lg bg-muted/10 border border-transparent" />
+                                ))}
+
+                                {Array.from({ length: totalDays }).map((_, idx) => {
+                                    const dayNum = idx + 1
+                                    const spend = dailyMap[dayNum] || 0
+                                    const intensity = spend === 0 ? 0 : Math.min(Math.ceil((spend / maxDailySpend) * 4), 4)
+
+                                    return (
+                                        <div
+                                            key={`day-${dayNum}`}
+                                            className={cn(
+                                                "h-9 rounded-xl p-1 flex flex-col justify-between items-center text-[10px] font-bold transition-all border",
+                                                intensity === 0 && "bg-muted/20 border-border/10 text-muted-foreground/50",
+                                                intensity === 1 && "bg-amber-500/15 border-amber-500/20 text-amber-600",
+                                                intensity === 2 && "bg-amber-500/30 border-amber-500/40 text-amber-700",
+                                                intensity === 3 && "bg-rose-500/40 border-rose-500/50 text-white",
+                                                intensity === 4 && "bg-rose-600 border-rose-600 text-white shadow-sm"
+                                            )}
+                                            title={`Day ${dayNum}: ${formatCurrency(spend, baseCurrency, showAmounts)}`}
+                                        >
+                                            <span>{dayNum}</span>
+                                            {spend > 0 && (
+                                                <span className="text-[8px] tabular-nums font-black opacity-90 truncate max-w-full">
+                                                    {formatCurrency(spend, baseCurrency, showAmounts).replace(/[^\d.]/g, "").slice(0, 4)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-2 text-[10px] font-bold text-muted-foreground">
+                                <span>No spend</span>
+                                <span className="w-3 h-3 rounded bg-muted/30 border border-border/10" />
+                                <span className="w-3 h-3 rounded bg-amber-500/20 border border-amber-500/30" />
+                                <span className="w-3 h-3 rounded bg-rose-500/40 border border-rose-500/50" />
+                                <span className="w-3 h-3 rounded bg-rose-600" />
+                                <span>Heavy spend</span>
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
+
+            {/* ═══════════════════════════════════════════ */}
             {/* ALL-TIME MONTHLY TREND CHART */}
             {/* ═══════════════════════════════════════════ */}
             <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-4 shadow-sm">

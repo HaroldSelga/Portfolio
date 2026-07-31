@@ -21,6 +21,24 @@ export function FundsSection({ funds, wallets, showAmounts = true, baseCurrency 
     const [showAddForm, setShowAddForm] = useState(false)
     const [txModal, setTxModal] = useState<{ fund: SavingsFund; type: "deposit" | "withdraw" } | null>(null)
     const [deleteModal, setDeleteModal] = useState<SavingsFund | null>(null)
+    
+    // Auto-allocate config state: Record<fundId, percent>
+    const [autoAllocates, setAutoAllocates] = useState<Record<string, number>>(() => {
+        try {
+            const stored = localStorage.getItem("finance_savings_auto_allocate")
+            if (stored) return JSON.parse(stored)
+        } catch {
+            // ignore
+        }
+        return {}
+    })
+
+    const handleSetAutoAllocate = (fundId: string, percent: number) => {
+        const updated = { ...autoAllocates, [fundId]: percent }
+        if (percent <= 0) delete updated[fundId]
+        setAutoAllocates(updated)
+        localStorage.setItem("finance_savings_auto_allocate", JSON.stringify(updated))
+    }
 
     const [newFund, setNewFund] = useState({
         label: "",
@@ -297,6 +315,25 @@ export function FundsSection({ funds, wallets, showAmounts = true, baseCurrency 
                                             <span>{Math.round(pct)}% Saved</span>
                                             <span>Remaining: {formatCurrency(Math.max(fund.target_amount - fund.current_amount, 0), baseCurrency, showAmounts)}</span>
                                         </div>
+                                    </div>
+
+                                    {/* Auto-Allocate dropdown selector */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/10 text-[10px] font-bold text-muted-foreground">
+                                        <span className="flex items-center gap-1">
+                                            <span>🎯 Auto-allocate:</span>
+                                        </span>
+                                        <select
+                                            value={autoAllocates[fund.id] || 0}
+                                            onChange={e => handleSetAutoAllocate(fund.id, parseInt(e.target.value) || 0)}
+                                            className="px-2 py-0.5 bg-background border border-border/40 rounded-md font-bold text-[10px] focus:outline-none"
+                                        >
+                                            <option value={0}>Off (0%)</option>
+                                            <option value={5}>5% of Income</option>
+                                            <option value={10}>10% of Income</option>
+                                            <option value={15}>15% of Income</option>
+                                            <option value={20}>20% of Income</option>
+                                            <option value={25}>25% of Income</option>
+                                        </select>
                                     </div>
                                 </div>
 

@@ -46,6 +46,7 @@ export interface FinanceEntry {
     wallet_id: string
     currency?: CurrencyCode
     exchange_rate?: number
+    notes?: string
     created_at: string
 }
 
@@ -81,6 +82,9 @@ export interface Debt {
     total_amount: number
     paid_amount: number
     is_settled: boolean
+    interest_rate?: number
+    due_date?: string
+    min_monthly_payment?: number
     created_at: string
 }
 
@@ -112,6 +116,7 @@ export interface WishlistItem {
     priority: "low" | "medium" | "high"
     notes: string | null
     target_date: string | null
+    url?: string
     is_purchased: boolean
     purchased_date: string | null
     wallet_id: string | null

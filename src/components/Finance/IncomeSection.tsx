@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Trash2, TrendingUp, X, Briefcase } from "lucide-react"
+import { Plus, Trash2, TrendingUp, X, Briefcase, Repeat, Check } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import type { FinanceEntry, Wallet, CurrencyCode } from "./types"
@@ -11,6 +11,15 @@ interface NetSalaryPreset {
     profileLabel: string
     currency: CurrencyCode
     targetWalletId?: string
+}
+
+export interface RecurringIncomeTemplate {
+    id: string
+    label: string
+    amount: number
+    category: string
+    wallet_id: string
+    day_of_month: number
 }
 
 interface IncomeSectionProps {
@@ -24,12 +33,32 @@ interface IncomeSectionProps {
 
 export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryPreset, onAdd, onDelete }: IncomeSectionProps) {
     const [showForm, setShowForm] = useState(false)
+    const [showRecurringManager, setShowRecurringManager] = useState(false)
+    const [recurringTemplates, setRecurringTemplates] = useState<RecurringIncomeTemplate[]>(() => {
+        try {
+            const stored = localStorage.getItem("finance_recurring_income")
+            if (stored) return JSON.parse(stored)
+        } catch (e) {
+            console.warn("Error loading recurring income templates:", e)
+        }
+        return []
+    })
+
+    const [newRecurring, setNewRecurring] = useState({
+        label: "",
+        amount: "",
+        category: "salary",
+        wallet_id: getDefaultSmartWallet(wallets),
+        day_of_month: "15"
+    })
+
     const [formData, setFormData] = useState({
         date: getLocalDateString(),
         category: "salary",
         description: "",
         amount: "",
         wallet_id: getDefaultSmartWallet(wallets),
+        notes: "",
     })
 
     const activeWalletId = formData.wallet_id || wallets[0]?.id || ""
@@ -50,6 +79,7 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
             amount: parseFloat(formData.amount),
             wallet_id: targetWalletId,
             currency: walletCurrency,
+            notes: formData.notes || undefined,
         })
 
         setFormData({
@@ -58,16 +88,40 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
             description: "",
             amount: "",
             wallet_id: getDefaultSmartWallet(wallets),
+            notes: "",
         })
         setShowForm(false)
     }
 
     const incomeEntries = entries.filter(e => e.type === "income").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
+    const handleAddRecurringTemplate = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newRecurring.label || !newRecurring.amount) return
+        const item: RecurringIncomeTemplate = {
+            id: crypto.randomUUID(),
+            label: newRecurring.label,
+            amount: parseFloat(newRecurring.amount),
+            category: newRecurring.category,
+            wallet_id: newRecurring.wallet_id || wallets[0]?.id || "",
+            day_of_month: parseInt(newRecurring.day_of_month) || 1,
+        }
+        const updated = [...recurringTemplates, item]
+        setRecurringTemplates(updated)
+        localStorage.setItem("finance_recurring_income", JSON.stringify(updated))
+        setNewRecurring({ label: "", amount: "", category: "salary", wallet_id: getDefaultSmartWallet(wallets), day_of_month: "15" })
+    }
+
+    const handleDeleteRecurringTemplate = (id: string) => {
+        const updated = recurringTemplates.filter(t => t.id !== id)
+        setRecurringTemplates(updated)
+        localStorage.setItem("finance_recurring_income", JSON.stringify(updated))
+    }
+
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-emerald-500/10 rounded-xl">
                         <TrendingUp className="h-5 w-5 text-emerald-500" />
@@ -79,20 +133,167 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                         </p>
                     </div>
                 </div>
-                <Button
-                    onClick={() => setShowForm(!showForm)}
-                    className={cn(
-                        "font-bold rounded-xl gap-2 transition-all",
-                        showForm
-                            ? "bg-muted text-muted-foreground hover:bg-muted/80"
-                            : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"
-                    )}
-                    size="sm"
-                >
-                    {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    {showForm ? "Cancel" : "Add Income"}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={() => setShowRecurringManager(!showRecurringManager)}
+                        className="font-bold rounded-xl gap-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20"
+                        size="sm"
+                    >
+                        <Repeat className="h-3.5 w-3.5" />
+                        Recurring
+                    </Button>
+                    <Button
+                        onClick={() => setShowForm(!showForm)}
+                        className={cn(
+                            "font-bold rounded-xl gap-2 transition-all",
+                            showForm
+                                ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                                : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"
+                        )}
+                        size="sm"
+                    >
+                        {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                        {showForm ? "Cancel" : "Add Income"}
+                    </Button>
+                </div>
             </div>
+
+            {/* Recurring Templates Manager Drawer */}
+            <AnimatePresence>
+                {showRecurringManager && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="bg-card/60 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-4 space-y-3 overflow-hidden"
+                    >
+                        <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Repeat className="h-4 w-4 text-emerald-500" /> Manage Scheduled / Recurring Income
+                        </h4>
+
+                        <form onSubmit={handleAddRecurringTemplate} className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+                            <input
+                                type="text"
+                                placeholder="Label (e.g. Monthly Allowance)"
+                                value={newRecurring.label}
+                                onChange={e => setNewRecurring({ ...newRecurring, label: e.target.value })}
+                                className="px-3 py-1.5 bg-background border border-border/60 rounded-xl font-medium focus:outline-none"
+                                required
+                            />
+                            <input
+                                type="number"
+                                step="any"
+                                placeholder="Amount"
+                                value={newRecurring.amount}
+                                onChange={e => setNewRecurring({ ...newRecurring, amount: e.target.value })}
+                                className="px-3 py-1.5 bg-background border border-border/60 rounded-xl font-medium tabular-nums focus:outline-none"
+                                required
+                            />
+                            <input
+                                type="number"
+                                min="1"
+                                max="31"
+                                placeholder="Day of Month (1-31)"
+                                value={newRecurring.day_of_month}
+                                onChange={e => setNewRecurring({ ...newRecurring, day_of_month: e.target.value })}
+                                className="px-3 py-1.5 bg-background border border-border/60 rounded-xl font-medium tabular-nums focus:outline-none"
+                                required
+                            />
+                            <select
+                                value={newRecurring.wallet_id}
+                                onChange={e => setNewRecurring({ ...newRecurring, wallet_id: e.target.value })}
+                                className="px-3 py-1.5 bg-background border border-border/60 rounded-xl font-medium focus:outline-none"
+                            >
+                                {wallets.map(w => (
+                                    <option key={w.id} value={w.id}>{w.name}</option>
+                                ))}
+                            </select>
+                            <Button type="submit" size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl">
+                                + Save Schedule
+                            </Button>
+                        </form>
+
+                        {recurringTemplates.length > 0 && (
+                            <div className="space-y-1.5 pt-2 border-t border-border/10">
+                                {recurringTemplates.map(tmpl => {
+                                    const tmplWallet = wallets.find(w => w.id === tmpl.wallet_id)
+                                    return (
+                                        <div key={tmpl.id} className="flex items-center justify-between p-2 bg-background/60 rounded-xl border border-border/20 text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold">{tmpl.label}</span>
+                                                <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-500 font-bold rounded">
+                                                    Every day {tmpl.day_of_month}
+                                                </span>
+                                                {tmplWallet && <span className="text-muted-foreground text-[10px]">➔ {tmplWallet.name}</span>}
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-black tabular-nums text-emerald-500">+{formatCurrency(tmpl.amount, tmplWallet?.currency || "PHP", showAmounts)}</span>
+                                                <button
+                                                    onClick={() => handleDeleteRecurringTemplate(tmpl.id)}
+                                                    className="p-1 text-muted-foreground/40 hover:text-rose-500 transition-colors"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Quick Recurring Claim Banner */}
+            {(() => {
+                const today = new Date()
+                const currentDay = today.getDate()
+                const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
+
+                const pendingItems = recurringTemplates.filter(tmpl => {
+                    const alreadyLogged = entries.some(e =>
+                        e.type === "income" &&
+                        e.date.startsWith(currentMonthKey) &&
+                        e.description.includes(tmpl.label)
+                    )
+                    return !alreadyLogged && Math.abs(currentDay - tmpl.day_of_month) <= 2
+                })
+
+                if (pendingItems.length === 0) return null
+
+                return (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 space-y-2">
+                        <span className="text-xs font-black uppercase text-emerald-500 flex items-center gap-1.5">
+                            <Repeat className="h-4 w-4" /> Pending Scheduled Income for This Pay Period:
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                            {pendingItems.map(tmpl => {
+                                const tmplWallet = wallets.find(w => w.id === tmpl.wallet_id)
+                                return (
+                                    <button
+                                        key={tmpl.id}
+                                        onClick={() => {
+                                            onAdd({
+                                                type: "income",
+                                                date: getLocalDateString(),
+                                                category: tmpl.category,
+                                                description: `Recurring Income: ${tmpl.label}`,
+                                                amount: tmpl.amount,
+                                                wallet_id: tmpl.wallet_id,
+                                                currency: tmplWallet?.currency || "PHP"
+                                            })
+                                        }}
+                                        className="px-3 py-1.5 bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 hover:bg-emerald-600 shadow-md transition-all"
+                                    >
+                                        <Check className="h-3.5 w-3.5" />
+                                        <span>Claim {tmpl.label} ({formatCurrency(tmpl.amount, tmplWallet?.currency || "PHP", showAmounts)})</span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )
+            })()}
 
             {/* Add Form */}
             <AnimatePresence>
@@ -116,7 +317,8 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                                             category: "salary",
                                             description: `Salary Payout — ${netSalaryPreset.profileLabel}`,
                                             amount: netSalaryPreset.amount.toString(),
-                                            wallet_id: netSalaryPreset.targetWalletId || formData.wallet_id || wallets[0]?.id || ""
+                                            wallet_id: netSalaryPreset.targetWalletId || formData.wallet_id || wallets[0]?.id || "",
+                                            notes: "",
                                         })
                                     }}
                                     className="w-full p-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-left flex items-center justify-between text-xs font-bold transition-all text-emerald-500 group shadow-sm"
@@ -201,6 +403,16 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                                     className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                                 />
                             </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes / Memo (optional)</label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Additional details, invoice numbers, or memos..."
+                                    value={formData.notes}
+                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                                />
+                            </div>
                             <Button
                                 type="submit"
                                 className="w-full bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-500/20"
@@ -238,6 +450,9 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                                     <span className="text-lg">{cat?.emoji || "💰"}</span>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold truncate">{entry.description || cat?.label || "Income"}</p>
+                                        {entry.notes && (
+                                            <p className="text-xs text-muted-foreground/80 italic font-normal truncate">{entry.notes}</p>
+                                        )}
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                             <span>{new Date(entry.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
                                             {wallet && (

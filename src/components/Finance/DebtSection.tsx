@@ -22,7 +22,13 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
     const [expandedDebt, setExpandedDebt] = useState<string | null>(null)
     const [showAddDebt, setShowAddDebt] = useState(false)
     const [paymentModal, setPaymentModal] = useState<string | null>(null)
-    const [newDebt, setNewDebt] = useState({ label: "", total_amount: "" })
+    const [newDebt, setNewDebt] = useState({ 
+        label: "", 
+        total_amount: "",
+        interest_rate: "",
+        due_date: "",
+        min_monthly_payment: ""
+    })
     const [newPayment, setNewPayment] = useState({
         date: getLocalDateString(),
         amount: "",
@@ -48,8 +54,11 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
         onAddDebt({
             label: newDebt.label,
             total_amount: parseFloat(newDebt.total_amount),
+            interest_rate: newDebt.interest_rate ? parseFloat(newDebt.interest_rate) : undefined,
+            due_date: newDebt.due_date || undefined,
+            min_monthly_payment: newDebt.min_monthly_payment ? parseFloat(newDebt.min_monthly_payment) : undefined,
         })
-        setNewDebt({ label: "", total_amount: "" })
+        setNewDebt({ label: "", total_amount: "", interest_rate: "", due_date: "", min_monthly_payment: "" })
         setShowAddDebt(false)
     }
 
@@ -164,6 +173,42 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
                                         onChange={e => setNewDebt({ ...newDebt, total_amount: e.target.value })}
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                                         required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Interest Rate (%/yr, opt)</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
+                                        placeholder="e.g. 5.5"
+                                        value={newDebt.interest_rate}
+                                        onChange={e => setNewDebt({ ...newDebt, interest_rate: e.target.value })}
+                                        className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Due Date (opt)</label>
+                                    <input
+                                        type="date"
+                                        value={newDebt.due_date}
+                                        onChange={e => setNewDebt({ ...newDebt, due_date: e.target.value })}
+                                        className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Min Monthly Pay (opt)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                        value={newDebt.min_monthly_payment}
+                                        onChange={e => setNewDebt({ ...newDebt, min_monthly_payment: e.target.value })}
+                                        className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                                     />
                                 </div>
                             </div>
@@ -288,6 +333,27 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
                                             </span>
                                         </div>
                                     </div>
+
+                                    {/* Additional info badges (Interest, Due date, Min monthly) */}
+                                    {(debt.interest_rate || debt.due_date || debt.min_monthly_payment) && (
+                                        <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+                                            {debt.interest_rate !== undefined && debt.interest_rate > 0 && (
+                                                <span className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/20 text-orange-500 rounded-md">
+                                                    📈 {debt.interest_rate}% APR (~{formatCurrency((remaining * (debt.interest_rate / 100)) / 12, baseCurrency, showAmounts)}/mo interest)
+                                                </span>
+                                            )}
+                                            {debt.due_date && (
+                                                <span className="px-2 py-0.5 bg-sky-500/10 border border-sky-500/20 text-sky-500 rounded-md">
+                                                    📅 Due: {new Date(debt.due_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                                                </span>
+                                            )}
+                                            {debt.min_monthly_payment !== undefined && debt.min_monthly_payment > 0 && (
+                                                <span className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 text-purple-500 rounded-md">
+                                                    💳 Min: {formatCurrency(debt.min_monthly_payment, baseCurrency, showAmounts)}/mo
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Payment history toggle */}
                                     {debtPayments.length > 0 && (

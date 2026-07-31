@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Target, Check, Trash2, X, AlertTriangle, Calendar } from "lucide-react"
+import { Plus, Target, Check, Trash2, X, AlertTriangle, Calendar, ExternalLink } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
@@ -26,6 +26,7 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
         priority: "medium" as "low" | "medium" | "high",
         notes: "",
         target_date: "",
+        url: "",
     })
 
     const [purchaseForm, setPurchaseForm] = useState({
@@ -51,6 +52,7 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
             priority: newWishlist.priority,
             notes: newWishlist.notes || null,
             target_date: newWishlist.target_date || null,
+            url: newWishlist.url || undefined,
         })
 
         setNewWishlist({
@@ -59,6 +61,7 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
             priority: "medium",
             notes: "",
             target_date: "",
+            url: "",
         })
         setShowAddForm(false)
     }
@@ -180,15 +183,27 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes / Description (optional)</label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g. Birthday gift, needs 8GB RAM, specs..."
-                                    value={newWishlist.notes}
-                                    onChange={e => setNewWishlist({ ...newWishlist, notes: e.target.value })}
-                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-                                />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes / Description (optional)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Birthday gift, specs..."
+                                        value={newWishlist.notes}
+                                        onChange={e => setNewWishlist({ ...newWishlist, notes: e.target.value })}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Product Link URL (optional)</label>
+                                    <input
+                                        type="url"
+                                        placeholder="https://shopee.ph/... or https://lazada.com..."
+                                        value={newWishlist.url}
+                                        onChange={e => setNewWishlist({ ...newWishlist, url: e.target.value })}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                                    />
+                                </div>
                             </div>
                             <Button
                                 type="submit"
@@ -240,9 +255,20 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
                                                 </span>
                                             )}
                                         </div>
-                                        <h5 className="font-black text-sm uppercase tracking-tight text-foreground mt-1.5">
-                                            {item.label}
-                                        </h5>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <h4 className="font-black text-sm uppercase tracking-tight">{item.label}</h4>
+                                            {item.url && (
+                                                <a
+                                                    href={item.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sky-500 hover:text-sky-400 p-0.5 rounded transition-colors"
+                                                    title="Open product link"
+                                                >
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                </a>
+                                            )}
+                                        </div>
                                         {item.notes && <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-2">{item.notes}</p>}
                                     </div>
                                     <span className="text-sm font-black tabular-nums text-foreground">

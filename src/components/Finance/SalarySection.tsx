@@ -31,7 +31,7 @@ import {
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode } from "./types"
+import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType } from "./types"
 import { CURRENCIES, formatCurrency } from "./types"
 import {
     getHourlyRate,
@@ -103,11 +103,13 @@ export function SalarySection({
     const [profileFormData, setProfileFormData] = useState({
         label: "Taiwan Factory (2-2)",
         country: "TW" as "TW" | "PH",
-        schedule_type: "2-2" as "2-2" | "5-2" | "custom",
+        schedule_type: "2-2" as ScheduleType,
         shift_hours: 12,
         rate_type: "hourly" as "hourly" | "monthly",
         base_rate: 183,
         custom_monthly_hours: undefined as number | undefined,
+        custom_work_days: undefined as number | undefined,
+        custom_rest_days: undefined as number | undefined,
         currency: "NTD" as CurrencyCode,
         wallet_id: "",
         cycle_start_date: new Date().toISOString().split("T")[0],
@@ -196,14 +198,8 @@ export function SalarySection({
             if (dateStr > todayStr) continue
 
             if (!loggedDatesSet.has(dateStr)) {
-                let isWorkDay = false
-                if (activeProfile.schedule_type === "2-2" && activeProfile.cycle_start_date) {
-                    isWorkDay = is22WorkDay(dateStr, activeProfile.cycle_start_date)
-                } else if (activeProfile.schedule_type === "5-2") {
-                    const dayOfWeek = new Date(dateStr).getDay()
-                    isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5
-                }
-                if (isWorkDay) {
+                const autoType = getAutoDayType(dateStr, activeProfile)
+                if (autoType === "regular") {
                     missing.push(dateStr)
                 }
             }
@@ -222,6 +218,8 @@ export function SalarySection({
                 rate_type: "hourly",
                 base_rate: 183,
                 custom_monthly_hours: undefined,
+                custom_work_days: undefined,
+                custom_rest_days: undefined,
                 currency: "NTD",
                 wallet_id: wallets[0]?.id || "",
                 cycle_start_date: new Date().toISOString().split("T")[0],
@@ -236,6 +234,8 @@ export function SalarySection({
                 rate_type: "monthly",
                 base_rate: 30000,
                 custom_monthly_hours: undefined,
+                custom_work_days: undefined,
+                custom_rest_days: undefined,
                 currency: "PHP",
                 wallet_id: wallets[0]?.id || "",
                 cycle_start_date: "",
@@ -1266,6 +1266,8 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                 rate_type: p.rate_type,
                                                                 base_rate: p.base_rate,
                                                                 custom_monthly_hours: p.custom_monthly_hours,
+                                                                custom_work_days: p.custom_work_days,
+                                                                custom_rest_days: p.custom_rest_days,
                                                                 currency: p.currency,
                                                                 wallet_id: p.wallet_id || "",
                                                                 cycle_start_date: p.cycle_start_date || new Date().toISOString().split("T")[0],
@@ -1380,15 +1382,50 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Schedule</label>
                             <select
                                 value={profileFormData.schedule_type}
-                                onChange={e => setProfileFormData({ ...profileFormData, schedule_type: e.target.value as any })}
+                                onChange={e => setProfileFormData({ ...profileFormData, schedule_type: e.target.value as ScheduleType })}
                                 className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none"
                             >
-                                <option value="2-2">2-2 Rotation (12hr)</option>
-                                <option value="5-2">5-2 Mon-Fri (8hr)</option>
-                                <option value="custom">Custom Schedule</option>
+                                <option value="2-2">🇹🇼 2-2 Rotation (12hr)</option>
+                                <option value="3-3">🇹🇼 3-3 Rotation (12hr)</option>
+                                <option value="4-2">🇹🇼/🇵🇭 4-2 Rotation (8-12hr)</option>
+                                <option value="4-3">🇹🇼/🇵🇭 4-3 Rotation (10-12hr)</option>
+                                <option value="5-2">🇵🇭/🇹🇼 5-2 Mon-Fri (8hr)</option>
+                                <option value="6-1">🇵🇭/🇹🇼 6-1 Schedule (8hr)</option>
+                                <option value="3-shift">🇹🇼/🇵🇭 Rotating 3-Shift (8hr)</option>
+                                <option value="custom">⚙️ Custom Work-Rest Cycle</option>
                             </select>
                         </div>
                     </div>
+
+                    {/* Custom Cycle Work & Rest Days if schedule is custom */}
+                    {profileFormData.schedule_type === "custom" && (
+                        <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 rounded-xl border border-border/30">
+                            <div>
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Work Days in Cycle</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="30"
+                                    value={profileFormData.custom_work_days || 4}
+                                    onChange={e => setProfileFormData({ ...profileFormData, custom_work_days: parseInt(e.target.value) || 1 })}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none font-bold text-xs"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Rest Days in Cycle</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="30"
+                                    value={profileFormData.custom_rest_days || 2}
+                                    onChange={e => setProfileFormData({ ...profileFormData, custom_rest_days: parseInt(e.target.value) || 1 })}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none font-bold text-xs"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-3 gap-3">
                         <div>
@@ -1508,9 +1545,9 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         </select>
                     </div>
 
-                    {profileFormData.schedule_type === "2-2" && (
+                    {profileFormData.schedule_type !== "5-2" && (
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">2-2 Cycle First Work Day</label>
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Cycle Anchor Date (First Work Day)</label>
                             <input
                                 type="date"
                                 value={profileFormData.cycle_start_date || ""}

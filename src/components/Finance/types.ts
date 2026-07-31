@@ -140,7 +140,7 @@ export interface CategoryBudget {
 // ═══════════════════════════════════════════
 
 export type WorkCountry = "TW" | "PH"
-export type ScheduleType = "2-2" | "5-2" | "custom"
+export type ScheduleType = "2-2" | "3-3" | "4-2" | "4-3" | "5-2" | "6-1" | "3-shift" | "custom"
 export type RateType = "hourly" | "monthly"
 export type DayType = "regular" | "rest_day" | "special_holiday" | "regular_holiday" | "typhoon_disaster_day"
 
@@ -153,6 +153,8 @@ export interface WorkProfile {
     rate_type: RateType
     base_rate: number
     custom_monthly_hours?: number
+    custom_work_days?: number
+    custom_rest_days?: number
     currency: CurrencyCode
     wallet_id: string | null
     cycle_start_date: string | null

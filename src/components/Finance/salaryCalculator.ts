@@ -350,26 +350,40 @@ function calculatePHTaxMonthly(annualizedIncome: number): number {
 }
 
 // ═══════════════════════════════════════════
-// PUBLIC: 2-2 Schedule helper
+// PUBLIC: Schedule Rotation Helpers
 // ═══════════════════════════════════════════
 
 /**
- * For a 2-2 schedule, determine if a given date is a work day or rest day.
- * cycleStartDate = the first work day in the rotation
- * Pattern: work, work, rest, rest, work, work, rest, rest...
+ * Determine if a date is a work day for any rotation pattern (X days work, Y days rest)
  */
-export function is22WorkDay(date: string, cycleStartDate: string): boolean {
+export function isRotationWorkDay(
+    date: string,
+    cycleStartDate: string,
+    workDays: number = 2,
+    restDays: number = 2
+): boolean {
+    if (!cycleStartDate) return true
     const d = new Date(date)
     const start = new Date(cycleStartDate)
+    const cycleLength = workDays + restDays
+    if (cycleLength <= 0) return true
+
     const diffDays = Math.floor((d.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-    const positionInCycle = ((diffDays % 4) + 4) % 4 // handle negative modulo
-    return positionInCycle < 2 // 0,1 = work; 2,3 = rest
+    const positionInCycle = ((diffDays % cycleLength) + cycleLength) % cycleLength
+    return positionInCycle < workDays
+}
+
+/**
+ * Backward compatibility alias for 2-2 schedule
+ */
+export function is22WorkDay(date: string, cycleStartDate: string): boolean {
+    return isRotationWorkDay(date, cycleStartDate, 2, 2)
 }
 
 import { checkHoliday } from "./holidays"
 
 /**
- * Get the auto-detected day type for a date (checks National Holidays first, then 2-2 rotation)
+ * Get the auto-detected day type for a date (checks National Holidays first, then schedule rotation)
  */
 export function getAutoDayType(date: string, profile: WorkProfile): DayType {
     // 1. Check if date is a National Statutory Holiday for this country
@@ -378,10 +392,34 @@ export function getAutoDayType(date: string, profile: WorkProfile): DayType {
         return holiday.type
     }
 
-    // 2. If 2-2 schedule, check rotation cycle
-    if (profile.schedule_type === "2-2" && profile.cycle_start_date) {
-        return is22WorkDay(date, profile.cycle_start_date) ? "regular" : "rest_day"
-    }
+    // 2. Evaluate schedule type
+    const startDate = profile.cycle_start_date || date
 
-    return "regular"
+    switch (profile.schedule_type) {
+        case "2-2":
+            return isRotationWorkDay(date, startDate, 2, 2) ? "regular" : "rest_day"
+        case "3-3":
+            return isRotationWorkDay(date, startDate, 3, 3) ? "regular" : "rest_day"
+        case "4-2":
+            return isRotationWorkDay(date, startDate, 4, 2) ? "regular" : "rest_day"
+        case "4-3":
+            return isRotationWorkDay(date, startDate, 4, 3) ? "regular" : "rest_day"
+        case "6-1":
+            return isRotationWorkDay(date, startDate, 6, 1) ? "regular" : "rest_day"
+        case "3-shift":
+            // 3-shift rotation: 6 days work, 2 days rest
+            return isRotationWorkDay(date, startDate, 6, 2) ? "regular" : "rest_day"
+        case "5-2": {
+            // Mon-Fri = regular, Sat-Sun = rest day
+            const dayOfWeek = new Date(date).getDay()
+            return (dayOfWeek >= 1 && dayOfWeek <= 5) ? "regular" : "rest_day"
+        }
+        case "custom": {
+            const workDays = profile.custom_work_days || 2
+            const restDays = profile.custom_rest_days || 2
+            return isRotationWorkDay(date, startDate, workDays, restDays) ? "regular" : "rest_day"
+        }
+        default:
+            return "regular"
+    }
 }

@@ -49,16 +49,48 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
     const currentDay = now.getDate()
     const currentMonthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
 
-    // Calculate bill status based on transaction history of the current month
+    // Manual monthly paid state override (persisted in localStorage)
+    const [manualPaidBills, setManualPaidBills] = useState<string[]>(() => {
+        try {
+            const stored = localStorage.getItem("finance_manual_paid_bills")
+            if (stored) return JSON.parse(stored)
+        } catch (e) {
+            console.warn("Error reading manual paid bills:", e)
+        }
+        return []
+    })
+
+    const handleToggleManualPaid = (billId: string) => {
+        const key = `${currentMonthPrefix}_${billId}`
+        const exists = manualPaidBills.includes(key)
+        const updated = exists ? manualPaidBills.filter(k => k !== key) : [...manualPaidBills, key]
+        setManualPaidBills(updated)
+        localStorage.setItem("finance_manual_paid_bills", JSON.stringify(updated))
+    }
+
+    // Calculate bill status based on transaction history of the current month + manual overrides
     const getBillStatus = (bill: BillTemplate) => {
-        // Find if paid this month
+        const key = `${currentMonthPrefix}_${bill.id}`
+        if (manualPaidBills.includes(key)) {
+            return { status: "paid" as const, daysLeft: 0 }
+        }
+
+        // Find if paid this month via expense entries
         const hasPaid = entries.some(e => {
-            const matchesMonth = e.date.startsWith(currentMonthPrefix)
-            const matchesType = e.type === "expense"
-            // Matches description or label
-            const matchesLabel = e.description.toLowerCase().includes(bill.label.toLowerCase())
-            const matchesCategory = e.category === bill.category && e.amount === bill.amount
-            return matchesMonth && matchesType && (matchesLabel || matchesCategory)
+            if (!e.date.startsWith(currentMonthPrefix) || e.type !== "expense") return false
+            
+            const eDesc = e.description.toLowerCase()
+            const bLabel = bill.label.toLowerCase()
+            
+            // Matches full description, or bill label, or any significant word (>=3 letters) in label
+            const labelWords = bLabel.split(" ").filter(w => w.length >= 3)
+            const matchesLabel = eDesc.includes(bLabel) || labelWords.some(w => eDesc.includes(w))
+            
+            // Matches category + amount within ±30% (handles late penalties or monthly utility bill variations)
+            const amountDiff = Math.abs(e.amount - bill.amount)
+            const matchesCategoryAndAmount = e.category === bill.category && (amountDiff <= bill.amount * 0.3 || e.amount === bill.amount)
+
+            return matchesLabel || matchesCategoryAndAmount
         })
 
         if (hasPaid) {
@@ -394,6 +426,18 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
                                         >
                                             <Edit2 className="h-3.5 w-3.5" />
                                         </button>
+                                        <button
+                                            onClick={() => handleToggleManualPaid(bill.id)}
+                                            className={cn(
+                                                "p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
+                                                info.status === "paid"
+                                                    ? "text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10"
+                                                    : "text-emerald-500 hover:bg-emerald-500/10"
+                                            )}
+                                            title={info.status === "paid" ? "Mark as Unpaid" : "Mark as Paid"}
+                                        >
+                                            {info.status === "paid" ? "Undo Paid" : "Mark Paid"}
+                                        </button>
                                         {info.status !== "paid" && (
                                             <Button
                                                 onClick={() => {
@@ -407,7 +451,7 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
                                                 className="h-8 rounded-xl text-xs font-black uppercase bg-emerald-500 hover:bg-emerald-600 text-white gap-1"
                                             >
                                                 <Check className="h-3 w-3" />
-                                                Pay
+                                                Pay & Log
                                             </Button>
                                         )}
                                     </div>

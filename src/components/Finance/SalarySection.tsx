@@ -29,7 +29,6 @@ import {
     ArrowDownRight,
     Printer,
     Lock,
-    FileText,
     Gift
 } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -1119,6 +1118,9 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                         {payrollSummary.totalHolidayPremium > 0 && (
                                             <div className="flex justify-between">
                                                 <span className="text-purple-500">Holiday Premiums:</span>
+                                                <span className="font-bold tabular-nums text-purple-500">+{formatCurrency(payrollSummary.totalHolidayPremium, activeProfile.currency, showAmounts)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between border-t border-border/30 pt-2 font-black text-sm">
                                             <span>Total Gross Earnings:</span>
                                             <span className="text-emerald-500 tabular-nums">{formatCurrency(payrollSummary.grossPay, activeProfile.currency, showAmounts)}</span>
@@ -1610,7 +1612,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                 {wallets.find(w => w.id === p.wallet_id)?.name || "Not selected"}
                                                             </span>
                                                         </div>
-                                                        {isRotation && (
+                                                        {p.schedule_type !== "5-2" && (
                                                             <div className="flex justify-between">
                                                                 <span>Cycle Start Date:</span>
                                                                 <span className="font-bold text-foreground">{p.cycle_start_date || "Not set"}</span>
@@ -1628,13 +1630,20 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                 </>
             )}
 
-            {/* Delete Confirmation Modal */}
+            {/* Profile Modal */}
             <Modal
-                isOpen={deleteConfirmLogId !== null}
-                onClose={() => setDeleteConfirmLogId(null)}
-                title="Delete Time Log Entry"
+                isOpen={showProfileModal}
+                onClose={() => setShowProfileModal(false)}
+                title={editingProfile ? "Edit Job Profile" : "Create Work Profile"}
                 className="max-w-md"
             >
+                <form onSubmit={handleSaveProfile} className="p-6 space-y-4 text-xs font-medium">
+                    {!editingProfile && (
+                        <div className="flex gap-2 pb-1">
+                            <button
+                                type="button"
+                                onClick={() => handleQuickPreset("TW_2_2")}
+                                className="flex-1 p-2 bg-muted/60 hover:bg-muted rounded-xl border border-border/30 font-bold text-center transition-all"
                             >
                                 🇹🇼 Taiwan 2-2 Factory
                             </button>
@@ -2045,6 +2054,143 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         </Button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* 📄 PRINTABLE PAYSLIP MODAL */}
+            <Modal
+                isOpen={showPrintablePayslip}
+                onClose={() => setShowPrintablePayslip(false)}
+                title={`📄 Payslip — ${new Date(`${selectedMonth}-01`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}`}
+                className="max-w-2xl"
+            >
+                {activeProfile && payrollSummary && (
+                    <div className="p-6 space-y-6">
+                        {/* Printable Area */}
+                        <div id="printable-payslip" className="bg-background border border-border/40 rounded-2xl p-6 space-y-5 text-foreground">
+                            {/* Header */}
+                            <div className="flex justify-between items-start border-b border-border/30 pb-4">
+                                <div>
+                                    <h2 className="text-lg font-black tracking-tight uppercase">PAYSLIP SUMMARY</h2>
+                                    <p className="text-xs font-bold text-muted-foreground">{activeProfile.label} ({activeProfile.country === "TW" ? "Taiwan 🇹🇼" : "Philippines 🇵🇭"})</p>
+                                    <p className="text-[10px] text-muted-foreground">Schedule: {activeProfile.schedule_type} ({activeProfile.shift_hours}h shift)</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-primary/10 text-primary uppercase">
+                                        {kinsenasPeriod === "full" ? "Full Month" : kinsenasPeriod === "kinsenas1" ? "1st Kinsenas (1–15th)" : "2nd Kinsenas (16–End)"}
+                                    </span>
+                                    <p className="text-xs font-bold text-muted-foreground mt-1">
+                                        {new Date(`${selectedMonth}-01`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Earnings Table */}
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-black uppercase tracking-wider text-emerald-500">Earnings</h3>
+                                <table className="w-full text-xs font-medium border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-border/20 text-[10px] uppercase text-muted-foreground text-left">
+                                            <th className="py-1">Description</th>
+                                            <th className="py-1 text-center">Hours / Days</th>
+                                            <th className="py-1 text-right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/10">
+                                        <tr>
+                                            <td className="py-1.5 font-bold">Days Worked</td>
+                                            <td className="py-1.5 text-center">{payrollSummary.totalDaysWorked} days</td>
+                                            <td className="py-1.5 text-right font-bold">—</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="py-1.5">Regular Salary Pay</td>
+                                            <td className="py-1.5 text-center">{payrollSummary.totalRegularHours.toFixed(1)} hrs</td>
+                                            <td className="py-1.5 text-right font-bold tabular-nums">{formatCurrency(payrollSummary.totalRegularPay, activeProfile.currency, showAmounts)}</td>
+                                        </tr>
+                                        {payrollSummary.totalOvertimeHours > 0 && (
+                                            <tr>
+                                                <td className="py-1.5 text-amber-500 font-bold">Overtime Pay</td>
+                                                <td className="py-1.5 text-center">{payrollSummary.totalOvertimeHours.toFixed(1)} hrs</td>
+                                                <td className="py-1.5 text-right font-bold tabular-nums text-amber-500">+{formatCurrency(payrollSummary.totalOvertimePay, activeProfile.currency, showAmounts)}</td>
+                                            </tr>
+                                        )}
+                                        {payrollSummary.totalNightHours > 0 && (
+                                            <tr>
+                                                <td className="py-1.5 text-indigo-400 font-bold">Night Differential Pay</td>
+                                                <td className="py-1.5 text-center">{payrollSummary.totalNightHours.toFixed(1)} hrs</td>
+                                                <td className="py-1.5 text-right font-bold tabular-nums text-indigo-400">+{formatCurrency(payrollSummary.totalNightPay, activeProfile.currency, showAmounts)}</td>
+                                            </tr>
+                                        )}
+                                        {payrollSummary.totalHolidayPremium > 0 && (
+                                            <tr>
+                                                <td className="py-1.5 text-purple-500 font-bold">Holiday Premiums</td>
+                                                <td className="py-1.5 text-center">—</td>
+                                                <td className="py-1.5 text-right font-bold tabular-nums text-purple-500">+{formatCurrency(payrollSummary.totalHolidayPremium, activeProfile.currency, showAmounts)}</td>
+                                            </tr>
+                                        )}
+                                        <tr className="border-t border-border/30 font-black text-sm">
+                                            <td className="py-2">TOTAL GROSS EARNINGS</td>
+                                            <td className="py-2"></td>
+                                            <td className="py-2 text-right text-emerald-500 tabular-nums">{formatCurrency(payrollSummary.grossPay, activeProfile.currency, showAmounts)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Deductions Table */}
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-black uppercase tracking-wider text-rose-500">Deductions</h3>
+                                <table className="w-full text-xs font-medium border-collapse">
+                                    <tbody className="divide-y divide-border/10">
+                                        <tr>
+                                            <td className="py-1.5 text-rose-500">Tax Withholding</td>
+                                            <td className="py-1.5 text-right font-bold tabular-nums text-rose-500">-{formatCurrency(payrollSummary.taxWithheld, activeProfile.currency, showAmounts)}</td>
+                                        </tr>
+                                        {payrollSummary.deductionBreakdown.map((d, i) => (
+                                            <tr key={i}>
+                                                <td className="py-1.5 text-rose-400">{d.label}</td>
+                                                <td className="py-1.5 text-right font-bold tabular-nums text-rose-400">-{formatCurrency(d.amount, activeProfile.currency, showAmounts)}</td>
+                                            </tr>
+                                        ))}
+                                        <tr className="border-t border-border/30 font-black text-xs text-rose-500">
+                                            <td className="py-2">TOTAL DEDUCTIONS</td>
+                                            <td className="py-2 text-right tabular-nums">-{formatCurrency(payrollSummary.taxWithheld + payrollSummary.totalDeductions, activeProfile.currency, showAmounts)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Net Payout Callout */}
+                            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex justify-between items-center">
+                                <div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Net Pay Payout</span>
+                                    <span className="text-xl font-black tabular-nums text-primary tracking-tight">{formatCurrency(payrollSummary.netPay, activeProfile.currency, showAmounts)}</span>
+                                </div>
+                                {activeProfile.currency !== "PHP" && (
+                                    <div className="text-right">
+                                        <span className="text-[10px] font-bold text-muted-foreground block">Remittance Value (Locked FX ₱{remittanceFxRate.toFixed(2)})</span>
+                                        <span className="text-sm font-black tabular-nums text-sky-500">≈ ₱{(payrollSummary.netPay * remittanceFxRate).toLocaleString("en-US", { minimumFractionDigits: 2 })} PHP</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Modal Action Buttons */}
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={() => setShowPrintablePayslip(false)}
+                                className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl"
+                            >
+                                Close
+                            </Button>
+                            <Button
+                                onClick={() => window.print()}
+                                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg gap-2"
+                            >
+                                <Printer className="h-4 w-4" /> Print / Save PDF
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div>
     )

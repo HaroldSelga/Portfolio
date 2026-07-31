@@ -1,10 +1,10 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, X, Star, Globe, RefreshCw } from "lucide-react"
+import { Plus, Edit2, Trash2, AlertTriangle, Building, Smartphone, Banknote, HelpCircle, Save, X, Star, Globe, RefreshCw, Calculator, Calendar as CalendarIcon, DollarSign, ChevronDown, ChevronUp, Check, RotateCcw } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { Wallet, CategoryBudget, CurrencyCode } from "./types"
+import type { Wallet, CategoryBudget, CurrencyCode, WorkProfile, PayrollDeduction } from "./types"
 import { WALLET_TYPES, WALLET_PRESETS, EXPENSE_CATEGORIES, CURRENCIES, formatCurrency } from "./types"
 import {
     getExchangeRates,
@@ -14,6 +14,22 @@ import {
     getDirectRate,
     type ExchangeRates
 } from "./currency"
+import {
+    getComputationConfig,
+    saveComputationConfig,
+    resetComputationConfig,
+    DEFAULT_COMPUTATION_CONFIG,
+    type ComputationConfig,
+    type TWComputationConfig,
+    type PHComputationConfig
+} from "./computationConfig"
+import {
+    getCustomHolidays,
+    addCustomHoliday,
+    deleteCustomHoliday,
+    getAllHolidays,
+    type Holiday
+} from "./holidays"
 
 interface SettingsSectionProps {
     wallets: Wallet[]
@@ -22,6 +38,8 @@ interface SettingsSectionProps {
     customRates: Partial<ExchangeRates>
     baseCurrency: CurrencyCode
     showAmounts?: boolean
+    profiles?: WorkProfile[]
+    deductions?: PayrollDeduction[]
     onAddWallet: (wallet: Omit<Wallet, "id" | "created_at">) => void
     onUpdateWallet: (wallet: Wallet) => void
     onDeleteWallet: (id: string) => void
@@ -29,6 +47,9 @@ interface SettingsSectionProps {
     onDeleteBudget: (id: string) => void
     onUpdateRates: (rates: ExchangeRates, customRates: Partial<ExchangeRates>) => void
     onUpdateBaseCurrency: (currency: CurrencyCode) => void
+    onAddDeduction?: (deduction: Omit<PayrollDeduction, "id" | "created_at">) => void
+    onDeleteDeduction?: (id: string) => void
+    onToggleDeduction?: (id: string) => void
 }
 
 const WALLET_ICONS: Record<string, React.ElementType> = {
@@ -44,6 +65,8 @@ export function SettingsSection({
     customRates,
     baseCurrency,
     showAmounts = true,
+    profiles = [],
+    deductions = [],
     onAddWallet,
     onUpdateWallet,
     onDeleteWallet,
@@ -51,6 +74,9 @@ export function SettingsSection({
     onDeleteBudget,
     onUpdateRates,
     onUpdateBaseCurrency,
+    onAddDeduction,
+    onDeleteDeduction,
+    onToggleDeduction
 }: SettingsSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [showBudgetForm, setShowBudgetForm] = useState(false)
@@ -80,6 +106,31 @@ export function SettingsSection({
     // Custom rates editing state
     const [rateInputs, setRateInputs] = useState<Record<string, string>>({})
     const [isRefreshingRates, setIsRefreshingRates] = useState(false)
+
+    // Computation Config State
+    const [compConfig, setCompConfig] = useState<ComputationConfig>(() => getComputationConfig())
+    const [compNotice, setCompNotice] = useState<string | null>(null)
+    const [showCompSection, setShowCompSection] = useState(false)
+
+    // Holiday Manager State
+    const [showHolidaySection, setShowHolidaySection] = useState(false)
+    const [customHolidays, setCustomHolidays] = useState<Holiday[]>(() => getCustomHolidays())
+    const [newHoliday, setNewHoliday] = useState({
+        date: "",
+        name: "",
+        country: "TW" as "TW" | "PH",
+        type: "regular_holiday" as "regular_holiday" | "special_holiday"
+    })
+    const [holidayCountryFilter, setHolidayCountryFilter] = useState<"TW" | "PH">("TW")
+
+    // Recurring Deductions State
+    const [showDeductionSection, setShowDeductionSection] = useState(false)
+    const [selectedDeductionProfileId, setSelectedDeductionProfileId] = useState<string>(() => profiles[0]?.id || "")
+    const [newDeduction, setNewDeduction] = useState({
+        label: "",
+        amount: "",
+        frequency: "kinsenas" as "monthly" | "kinsenas"
+    })
 
     const handleAddSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -560,6 +611,564 @@ export function SettingsSection({
                         })}
                     </div>
                 )}
+            </div>
+
+            {/* ═══════════════════════════════════════════ */}
+            {/* ⚙️ COMPUTATION CONSTANTS (Editable Tax & Multipliers) */}
+            {/* ═══════════════════════════════════════════ */}
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-md">
+                <div
+                    onClick={() => setShowCompSection(!showCompSection)}
+                    className="flex items-center justify-between cursor-pointer select-none"
+                >
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                            <Calculator className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-black uppercase tracking-tight">Computation Constants & Rates</h4>
+                            <p className="text-[10px] text-muted-foreground font-semibold">Customize OT multipliers, night pay, tax withholding, and legal benchmark hours</p>
+                        </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="p-1 h-8 w-8 rounded-xl">
+                        {showCompSection ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                </div>
+
+                <AnimatePresence>
+                    {showCompSection && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-4 pt-3 border-t border-border/20 overflow-hidden"
+                        >
+                            {compNotice && (
+                                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl text-xs font-bold flex items-center gap-2">
+                                    <Check className="h-4 w-4" /> {compNotice}
+                                </div>
+                            )}
+
+                            {/* 🇹🇼 TAIWAN COMPUTATION SETTINGS */}
+                            <div className="space-y-2">
+                                <h5 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                    🇹🇼 Taiwan Constants (勞基法)
+                                </h5>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">OT Tier 1 (1st 2hrs)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={compConfig.tw.otTier1Multiplier}
+                                            onChange={e => setCompConfig({ ...compConfig, tw: { ...compConfig.tw, otTier1Multiplier: parseFloat(e.target.value) || 0 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">OT Tier 2 (Next 2hrs)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={compConfig.tw.otTier2Multiplier}
+                                            onChange={e => setCompConfig({ ...compConfig, tw: { ...compConfig.tw, otTier2Multiplier: parseFloat(e.target.value) || 0 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Rest Day OT Tier 2 (Hrs 11+)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={compConfig.tw.restDayOtTier2}
+                                            onChange={e => setCompConfig({ ...compConfig, tw: { ...compConfig.tw, restDayOtTier2: parseFloat(e.target.value) || 0 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Night Pay (NT$/hr)</label>
+                                        <input
+                                            type="number"
+                                            step="1"
+                                            value={compConfig.tw.nightDifferentialFlat}
+                                            onChange={e => setCompConfig({ ...compConfig, tw: { ...compConfig.tw, nightDifferentialFlat: parseFloat(e.target.value) || 0 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Tax Withholding Rate (%)</label>
+                                        <input
+                                            type="number"
+                                            step="1"
+                                            value={Math.round(compConfig.tw.withholdingRate * 100)}
+                                            onChange={e => setCompConfig({ ...compConfig, tw: { ...compConfig.tw, withholdingRate: (parseFloat(e.target.value) || 0) / 100 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Monthly Divisor (Hours)</label>
+                                        <input
+                                            type="number"
+                                            step="1"
+                                            value={compConfig.tw.monthlySalaryDivisor}
+                                            onChange={e => setCompConfig({ ...compConfig, tw: { ...compConfig.tw, monthlySalaryDivisor: parseFloat(e.target.value) || 0 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 🇵🇭 PHILIPPINES COMPUTATION SETTINGS */}
+                            <div className="space-y-2 pt-2 border-t border-border/10">
+                                <h5 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                    🇵🇭 Philippines Constants (DOLE & TRAIN)
+                                </h5>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Regular Day OT Multiplier</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={compConfig.ph.otMultiplier}
+                                            onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, otMultiplier: parseFloat(e.target.value) || 0 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Rest Day Multiplier</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={compConfig.ph.restDayBase}
+                                            onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, restDayBase: parseFloat(e.target.value) || 0 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Night Differential (%)</label>
+                                        <input
+                                            type="number"
+                                            step="1"
+                                            value={Math.round(compConfig.ph.nightDifferentialPercent * 100)}
+                                            onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, nightDifferentialPercent: (parseFloat(e.target.value) || 0) / 100 } })}
+                                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">SSS Rate (%) & Monthly Cap (₱)</label>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={compConfig.ph.sssRate * 100}
+                                                onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, sssRate: (parseFloat(e.target.value) || 0) / 100 } })}
+                                                className="px-2 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                                placeholder="%"
+                                            />
+                                            <input
+                                                type="number"
+                                                step="50"
+                                                value={compConfig.ph.sssMonthyCap}
+                                                onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, sssMonthyCap: parseFloat(e.target.value) || 0 } })}
+                                                className="px-2 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                                placeholder="Cap ₱"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">PhilHealth Rate (%) & Cap (₱)</label>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={compConfig.ph.philHealthRate * 100}
+                                                onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, philHealthRate: (parseFloat(e.target.value) || 0) / 100 } })}
+                                                className="px-2 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                                placeholder="%"
+                                            />
+                                            <input
+                                                type="number"
+                                                step="50"
+                                                value={compConfig.ph.philHealthMonthlyCap}
+                                                onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, philHealthMonthlyCap: parseFloat(e.target.value) || 0 } })}
+                                                className="px-2 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                                placeholder="Cap ₱"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-muted-foreground block uppercase">Pag-IBIG Rate (%) & Cap (₱)</label>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={compConfig.ph.pagIbigRate * 100}
+                                                onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, pagIbigRate: (parseFloat(e.target.value) || 0) / 100 } })}
+                                                className="px-2 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                                placeholder="%"
+                                            />
+                                            <input
+                                                type="number"
+                                                step="50"
+                                                value={compConfig.ph.pagIbigMonthlyCap}
+                                                onChange={e => setCompConfig({ ...compConfig, ph: { ...compConfig.ph, pagIbigMonthlyCap: parseFloat(e.target.value) || 0 } })}
+                                                className="px-2 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                                placeholder="Cap ₱"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-2 border-t border-border/20">
+                                <Button
+                                    type="button"
+                                    onClick={() => {
+                                        resetComputationConfig()
+                                        setCompConfig({ ...DEFAULT_COMPUTATION_CONFIG })
+                                        setCompNotice("Restored default legal computation rates!")
+                                        setTimeout(() => setCompNotice(null), 4000)
+                                    }}
+                                    className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl text-xs"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset to Legal Defaults
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={() => {
+                                        saveComputationConfig(compConfig)
+                                        setCompNotice("Saved customized computation rates!")
+                                        setTimeout(() => setCompNotice(null), 4000)
+                                    }}
+                                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs shadow-lg"
+                                >
+                                    <Save className="h-3.5 w-3.5 mr-1.5" /> Save Overrides
+                                </Button>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* ═══════════════════════════════════════════ */}
+            {/* 📅 CUSTOM HOLIDAY MANAGER */}
+            {/* ═══════════════════════════════════════════ */}
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-md">
+                <div
+                    onClick={() => setShowHolidaySection(!showHolidaySection)}
+                    className="flex items-center justify-between cursor-pointer select-none"
+                >
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-500">
+                            <CalendarIcon className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-black uppercase tracking-tight">Holiday Manager (Custom Holidays)</h4>
+                            <p className="text-[10px] text-muted-foreground font-semibold">Add company holidays, local city holidays, or future year holidays</p>
+                        </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="p-1 h-8 w-8 rounded-xl">
+                        {showHolidaySection ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                </div>
+
+                <AnimatePresence>
+                    {showHolidaySection && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-4 pt-3 border-t border-border/20 overflow-hidden"
+                        >
+                            {/* Filter Country Tabs */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex gap-1.5">
+                                    <button
+                                        onClick={() => setHolidayCountryFilter("TW")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-xl text-xs font-bold transition-all",
+                                            holidayCountryFilter === "TW" ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground"
+                                        )}
+                                    >
+                                        🇹🇼 Taiwan
+                                    </button>
+                                    <button
+                                        onClick={() => setHolidayCountryFilter("PH")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-xl text-xs font-bold transition-all",
+                                            holidayCountryFilter === "PH" ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground"
+                                        )}
+                                    >
+                                        🇵🇭 Philippines
+                                    </button>
+                                </div>
+                                <span className="text-[10px] font-bold text-muted-foreground">
+                                    {customHolidays.filter(h => h.country === holidayCountryFilter).length} custom holidays added
+                                </span>
+                            </div>
+
+                            {/* Add Custom Holiday Form */}
+                            <form
+                                onSubmit={e => {
+                                    e.preventDefault()
+                                    if (!newHoliday.date || !newHoliday.name) return
+                                    const updated = addCustomHoliday({
+                                        date: newHoliday.date,
+                                        name: newHoliday.name,
+                                        country: newHoliday.country,
+                                        type: newHoliday.type
+                                    })
+                                    setCustomHolidays(updated)
+                                    setNewHoliday({ date: "", name: "", country: holidayCountryFilter, type: "regular_holiday" })
+                                }}
+                                className="bg-muted/40 p-3 rounded-xl border border-border/20 space-y-2.5"
+                            >
+                                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">➕ Add New Holiday</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                    <input
+                                        type="date"
+                                        value={newHoliday.date}
+                                        onChange={e => setNewHoliday({ ...newHoliday, date: e.target.value, country: holidayCountryFilter })}
+                                        className="px-2.5 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold"
+                                        required
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Holiday Name (e.g. Company Anniversary)"
+                                        value={newHoliday.name}
+                                        onChange={e => setNewHoliday({ ...newHoliday, name: e.target.value, country: holidayCountryFilter })}
+                                        className="sm:col-span-2 px-2.5 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-medium"
+                                        required
+                                    />
+                                    <select
+                                        value={newHoliday.type}
+                                        onChange={e => setNewHoliday({ ...newHoliday, type: e.target.value as any })}
+                                        className="px-2.5 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold"
+                                    >
+                                        <option value="regular_holiday">Regular Holiday</option>
+                                        <option value="special_holiday">Special Holiday</option>
+                                    </select>
+                                </div>
+                                <Button type="submit" size="sm" className="w-full bg-primary text-primary-foreground font-bold rounded-xl text-xs">
+                                    <Plus className="h-3.5 w-3.5 mr-1" /> Save Custom Holiday
+                                </Button>
+                            </form>
+
+                            {/* Holiday List */}
+                            <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1">
+                                {getAllHolidays()
+                                    .filter(h => h.country === holidayCountryFilter)
+                                    .map((h, i) => (
+                                        <div
+                                            key={`${h.date}-${h.country}-${i}`}
+                                            className="flex items-center justify-between p-2 rounded-xl bg-background border border-border/20 text-xs"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="font-bold text-sky-500 tabular-nums shrink-0">{h.date}</span>
+                                                <span className="font-semibold truncate">{h.name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <span className={cn(
+                                                    "text-[9px] font-black uppercase px-2 py-0.5 rounded-md",
+                                                    h.type === "regular_holiday" ? "bg-rose-500/10 text-rose-500" : "bg-amber-500/10 text-amber-500"
+                                                )}>
+                                                    {h.type === "regular_holiday" ? "Regular" : "Special"}
+                                                </span>
+                                                {h.isCustom ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const updated = deleteCustomHoliday(h.date, h.country)
+                                                            setCustomHolidays(updated)
+                                                        }}
+                                                        className="p-1 text-rose-500 hover:bg-rose-500/10 rounded-lg"
+                                                        title="Delete custom holiday"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Official</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* ═══════════════════════════════════════════ */}
+            {/* 💸 RECURRING PAYROLL DEDUCTIONS (Kinsenas / Monthly) */}
+            {/* ═══════════════════════════════════════════ */}
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-md">
+                <div
+                    onClick={() => setShowDeductionSection(!showDeductionSection)}
+                    className="flex items-center justify-between cursor-pointer select-none"
+                >
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-rose-500/10 rounded-xl text-rose-500">
+                            <DollarSign className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-black uppercase tracking-tight">Recurring Payroll Deductions</h4>
+                            <p className="text-[10px] text-muted-foreground font-semibold">Manage cash advances, loans, dormitory, SSS/PhilHealth/PagIBIG monthly or kinsenas deductions</p>
+                        </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="p-1 h-8 w-8 rounded-xl">
+                        {showDeductionSection ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                </div>
+
+                <AnimatePresence>
+                    {showDeductionSection && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-4 pt-3 border-t border-border/20 overflow-hidden"
+                        >
+                            {/* Profile Selector */}
+                            {profiles.length > 0 && (
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                                        Select Work Profile
+                                    </label>
+                                    <select
+                                        value={selectedDeductionProfileId}
+                                        onChange={e => setSelectedDeductionProfileId(e.target.value)}
+                                        className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold"
+                                    >
+                                        {profiles.map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.label} ({p.country === "TW" ? "Taiwan 🇹🇼" : "Philippines 🇵🇭"})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Add Deduction Form */}
+                            <form
+                                onSubmit={e => {
+                                    e.preventDefault()
+                                    if (!newDeduction.label || !newDeduction.amount || !selectedDeductionProfileId) return
+                                    onAddDeduction?.({
+                                        profile_id: selectedDeductionProfileId,
+                                        label: newDeduction.label,
+                                        amount: parseFloat(newDeduction.amount) || 0,
+                                        frequency: newDeduction.frequency,
+                                        is_active: true
+                                    })
+                                    setNewDeduction({ label: "", amount: "", frequency: "kinsenas" })
+                                }}
+                                className="bg-muted/40 p-3 rounded-xl border border-border/20 space-y-2.5"
+                            >
+                                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">➕ Add New Recurring Deduction</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Label (e.g. SSS, Cash Advance)"
+                                        value={newDeduction.label}
+                                        onChange={e => setNewDeduction({ ...newDeduction, label: e.target.value })}
+                                        className="px-2.5 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-medium"
+                                        required
+                                    />
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        placeholder="Amount per deduction"
+                                        value={newDeduction.amount}
+                                        onChange={e => setNewDeduction({ ...newDeduction, amount: e.target.value })}
+                                        className="px-2.5 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums"
+                                        required
+                                    />
+                                    <select
+                                        value={newDeduction.frequency}
+                                        onChange={e => setNewDeduction({ ...newDeduction, frequency: e.target.value as any })}
+                                        className="px-2.5 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold"
+                                    >
+                                        <option value="kinsenas">Kinsenas (2x / month)</option>
+                                        <option value="monthly">Monthly (1x / month)</option>
+                                    </select>
+                                </div>
+
+                                {/* Presets */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] font-bold text-muted-foreground uppercase">Presets:</span>
+                                    {[
+                                        { label: "SSS", amount: 1350, freq: "monthly" },
+                                        { label: "PhilHealth", amount: 500, freq: "monthly" },
+                                        { label: "Pag-IBIG", amount: 200, freq: "monthly" },
+                                        { label: "Cash Advance (Vale)", amount: 1000, freq: "kinsenas" },
+                                        { label: "Dormitory Fee", amount: 2500, freq: "monthly" },
+                                    ].map(preset => (
+                                        <button
+                                            key={preset.label}
+                                            type="button"
+                                            onClick={() => setNewDeduction({ label: preset.label, amount: String(preset.amount), frequency: preset.freq as any })}
+                                            className="px-2 py-0.5 bg-background border border-border/40 hover:bg-muted rounded-md text-[10px] font-bold text-muted-foreground transition-all"
+                                        >
+                                            + {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <Button type="submit" size="sm" className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs shadow-md">
+                                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Payroll Deduction
+                                </Button>
+                            </form>
+
+                            {/* Active Deductions List */}
+                            <div className="space-y-1.5">
+                                {deductions.filter(d => d.profile_id === selectedDeductionProfileId).length === 0 ? (
+                                    <div className="text-center py-4 text-xs font-bold text-muted-foreground">
+                                        No recurring deductions added for this profile.
+                                    </div>
+                                ) : (
+                                    deductions
+                                        .filter(d => d.profile_id === selectedDeductionProfileId)
+                                        .map(ded => (
+                                            <div
+                                                key={ded.id}
+                                                className={cn(
+                                                    "flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all",
+                                                    ded.is_active ? "bg-background border-border/30" : "bg-muted/20 border-border/10 opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={ded.is_active}
+                                                        onChange={() => onToggleDeduction?.(ded.id)}
+                                                        className="rounded text-rose-500 focus:ring-rose-500/20"
+                                                    />
+                                                    <div>
+                                                        <span className="font-bold block">{ded.label}</span>
+                                                        <span className="text-[9px] font-bold uppercase text-muted-foreground">
+                                                            {ded.frequency === "kinsenas" ? "Kinsenas (2x/mo)" : "Monthly (1x/mo)"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-black tabular-nums text-rose-500">
+                                                        -{ded.amount.toLocaleString()} / {ded.frequency === "kinsenas" ? "half" : "mo"}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onDeleteDeduction?.(ded.id)}
+                                                        className="p-1 text-muted-foreground/40 hover:text-rose-500 transition-colors"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             {/* Edit Wallet Modal */}

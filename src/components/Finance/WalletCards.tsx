@@ -128,13 +128,13 @@ export function WalletCards({
     return (
         <div className="space-y-4">
             {/* Total Balance Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-primary/10 rounded-xl">
                         <Wallet className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 flex-wrap">
                             Total Portfolio Balance <span className="text-[10px] px-1.5 py-0.2 bg-muted rounded font-black">{baseConfig.flag} {baseCurrency}</span>
                         </p>
                         <p className={cn(
@@ -148,7 +148,7 @@ export function WalletCards({
                 {wallets.length >= 2 && (
                     <button
                         onClick={onTransfer}
-                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted border border-border/40 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground transition-all shadow-sm"
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted border border-border/40 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground transition-all shadow-sm self-start sm:self-auto"
                     >
                         <ArrowRightLeft className="h-4 w-4" />
                         <span>Transfer</span>
@@ -157,7 +157,7 @@ export function WalletCards({
             </div>
 
             {/* Wallet Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {wallets.map((wallet, index) => {
                     const Icon = WALLET_ICONS[wallet.icon] || HelpCircle
                     const colors = getWalletTheme(wallet.name, wallet.icon)

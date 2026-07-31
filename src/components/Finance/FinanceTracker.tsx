@@ -31,7 +31,7 @@ import { WishlistSection } from "./WishlistSection"
 import { SettingsSection } from "./SettingsSection"
 import { FundsSection } from "./FundsSection"
 import { SalarySection } from "./SalarySection"
-import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, CategoryBudget, CurrencyCode, WorkProfile, TimeLog } from "./types"
+import type { Wallet, FinanceEntry, Debt, DebtPayment, BillTemplate, WishlistItem, SavingsFund, CategoryBudget, CurrencyCode, WorkProfile, TimeLog, PayrollDeduction } from "./types"
 import { CURRENCIES, formatCurrency } from "./types"
 import {
     getExchangeRates,
@@ -79,6 +79,15 @@ export default function FinanceTracker() {
     const [budgets, setBudgets] = useState<CategoryBudget[]>([])
     const [workProfiles, setWorkProfiles] = useState<WorkProfile[]>([])
     const [timeLogs, setTimeLogs] = useState<TimeLog[]>([])
+    const [payrollDeductions, setPayrollDeductions] = useState<PayrollDeduction[]>(() => {
+        try {
+            const stored = localStorage.getItem("finance_payroll_deductions")
+            if (stored) return JSON.parse(stored)
+        } catch (e) {
+            console.warn("Error loading payroll deductions:", e)
+        }
+        return []
+    })
 
     // Load rates on mount
     useEffect(() => {
@@ -264,13 +273,38 @@ export default function FinanceTracker() {
     // Add finance entry (income or expense)
     const handleAddEntry = async (entry: Omit<FinanceEntry, "id" | "created_at">) => {
         try {
+            let insertedData: FinanceEntry | null = null
+
+            // Try inserting full entry
             const { data, error } = await supabase
                 .from("finance_entries")
                 .insert(entry)
                 .select()
                 .single()
 
-            if (error) throw error
+            if (error) {
+                // If column error or schema mismatch (e.g. 400 for unknown currency column), retry with core fields
+                const { currency, exchange_rate, ...coreEntry } = entry as any
+                const { data: retryData, error: retryError } = await supabase
+                    .from("finance_entries")
+                    .insert(coreEntry)
+                    .select()
+                    .single()
+
+                if (retryError) {
+                    console.warn("Supabase entry insert warning, using local state fallback:", retryError)
+                } else {
+                    insertedData = retryData
+                }
+            } else {
+                insertedData = data
+            }
+
+            const finalEntry: FinanceEntry = insertedData || {
+                ...entry,
+                id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
+                created_at: new Date().toISOString()
+            }
 
             // Update wallet balance
             const wallet = wallets.find(w => w.id === entry.wallet_id)
@@ -279,17 +313,21 @@ export default function FinanceTracker() {
                     ? wallet.balance + entry.amount
                     : wallet.balance - entry.amount
 
-                await supabase
-                    .from("wallets")
-                    .update({ balance: newBalance })
-                    .eq("id", entry.wallet_id)
+                try {
+                    await supabase
+                        .from("wallets")
+                        .update({ balance: newBalance })
+                        .eq("id", entry.wallet_id)
+                } catch (err) {
+                    console.warn("Updating wallet balance in Supabase failed, updated locally:", err)
+                }
 
                 setWallets(prev => prev.map(w =>
                     w.id === entry.wallet_id ? { ...w, balance: newBalance } : w
                 ))
             }
 
-            if (data) setEntries(prev => [data, ...prev])
+            setEntries(prev => [finalEntry, ...prev])
         } catch (e) {
             console.error("Error adding entry:", e)
         }
@@ -1116,7 +1154,7 @@ export default function FinanceTracker() {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="flex gap-1 bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-1.5 overflow-x-auto scrollbar-none"
+                    className="flex gap-1.5 bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-1.5 overflow-x-auto scrollbar-none"
                 >
                     {TABS.map(tab => {
                         const isActive = activeTab === tab.key
@@ -1125,7 +1163,7 @@ export default function FinanceTracker() {
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key)}
                                 className={cn(
-                                    "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 justify-center",
+                                    "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 justify-center",
                                     isActive
                                         ? "bg-background shadow-lg text-foreground font-black"
                                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -1188,6 +1226,7 @@ export default function FinanceTracker() {
                                     showAmounts={showAmounts}
                                     baseCurrency={baseCurrency}
                                     rates={rates}
+                                    deductions={payrollDeductions}
                                     onAddProfile={handleAddProfile}
                                     onUpdateProfile={handleUpdateProfile}
                                     onDeleteProfile={handleDeleteProfile}
@@ -1274,6 +1313,8 @@ export default function FinanceTracker() {
                                     customRates={customRates}
                                     baseCurrency={baseCurrency}
                                     showAmounts={showAmounts}
+                                    profiles={workProfiles}
+                                    deductions={payrollDeductions}
                                     onAddWallet={handleAddWallet}
                                     onUpdateWallet={handleUpdateWallet}
                                     onDeleteWallet={handleDeleteWallet}
@@ -1284,6 +1325,9 @@ export default function FinanceTracker() {
                                         setCustomRates(newCustom)
                                     }}
                                     onUpdateBaseCurrency={newCurr => setBaseCurrency(newCurr)}
+                                    onAddDeduction={handleAddDeduction}
+                                    onDeleteDeduction={handleDeleteDeduction}
+                                    onToggleDeduction={handleToggleDeduction}
                                 />
                             )}
                         </motion.div>

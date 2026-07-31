@@ -34,7 +34,8 @@ export function ExpenseSection({
         wallet_id: wallets[0]?.id || "",
     })
 
-    const selectedWallet = wallets.find(w => w.id === formData.wallet_id)
+    const activeWalletId = formData.wallet_id || wallets[0]?.id || ""
+    const selectedWallet = wallets.find(w => w.id === activeWalletId)
     const walletCurrency: CurrencyCode = selectedWallet?.currency || "PHP"
     const currInfo = CURRENCIES[walletCurrency] || CURRENCIES.PHP
 
@@ -83,7 +84,8 @@ export function ExpenseSection({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!formData.amount || !formData.wallet_id) return
+        const targetWalletId = activeWalletId
+        if (!formData.amount || !targetWalletId) return
 
         onAdd({
             type: "expense",
@@ -91,7 +93,7 @@ export function ExpenseSection({
             category: formData.category,
             description: formData.description || EXPENSE_CATEGORIES.find(c => c.value === formData.category)?.label || "Expense",
             amount: parseFloat(formData.amount),
-            wallet_id: formData.wallet_id,
+            wallet_id: targetWalletId,
             currency: walletCurrency,
         })
 
@@ -236,7 +238,7 @@ export function ExpenseSection({
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Pay From Wallet</label>
                                     <select
-                                        value={formData.wallet_id}
+                                        value={activeWalletId}
                                         onChange={e => setFormData({ ...formData, wallet_id: e.target.value })}
                                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
                                     >

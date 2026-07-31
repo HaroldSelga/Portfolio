@@ -31,8 +31,9 @@ import {
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType } from "./types"
+import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType, PayrollDeduction } from "./types"
 import { CURRENCIES, formatCurrency } from "./types"
+import { getComputationConfig } from "./computationConfig"
 import {
     getHourlyRate,
     getMonthlySalary,
@@ -76,6 +77,7 @@ interface SalarySectionProps {
     showAmounts: boolean
     baseCurrency: CurrencyCode
     rates?: ExchangeRates
+    deductions?: PayrollDeduction[]
     onAddProfile: (profile: Omit<WorkProfile, "id" | "created_at">) => Promise<void>
     onUpdateProfile: (id: string, profile: Partial<WorkProfile>) => Promise<void>
     onDeleteProfile: (id: string) => Promise<void>
@@ -92,6 +94,7 @@ export function SalarySection({
     wallets,
     showAmounts,
     rates,
+    deductions = [],
     onAddProfile,
     onUpdateProfile,
     onDeleteProfile,
@@ -167,8 +170,8 @@ export function SalarySection({
     // Calculate monthly payroll summary
     const payrollSummary = useMemo(() => {
         if (!activeProfile) return null
-        return calculatePayroll(monthlyLogs, activeProfile)
-    }, [monthlyLogs, activeProfile])
+        return calculatePayroll(monthlyLogs, activeProfile, deductions)
+    }, [monthlyLogs, activeProfile, deductions])
 
     // Calculate previous month payroll summary for monthly comparison
     const prevMonthPayrollSummary = useMemo(() => {
@@ -178,8 +181,8 @@ export function SalarySection({
         const prevMonthStr = `${prevD.getFullYear()}-${String(prevD.getMonth() + 1).padStart(2, "0")}`
         const prevLogs = profileLogs.filter(l => l.date.startsWith(prevMonthStr))
         if (prevLogs.length === 0) return null
-        return calculatePayroll(prevLogs, activeProfile)
-    }, [profileLogs, selectedMonth, activeProfile])
+        return calculatePayroll(prevLogs, activeProfile, deductions)
+    }, [profileLogs, selectedMonth, activeProfile, deductions])
 
     // Calculate annual tax estimate
     const taxEstimate = useMemo(() => {
@@ -382,7 +385,9 @@ EARNINGS BREAKDOWN:
 ${payrollSummary.totalHolidayPremium > 0 ? `• Holiday Premiums: ➔ ${formatCurrency(payrollSummary.totalHolidayPremium, currency)}\n` : ""}
 ──────────────────────────────────────
 GROSS EARNINGS: ${formatCurrency(payrollSummary.grossPay, currency)}
-TAX WITHHELD: -${formatCurrency(payrollSummary.taxWithheld, currency)}
+DEDUCTIONS:
+• Tax Withheld: -${formatCurrency(payrollSummary.taxWithheld, currency)}
+${payrollSummary.deductionBreakdown.map(d => `• ${d.label}: -${formatCurrency(d.amount, currency)}`).join("\n")}
 ──────────────────────────────────────
 NET PAYOUT: ${formatCurrency(payrollSummary.netPay, currency)}
 ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PHP` : ""}
@@ -712,7 +717,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
 
                             {/* Monthly Quick Stats */}
                             {payrollSummary && (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                                     <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3.5">
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Days Logged</span>
                                         <span className="text-lg font-black tabular-nums">{payrollSummary.totalDaysWorked} days</span>
@@ -788,7 +793,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5 font-medium">
+                                                                <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5 font-medium flex-wrap">
                                                                     <span>Total: {dayCalc.totalHours.toFixed(1)}h</span>
                                                                     {dayCalc.overtimeHours > 0 && <span className="text-amber-500 font-bold">OT: {dayCalc.overtimeHours.toFixed(1)}h</span>}
                                                                     {dayCalc.nightHours > 0 && <span className="text-indigo-400 font-bold">Night: {dayCalc.nightHours.toFixed(1)}h</span>}
@@ -824,7 +829,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                             ) : (
                                 /* Calendar Grid View */
                                 <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3">
-                                    <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+                                    <div className="flex justify-between items-center text-xs font-bold text-muted-foreground flex-wrap gap-2">
                                         <span>Monthly Shift Calendar</span>
                                         <div className="flex items-center gap-3 text-[10px]">
                                             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Regular</span>
@@ -833,8 +838,9 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                         </div>
                                     </div>
 
-                                    {/* 7-column calendar grid */}
-                                    <div className="grid grid-cols-7 gap-1 text-center">
+                                    {/* 7-column calendar grid wrapper for mobile horizontal scrolling */}
+                                    <div className="overflow-x-auto pb-2 scrollbar-none">
+                                        <div className="grid grid-cols-7 gap-1 text-center min-w-[560px] md:min-w-full">
                                         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
                                             <div key={d} className="text-[10px] font-bold text-muted-foreground uppercase py-1">
                                                 {d}
@@ -917,6 +923,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                 </>
                                             )
                                         })()}
+                                    </div>
                                     </div>
                                 </div>
                             )}
@@ -1036,9 +1043,6 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                         {payrollSummary.totalHolidayPremium > 0 && (
                                             <div className="flex justify-between">
                                                 <span className="text-purple-500">Holiday Premiums:</span>
-                                                <span className="font-bold tabular-nums text-purple-500">+{formatCurrency(payrollSummary.totalHolidayPremium, activeProfile.currency, showAmounts)}</span>
-                                            </div>
-                                        )}
                                         <div className="flex justify-between border-t border-border/30 pt-2 font-black text-sm">
                                             <span>Total Gross Earnings:</span>
                                             <span className="text-emerald-500 tabular-nums">{formatCurrency(payrollSummary.grossPay, activeProfile.currency, showAmounts)}</span>
@@ -1055,6 +1059,22 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                 -{formatCurrency(payrollSummary.taxWithheld, activeProfile.currency, showAmounts)}
                                             </span>
                                         </div>
+                                        {payrollSummary.deductionBreakdown.map((d, i) => (
+                                            <div key={i} className="flex justify-between">
+                                                <span className="text-rose-400">{d.label}:</span>
+                                                <span className="font-bold tabular-nums text-rose-400">
+                                                    -{formatCurrency(d.amount, activeProfile.currency, showAmounts)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                        {payrollSummary.totalDeductions > 0 && (
+                                            <div className="flex justify-between border-t border-border/20 pt-1 font-bold text-xs">
+                                                <span className="text-rose-500">Total All Deductions:</span>
+                                                <span className="tabular-nums text-rose-500">
+                                                    -{formatCurrency(payrollSummary.taxWithheld + payrollSummary.totalDeductions, activeProfile.currency, showAmounts)}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between border-t border-border/30 pt-2">
                                             <span>
                                                 {activeProfile.country === "PH" ? "13th Month Accrued This Month:" : "Year-End Bonus Estimate:"}
@@ -1380,12 +1400,12 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                             {/* Comprehensive Rate Summary Card */}
                                             {(() => {
                                                 const dRate = getDailyRate(p)
-                                                const isRotation = p.schedule_type !== "5-2"
-                                                // OT multiplier rates
-                                                const ot1Rate = hRate * (p.country === "TW" ? 1.34 : 1.25)
-                                                const ot2Rate = hRate * (p.country === "TW" ? 1.67 : 1.25)
-                                                const nightRate = p.country === "TW" ? 20 : hRate * 0.10
-                                                const holidayMultiplier = 2.0
+                                                const cfg = getComputationConfig()
+                                                const isTW = p.country === "TW"
+                                                const ot1Rate = hRate * (isTW ? cfg.tw.otTier1Multiplier : cfg.ph.otMultiplier)
+                                                const ot2Rate = hRate * (isTW ? cfg.tw.otTier2Multiplier : cfg.ph.otMultiplier)
+                                                const nightRate = isTW ? cfg.tw.nightDifferentialFlat : hRate * cfg.ph.nightDifferentialPercent
+                                                const holidayMultiplier = isTW ? cfg.tw.holidayMultiplier : cfg.ph.holidayMultiplier
 
                                                 return (
                                                     <div className="border-t border-border/20 pt-2 text-xs space-y-1.5 font-medium text-muted-foreground">
@@ -1403,7 +1423,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                 <span className="font-black text-amber-500 tabular-nums">{formatCurrency(dRate, p.currency)} / day</span>
                                                             </div>
                                                             <div>
-                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">Holiday Rate (2.0x)</span>
+                                                                <span className="text-[9px] uppercase font-bold text-muted-foreground block">Holiday Rate ({holidayMultiplier}x)</span>
                                                                 <span className="font-black text-rose-500 tabular-nums">{formatCurrency(hRate * holidayMultiplier * p.shift_hours, p.currency)} / day</span>
                                                             </div>
                                                         </div>
@@ -1412,19 +1432,19 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                         <div className="bg-muted/40 p-2.5 rounded-xl border border-border/20 grid grid-cols-3 gap-2 text-[11px]">
                                                             <div>
                                                                 <span className="text-[9px] uppercase font-bold text-muted-foreground block">
-                                                                    OT 1st 2hrs ({p.country === "TW" ? "1.34x" : "1.25x"})
+                                                                    OT 1st 2hrs ({isTW ? `${cfg.tw.otTier1Multiplier}x` : `${cfg.ph.otMultiplier}x`})
                                                                 </span>
                                                                 <span className="font-black text-amber-500 tabular-nums">{formatCurrency(ot1Rate, p.currency)} / hr</span>
                                                             </div>
                                                             <div>
                                                                 <span className="text-[9px] uppercase font-bold text-muted-foreground block">
-                                                                    OT Next ({p.country === "TW" ? "1.67x" : "1.25x"})
+                                                                    OT Next ({isTW ? `${cfg.tw.otTier2Multiplier}x` : `${cfg.ph.otMultiplier}x`})
                                                                 </span>
                                                                 <span className="font-black text-amber-500 tabular-nums">{formatCurrency(ot2Rate, p.currency)} / hr</span>
                                                             </div>
                                                             <div>
                                                                 <span className="text-[9px] uppercase font-bold text-muted-foreground block">
-                                                                    Night Diff ({p.country === "TW" ? "NT$20/hr" : "10%"})
+                                                                    Night Diff ({isTW ? `NT$${cfg.tw.nightDifferentialFlat}/hr` : `${cfg.ph.nightDifferentialPercent * 100}%`})
                                                                 </span>
                                                                 <span className="font-black text-indigo-400 tabular-nums">+{formatCurrency(nightRate, p.currency)} / hr</span>
                                                             </div>
@@ -1501,7 +1521,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Country Law</label>
                             <select
@@ -1556,7 +1576,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
 
                     {/* Custom Cycle Work & Rest Days if schedule is custom */}
                     {profileFormData.schedule_type === "custom" && (
-                        <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 rounded-xl border border-border/30">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-muted/40 rounded-xl border border-border/30">
                             <div>
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Work Days in Cycle</label>
                                 <input
@@ -1584,7 +1604,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         </div>
                     )}
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Rate Type</label>
                             <select
@@ -1659,7 +1679,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                 </div>
 
                                 {/* Primary Rates Row */}
-                                <div className="grid grid-cols-3 gap-2 border-t border-border/20 pt-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-t border-border/20 pt-2">
                                     <div className="bg-background/80 p-2 rounded-lg border border-border/30">
                                         <span className="text-[9px] text-muted-foreground font-bold uppercase block">Monthly Base</span>
                                         <span className="text-xs font-black text-sky-500 tabular-nums">
@@ -1681,7 +1701,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                 </div>
 
                                 {/* Overtime & Night Premium Rates Row */}
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     <div className="bg-background/80 p-2 rounded-lg border border-border/30">
                                         <span className="text-[9px] text-amber-500 font-bold uppercase block">
                                             OT 1st 2h ({profileFormData.country === "TW" ? "1.34x" : "1.25x"})

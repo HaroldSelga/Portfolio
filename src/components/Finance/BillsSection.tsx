@@ -127,16 +127,19 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
         setEditModalBill(null)
     }
 
+    const activePayWalletId = selectedWalletId || wallets[0]?.id || ""
+
     const handlePayConfirm = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!payModalBill || !selectedWalletId || !payAmount) return
+        const targetWalletId = activePayWalletId
+        if (!payModalBill || !targetWalletId || !payAmount) return
 
         onPayBill(
             {
                 ...payModalBill,
                 amount: parseFloat(payAmount),
             },
-            selectedWalletId
+            targetWalletId
         )
         setPayModalBill(null)
     }
@@ -459,7 +462,7 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
                     <div>
                         <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Pay from Wallet</label>
                         <select
-                            value={selectedWalletId}
+                            value={activePayWalletId}
                             onChange={e => setSelectedWalletId(e.target.value)}
                             className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                             required
@@ -480,7 +483,7 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
                         </Button>
                         <Button
                             type="submit"
-                            disabled={!selectedWalletId || !payAmount}
+                            disabled={!activePayWalletId || !payAmount}
                             className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-500/20"
                         >
                             Confirm Payment

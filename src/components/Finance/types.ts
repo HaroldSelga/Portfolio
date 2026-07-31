@@ -202,10 +202,22 @@ export interface PayrollSummary {
     totalHolidayPremium: number
     grossPay: number
     taxWithheld: number
+    totalDeductions: number
+    deductionBreakdown: { label: string; amount: number }[]
     netPay: number
     thirteenthMonthAccrued: number
     yearEndBonusEstimate: number
     days: DayPayBreakdown[]
+}
+
+export interface PayrollDeduction {
+    id: string
+    profile_id: string
+    label: string
+    amount: number
+    frequency: "monthly" | "kinsenas"
+    is_active: boolean
+    created_at: string
 }
 
 export interface TaxEstimate {

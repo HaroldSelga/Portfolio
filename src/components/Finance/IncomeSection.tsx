@@ -24,13 +24,15 @@ export function IncomeSection({ entries, wallets, showAmounts = true, onAdd, onD
         wallet_id: wallets[0]?.id || "",
     })
 
-    const selectedWallet = wallets.find(w => w.id === formData.wallet_id)
+    const activeWalletId = formData.wallet_id || wallets[0]?.id || ""
+    const selectedWallet = wallets.find(w => w.id === activeWalletId)
     const walletCurrency: CurrencyCode = selectedWallet?.currency || "PHP"
     const currInfo = CURRENCIES[walletCurrency] || CURRENCIES.PHP
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!formData.amount || !formData.wallet_id) return
+        const targetWalletId = activeWalletId
+        if (!formData.amount || !targetWalletId) return
 
         onAdd({
             type: "income",
@@ -38,7 +40,7 @@ export function IncomeSection({ entries, wallets, showAmounts = true, onAdd, onD
             category: formData.category,
             description: formData.description || INCOME_CATEGORIES.find(c => c.value === formData.category)?.label || "Income",
             amount: parseFloat(formData.amount),
-            wallet_id: formData.wallet_id,
+            wallet_id: targetWalletId,
             currency: walletCurrency,
         })
 

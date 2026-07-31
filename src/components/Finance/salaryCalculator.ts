@@ -1,9 +1,11 @@
 /**
  * Salary Calculator — Overtime & Pay Calculation Engine
  * Supports Taiwan (勞動基準法) and Philippines (DOLE) labor laws
+ * Now reads all multipliers/rates from computationConfig for user editability.
  */
 
-import type { WorkProfile, TimeLog, DayPayBreakdown, PayrollSummary, DayType } from "./types"
+import type { WorkProfile, TimeLog, DayPayBreakdown, PayrollSummary, DayType, PayrollDeduction } from "./types"
+import { getComputationConfig } from "./computationConfig"
 
 // ═══════════════════════════════════════════
 // HELPER: Calculate hours worked from time-in/out
@@ -54,23 +56,25 @@ export function getStandardMonthlyHours(profile: WorkProfile): number {
     if (profile.custom_monthly_hours && profile.custom_monthly_hours > 0) {
         return profile.custom_monthly_hours
     }
+
+    const config = getComputationConfig()
     
     if (profile.country === "TW") {
         // Under Taiwan Labor Standards Act (勞基法 §24):
         // For ALL monthly-salaried employees (月薪制), the statutory hourly rate divisor is 240 hrs (30 days × 8 hrs).
         // For hourly-rate employees (時薪制), 173.2 hrs (40 hrs/week × 4.33 weeks) is the monthly benchmark.
         if (profile.rate_type === "monthly") {
-            return 240
+            return config.tw.monthlySalaryDivisor
         }
-        return 173.2
+        return config.tw.hourlyBenchmarkHours
     } else {
         // Philippines DOLE standard monthly hours:
         // 6-1 schedule (26 working days × 8 hrs = 208 hrs)
         // 5-2 / 2-2 / other schedules (22 working days × 8 hrs = 176 hrs)
         if (profile.schedule_type === "6-1") {
-            return 208
+            return config.ph.monthlyHours61
         }
-        return 176
+        return config.ph.monthlyHours52
     }
 }
 
@@ -102,7 +106,8 @@ function calculateDayPayTW(
     dayType: DayType,
     hourlyRate: number
 ): { regularPay: number; overtimePay: number; nightPay: number; holidayPremium: number; regularHours: number; overtimeHours: number } {
-    const REGULAR_HOURS = 8
+    const config = getComputationConfig().tw
+    const REGULAR_HOURS = config.regularHoursPerDay
     let regularPay = 0
     let overtimePay = 0
     let nightPay = 0
@@ -117,68 +122,67 @@ function calculateDayPayTW(
 
             regularPay = regularHours * hourlyRate
 
-            // TW OT: first 2 hours = 1.34x, next 2 hours = 1.67x
+            // TW OT: first 2 hours = tier1, next 2 hours = tier2
             const ot1 = Math.min(overtimeHours, 2)
             const ot2 = Math.max(overtimeHours - 2, 0)
-            overtimePay = (ot1 * hourlyRate * 1.34) + (ot2 * hourlyRate * 1.67)
+            overtimePay = (ot1 * hourlyRate * config.otTier1Multiplier) + (ot2 * hourlyRate * config.otTier2Multiplier)
             break
         }
         case "rest_day": {
-            // Rest day: first 8 hours at 1.34x, next 2 at 1.67x, beyond 10 at 2.67x
-            const rd1 = Math.min(totalHours, 8)
-            const rd2 = Math.min(Math.max(totalHours - 8, 0), 2)
-            const rd3 = Math.max(totalHours - 10, 0)
+            // Rest day: first 8 hours at restDayBase, next 2 at restDayOtTier1, beyond 10 at restDayOtTier2
+            const rd1 = Math.min(totalHours, REGULAR_HOURS)
+            const rd2 = Math.min(Math.max(totalHours - REGULAR_HOURS, 0), 2)
+            const rd3 = Math.max(totalHours - REGULAR_HOURS - 2, 0)
 
             regularHours = rd1
             overtimeHours = totalHours - rd1
 
-            regularPay = rd1 * hourlyRate * 1.34
-            overtimePay = (rd2 * hourlyRate * 1.67) + (rd3 * hourlyRate * 2.67)
+            regularPay = rd1 * hourlyRate * config.restDayBaseMultiplier
+            overtimePay = (rd2 * hourlyRate * config.restDayOtTier1) + (rd3 * hourlyRate * config.restDayOtTier2)
             break
         }
         case "regular_holiday": {
-            // National holiday: 2x for all hours
+            // National holiday: holidayMultiplier for all hours
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
             regularPay = regularHours * hourlyRate
-            holidayPremium = regularHours * hourlyRate // extra 1x (total = 2x)
+            holidayPremium = regularHours * hourlyRate * (config.holidayMultiplier - 1)
 
             const hotOt1 = Math.min(overtimeHours, 2)
             const hotOt2 = Math.max(overtimeHours - 2, 0)
-            overtimePay = (hotOt1 * hourlyRate * 1.34) + (hotOt2 * hourlyRate * 1.67)
+            overtimePay = (hotOt1 * hourlyRate * config.otTier1Multiplier) + (hotOt2 * hourlyRate * config.otTier2Multiplier)
             overtimePay += overtimeHours * hourlyRate // holiday base for OT hours
             break
         }
         case "special_holiday": {
-            // Special holiday (TW doesn't distinguish as much, treat similar to rest day)
+            // Special holiday (treat similar to rest day with specialHolidayMultiplier)
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
-            regularPay = regularHours * hourlyRate * 1.34
+            regularPay = regularHours * hourlyRate * config.specialHolidayMultiplier
             const shOt1 = Math.min(overtimeHours, 2)
             const shOt2 = Math.max(overtimeHours - 2, 0)
-            overtimePay = (shOt1 * hourlyRate * 1.67) + (shOt2 * hourlyRate * 2.67)
+            overtimePay = (shOt1 * hourlyRate * config.restDayOtTier1) + (shOt2 * hourlyRate * config.restDayOtTier2)
             break
         }
         case "typhoon_disaster_day": {
             // Typhoon / Natural Disaster Day (颱風假 / 天然災害出勤):
-            // Under Taiwan labor guidance, employees required to work on declared typhoon days get 2.0x double pay
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
             regularPay = regularHours * hourlyRate
-            holidayPremium = regularHours * hourlyRate // Extra 1.0x (Total 2.0x Double Pay)
+            holidayPremium = regularHours * hourlyRate * (config.typhoonDayMultiplier - 1)
 
             const typhOt1 = Math.min(overtimeHours, 2)
             const typhOt2 = Math.max(overtimeHours - 2, 0)
-            overtimePay = (typhOt1 * hourlyRate * 1.67) + (typhOt2 * hourlyRate * 2.67)
+            overtimePay = (typhOt1 * hourlyRate * config.restDayOtTier1) + (typhOt2 * hourlyRate * config.restDayOtTier2)
             break
         }
     }
 
-    // Night differential: +NT$20/hr for TW
-    nightPay = nightHours * 20
+    // Night differential: flat NT$/hr from config
+    nightPay = nightHours * config.nightDifferentialFlat
 
     return { regularPay, overtimePay, nightPay, holidayPremium, regularHours, overtimeHours }
 }
@@ -193,7 +197,8 @@ function calculateDayPayPH(
     dayType: DayType,
     hourlyRate: number
 ): { regularPay: number; overtimePay: number; nightPay: number; holidayPremium: number; regularHours: number; overtimeHours: number } {
-    const REGULAR_HOURS = 8
+    const config = getComputationConfig().ph
+    const REGULAR_HOURS = config.regularHoursPerDay
     let regularPay = 0
     let overtimePay = 0
     let nightPay = 0
@@ -207,51 +212,51 @@ function calculateDayPayPH(
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
             regularPay = regularHours * hourlyRate
-            overtimePay = overtimeHours * hourlyRate * 1.25
+            overtimePay = overtimeHours * hourlyRate * config.otMultiplier
             break
         }
         case "rest_day": {
-            // Rest day: 1.30x base, OT = 1.30 × 1.30 = 1.69 per DOLE
+            // Rest day: restDayBase, OT = restDayOt per DOLE
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
-            regularPay = regularHours * hourlyRate * 1.30
-            overtimePay = overtimeHours * hourlyRate * 1.69
+            regularPay = regularHours * hourlyRate * config.restDayBase
+            overtimePay = overtimeHours * hourlyRate * config.restDayOt
             break
         }
         case "regular_holiday": {
-            // Regular holiday: 2.0x base, OT = 2.0 × 1.30 = 2.60
+            // Regular holiday: holidayMultiplier base, OT = holidayOt
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
             regularPay = regularHours * hourlyRate
-            holidayPremium = regularHours * hourlyRate // extra 1x (total 2x)
-            overtimePay = overtimeHours * hourlyRate * 2.60
+            holidayPremium = regularHours * hourlyRate * (config.holidayMultiplier - 1)
+            overtimePay = overtimeHours * hourlyRate * config.holidayOt
             break
         }
         case "special_holiday": {
-            // Special holiday: 1.30x base, OT = 1.30 × 1.30 = 1.69
+            // Special holiday: specialHolidayBase, OT = specialHolidayOt
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
-            regularPay = regularHours * hourlyRate * 1.30
-            overtimePay = overtimeHours * hourlyRate * 1.69
+            regularPay = regularHours * hourlyRate * config.specialHolidayBase
+            overtimePay = overtimeHours * hourlyRate * config.specialHolidayOt
             break
         }
         case "typhoon_disaster_day": {
-            // Disaster / Typhoon Work Day (DOLE Work Suspension): 2.0x double pay
+            // Disaster / Typhoon Work Day (DOLE Work Suspension): typhoonDayMultiplier
             regularHours = Math.min(totalHours, REGULAR_HOURS)
             overtimeHours = Math.max(totalHours - REGULAR_HOURS, 0)
 
             regularPay = regularHours * hourlyRate
-            holidayPremium = regularHours * hourlyRate // Extra 1.0x (Total 2.0x Double Pay)
-            overtimePay = overtimeHours * hourlyRate * 2.60
+            holidayPremium = regularHours * hourlyRate * (config.typhoonDayMultiplier - 1)
+            overtimePay = overtimeHours * hourlyRate * config.typhoonDayOt
             break
         }
     }
 
-    // Night differential: +10% of hourly rate
-    nightPay = nightHours * hourlyRate * 0.10
+    // Night differential: % of hourly rate from config
+    nightPay = nightHours * hourlyRate * config.nightDifferentialPercent
 
     return { regularPay, overtimePay, nightPay, holidayPremium, regularHours, overtimeHours }
 }
@@ -293,7 +298,8 @@ export function calculateDayPay(log: TimeLog, profile: WorkProfile): DayPayBreak
 // PUBLIC: Calculate payroll summary for a set of logs
 // ═══════════════════════════════════════════
 
-export function calculatePayroll(logs: TimeLog[], profile: WorkProfile): PayrollSummary {
+export function calculatePayroll(logs: TimeLog[], profile: WorkProfile, deductions: PayrollDeduction[] = []): PayrollSummary {
+    const config = getComputationConfig()
     const days = logs.map(log => calculateDayPay(log, profile))
 
     const totalRegularHours = days.reduce((s, d) => s + d.regularHours, 0)
@@ -309,12 +315,25 @@ export function calculatePayroll(logs: TimeLog[], profile: WorkProfile): Payroll
     const hourlyRate = getHourlyRate(profile)
     let taxWithheld = 0
     if (profile.country === "TW") {
-        // Taiwan: 18% flat withholding for foreign workers (non-resident default)
-        taxWithheld = grossPay * 0.18
+        // Taiwan: flat withholding from config
+        taxWithheld = grossPay * config.tw.withholdingRate
     } else {
         // PH: rough monthly withholding estimate based on annualized income
         const annualized = grossPay * 12
         taxWithheld = calculatePHTaxMonthly(annualized) / 12
+    }
+
+    // Calculate recurring deductions for this profile
+    const activeDeductions = deductions.filter(d => d.profile_id === profile.id && d.is_active)
+    const deductionBreakdown: { label: string; amount: number }[] = []
+    let totalDeductionsAmount = 0
+
+    for (const ded of activeDeductions) {
+        // Monthly deductions: full amount once
+        // Kinsenas deductions: amount is per-kinsenas, so monthly total = amount × 2
+        const monthlyAmount = ded.frequency === "kinsenas" ? ded.amount * 2 : ded.amount
+        deductionBreakdown.push({ label: ded.label, amount: monthlyAmount })
+        totalDeductionsAmount += monthlyAmount
     }
 
     // 13th month pay accrued (PH: basic salary only, no OT/holiday/night)
@@ -344,7 +363,9 @@ export function calculatePayroll(logs: TimeLog[], profile: WorkProfile): Payroll
         totalHolidayPremium,
         grossPay,
         taxWithheld,
-        netPay: grossPay - taxWithheld,
+        totalDeductions: totalDeductionsAmount,
+        deductionBreakdown,
+        netPay: grossPay - taxWithheld - totalDeductionsAmount,
         thirteenthMonthAccrued,
         yearEndBonusEstimate,
         days,

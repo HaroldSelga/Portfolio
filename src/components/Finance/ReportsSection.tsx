@@ -355,7 +355,7 @@ export function ReportsSection({
             {/* ═══════════════════════════════════════════ */}
             {/* MONTH vs PREVIOUS MONTH COMPARISON */}
             {/* ═══════════════════════════════════════════ */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Income */}
                 <motion.div
                     initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}
@@ -513,7 +513,7 @@ export function ReportsSection({
                         </h3>
 
                         {/* Status bar */}
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                             <div className="text-center p-2 rounded-xl bg-emerald-500/10">
                                 <p className="text-lg font-black text-emerald-500 tabular-nums">{paidCount}</p>
                                 <p className="text-[9px] font-bold uppercase text-emerald-500/80">Paid</p>

@@ -2,10 +2,12 @@
  * Tax Calculator — Taiwan & Philippines Tax Estimation Engine
  * Taiwan: 18% flat withholding for foreign workers → progressive resident rates → refund
  * Philippines: TRAIN Law progressive brackets, SSS/PhilHealth/PagIBIG, 13th month tax-exempt
+ * Now reads all rates/deductions from computationConfig for user editability.
  */
 
 import type { WorkProfile, TaxEstimate } from "./types"
 import { getHourlyRate } from "./salaryCalculator"
+import { getComputationConfig } from "./computationConfig"
 
 // ═══════════════════════════════════════════
 // TAIWAN TAX CALCULATION
@@ -19,15 +21,6 @@ const TW_TAX_BRACKETS = [
     { limit: 4720000, rate: 0.30, deduction: 392000 },
     { limit: Infinity, rate: 0.40, deduction: 864000 },
 ]
-
-// Taiwan standard deductions for single filer
-const TW_DEDUCTIONS = {
-    standardDeduction: 131000,   // 標準扣除額 (single)
-    personalExemption: 97000,    // 免稅額
-    salaryDeduction: 218000,     // 薪資所得特別扣除額
-    laborInsuranceEstimate: 12000, // 勞保 (estimated annual)
-    nhiEstimate: 10000,          // 健保 (estimated annual)
-}
 
 function calculateTWProgressiveTax(taxableIncome: number): number {
     if (taxableIncome <= 0) return 0
@@ -47,32 +40,33 @@ export function calculateTWTax(
     daysInTW: number,
     yearEndBonus: number = 0,
 ): TaxEstimate {
-    const isResident = daysInTW >= 183
+    const config = getComputationConfig().tw
+    const isResident = daysInTW >= config.residentThresholdDays
     const totalIncome = annualGross + yearEndBonus
 
-    // Total withheld throughout the year at 18%
-    const totalWithheld = totalIncome * 0.18
+    // Total withheld throughout the year at withholding rate
+    const totalWithheld = totalIncome * config.withholdingRate
 
     let actualTaxOwed: number
     let totalDeductions: number
     let taxableIncome: number
 
     if (isResident) {
-        // Resident: progressive rates with deductions
+        // Resident: progressive rates with deductions from config
         totalDeductions =
-            TW_DEDUCTIONS.standardDeduction +
-            TW_DEDUCTIONS.personalExemption +
-            TW_DEDUCTIONS.salaryDeduction +
-            TW_DEDUCTIONS.laborInsuranceEstimate +
-            TW_DEDUCTIONS.nhiEstimate
+            config.standardDeduction +
+            config.personalExemption +
+            config.salaryDeduction +
+            config.laborInsuranceEstimate +
+            config.nhiEstimate
 
         taxableIncome = Math.max(totalIncome - totalDeductions, 0)
         actualTaxOwed = Math.max(calculateTWProgressiveTax(taxableIncome), 0)
     } else {
-        // Non-resident: flat 18%, no deductions
+        // Non-resident: flat withholding rate, no deductions
         totalDeductions = 0
         taxableIncome = totalIncome
-        actualTaxOwed = totalIncome * 0.18
+        actualTaxOwed = totalIncome * config.withholdingRate
     }
 
     const estimatedRefund = Math.max(totalWithheld - actualTaxOwed, 0)
@@ -86,7 +80,7 @@ export function calculateTWTax(
         totalWithheld,
         estimatedRefund,
         effectiveRate,
-        withholdingRate: 18,
+        withholdingRate: config.withholdingRate * 100,
         isResident,
         daysInCountry: daysInTW,
         thirteenthMonth: 0, // TW doesn't have 13th month
@@ -109,25 +103,22 @@ function calculatePHProgressiveTax(taxableIncome: number): number {
     return 2202500 + (taxableIncome - 8000000) * 0.35
 }
 
-// SSS contribution table (simplified — 2024 rates)
+// SSS contribution table (simplified — rates from config)
 function calculateSSS(monthlySalary: number): number {
-    // Employee share: approximately 4.5% of monthly salary, capped
-    const rate = 0.045
-    const maxContribution = 1350 // approximate monthly cap
-    return Math.min(monthlySalary * rate, maxContribution)
+    const config = getComputationConfig().ph
+    return Math.min(monthlySalary * config.sssRate, config.sssMonthyCap)
 }
 
-// PhilHealth contribution (2024: 5% of basic salary, split 50/50)
+// PhilHealth contribution (rates from config)
 function calculatePhilHealth(monthlySalary: number): number {
-    const rate = 0.025 // employee share = 2.5%
-    const maxContribution = 500 // approximate monthly cap
-    return Math.min(monthlySalary * rate, maxContribution)
+    const config = getComputationConfig().ph
+    return Math.min(monthlySalary * config.philHealthRate, config.philHealthMonthlyCap)
 }
 
-// Pag-IBIG contribution
+// Pag-IBIG contribution (rates from config)
 function calculatePagIBIG(monthlySalary: number): number {
-    // Employee share: 2% of salary, max ₱200/month
-    return Math.min(monthlySalary * 0.02, 200)
+    const config = getComputationConfig().ph
+    return Math.min(monthlySalary * config.pagIbigRate, config.pagIbigMonthlyCap)
 }
 
 export function calculatePHTax(
@@ -135,6 +126,8 @@ export function calculatePHTax(
     monthlyBasicSalary: number,
     monthsWorked: number = 12,
 ): TaxEstimate {
+    const config = getComputationConfig().ph
+
     // Monthly mandatory contributions
     const monthlySSS = calculateSSS(monthlyBasicSalary)
     const monthlyPhilHealth = calculatePhilHealth(monthlyBasicSalary)
@@ -144,13 +137,13 @@ export function calculatePHTax(
 
     // 13th month pay calculation (basic salary only ÷ 12)
     const thirteenthMonth = (monthlyBasicSalary * monthsWorked) / 12
-    const thirteenthMonthTaxable = Math.max(thirteenthMonth - 90000, 0)
+    const thirteenthMonthTaxable = Math.max(thirteenthMonth - config.thirteenthMonthExempt, 0)
 
     // Total deductions
     const totalDeductions = annualContributions
 
     // Taxable income = gross + taxable 13th month - contributions
-    // Note: the first ₱90k of 13th month is exempt
+    // Note: the first portion of 13th month is exempt (from config)
     const taxableIncome = Math.max(annualGross + thirteenthMonthTaxable - totalDeductions, 0)
 
     const actualTaxOwed = calculatePHProgressiveTax(taxableIncome)

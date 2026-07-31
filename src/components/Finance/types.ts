@@ -220,6 +220,8 @@ export interface PayrollDeduction {
     created_at: string
 }
 
+export type KinsenasPeriod = "full" | "kinsenas1" | "kinsenas2"
+
 export interface TaxEstimate {
     annualGross: number
     totalDeductions: number

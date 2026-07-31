@@ -26,12 +26,16 @@ import {
     Check,
     Globe,
     ArrowUpRight,
-    ArrowDownRight
+    ArrowDownRight,
+    Printer,
+    Lock,
+    FileText,
+    Gift
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType, PayrollDeduction } from "./types"
+import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType, PayrollDeduction, KinsenasPeriod } from "./types"
 import { CURRENCIES, formatCurrency } from "./types"
 import { getComputationConfig } from "./computationConfig"
 import {
@@ -49,7 +53,7 @@ import {
     getHolidaysForCountry,
     getUpcomingHolidays
 } from "./holidays"
-import { convertCurrency, type ExchangeRates } from "./currency"
+import { convertCurrency, getRemittanceFxRate, saveRemittanceFxRate, type ExchangeRates } from "./currency"
 
 /** Auto-compute shift time-in/time-out based on shift type and hours */
 function getShiftTimes(type: "day" | "night", shiftHours: number): { timeIn: string; timeOut: string } {
@@ -153,6 +157,15 @@ export function SalarySection({
     const [daysInCountry, setDaysInCountry] = useState<number>(365)
     const [manualAnnualGross] = useState<string>("")
 
+    // Kinsenas Period State (full, kinsenas1, kinsenas2)
+    const [kinsenasPeriod, setKinsenasPeriod] = useState<KinsenasPeriod>("full")
+    const [showPrintablePayslip, setShowPrintablePayslip] = useState(false)
+
+    // Remittance FX Rate Lock State
+    const [remittanceFxRate, setRemittanceFxRateState] = useState<number>(() =>
+        getRemittanceFxRate("NTD", "PHP", 1.80)
+    )
+
     // Feedback notices
     const [incomeAddedNotice, setIncomeAddedNotice] = useState<string | null>(null)
     const [copiedPayslipNotice, setCopiedPayslipNotice] = useState(false)
@@ -167,11 +180,11 @@ export function SalarySection({
         return profileLogs.filter(l => l.date.startsWith(selectedMonth))
     }, [profileLogs, selectedMonth])
 
-    // Calculate monthly payroll summary
+    // Calculate monthly payroll summary (filtered by kinsenasPeriod)
     const payrollSummary = useMemo(() => {
         if (!activeProfile) return null
-        return calculatePayroll(monthlyLogs, activeProfile, deductions)
-    }, [monthlyLogs, activeProfile, deductions])
+        return calculatePayroll(monthlyLogs, activeProfile, deductions, kinsenasPeriod)
+    }, [monthlyLogs, activeProfile, deductions, kinsenasPeriod])
 
     // Calculate previous month payroll summary for monthly comparison
     const prevMonthPayrollSummary = useMemo(() => {
@@ -181,8 +194,29 @@ export function SalarySection({
         const prevMonthStr = `${prevD.getFullYear()}-${String(prevD.getMonth() + 1).padStart(2, "0")}`
         const prevLogs = profileLogs.filter(l => l.date.startsWith(prevMonthStr))
         if (prevLogs.length === 0) return null
-        return calculatePayroll(prevLogs, activeProfile, deductions)
-    }, [profileLogs, selectedMonth, activeProfile, deductions])
+        return calculatePayroll(prevLogs, activeProfile, deductions, kinsenasPeriod)
+    }, [profileLogs, selectedMonth, activeProfile, deductions, kinsenasPeriod])
+
+    // Calculate Year-To-Date (YTD) 13th Month / Annual Bonus Progress
+    const ytdEarnings = useMemo(() => {
+        if (!activeProfile) return { gross: 0, basic: 0, accrued13th: 0, target13th: 0, percent13th: 0 }
+        const currentYear = selectedMonth.split("-")[0]
+        const yearLogs = profileLogs.filter(l => l.date.startsWith(currentYear))
+        
+        let gross = 0
+        let basic = 0
+        for (const log of yearLogs) {
+            const dayBreakdown = calculateDayPay(log, activeProfile)
+            gross += dayBreakdown.totalPay
+            basic += dayBreakdown.regularPay
+        }
+
+        const accrued13th = basic / 12
+        const target13th = getMonthlySalary(activeProfile)
+        const percent13th = target13th > 0 ? Math.min((accrued13th / target13th) * 100, 100) : 0
+
+        return { gross, basic, accrued13th, target13th, percent13th }
+    }, [profileLogs, activeProfile, selectedMonth])
 
     // Calculate annual tax estimate
     const taxEstimate = useMemo(() => {
@@ -933,23 +967,54 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                     {/* TAB 2: PAYROLL BREAKDOWN */}
                     {activeSubTab === "payroll" && activeProfile && payrollSummary && (
                         <div className="space-y-4">
-                            {/* Monthly Selector */}
-                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
+                            {/* Monthly & Kinsenas Period Selector */}
+                            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <button onClick={handlePrevMonth} className="p-1.5 hover:bg-muted rounded-xl transition-all">
                                         <ChevronLeft className="h-4 w-4" />
                                     </button>
                                     <span className="text-sm font-black tracking-tight">
-                                        {new Date(`${selectedMonth}-01`).toLocaleDateString("en-US", { month: "long", year: "numeric" })} Payroll
+                                        {new Date(`${selectedMonth}-01`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                                     </span>
                                     <button onClick={handleNextMonth} className="p-1.5 hover:bg-muted rounded-xl transition-all">
                                         <ChevronRight className="h-4 w-4" />
                                     </button>
 
+                                    {/* Kinsenas Period Selector Toggle */}
+                                    <div className="flex bg-muted/60 p-1 rounded-xl gap-1 ml-2">
+                                        <button
+                                            onClick={() => setKinsenasPeriod("full")}
+                                            className={cn(
+                                                "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
+                                                kinsenasPeriod === "full" ? "bg-background text-foreground shadow-sm font-black" : "text-muted-foreground hover:text-foreground"
+                                            )}
+                                        >
+                                            Full Month
+                                        </button>
+                                        <button
+                                            onClick={() => setKinsenasPeriod("kinsenas1")}
+                                            className={cn(
+                                                "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
+                                                kinsenasPeriod === "kinsenas1" ? "bg-primary text-primary-foreground shadow-sm font-black" : "text-muted-foreground hover:text-foreground"
+                                            )}
+                                        >
+                                            1st Half (1–15th)
+                                        </button>
+                                        <button
+                                            onClick={() => setKinsenasPeriod("kinsenas2")}
+                                            className={cn(
+                                                "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
+                                                kinsenasPeriod === "kinsenas2" ? "bg-primary text-primary-foreground shadow-sm font-black" : "text-muted-foreground hover:text-foreground"
+                                            )}
+                                        >
+                                            2nd Half (16–End)
+                                        </button>
+                                    </div>
+
                                     {/* Monthly Comparison Delta Badge */}
                                     {prevMonthPayrollSummary && (
                                         <div className={cn(
-                                            "ml-2 text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1",
+                                            "text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1",
                                             payrollSummary.grossPay >= prevMonthPayrollSummary.grossPay
                                                 ? "bg-emerald-500/20 text-emerald-500"
                                                 : "bg-rose-500/20 text-rose-500"
@@ -961,14 +1026,25 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                             )}
                                             <span>
                                                 {payrollSummary.grossPay >= prevMonthPayrollSummary.grossPay ? "+" : ""}
-                                                {formatCurrency(payrollSummary.grossPay - prevMonthPayrollSummary.grossPay, activeProfile.currency, showAmounts)} vs Prev Month
+                                                {formatCurrency(payrollSummary.grossPay - prevMonthPayrollSummary.grossPay, activeProfile.currency, showAmounts)} vs Prev
                                             </span>
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                    {/* Export Payslip Button */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {/* Printable Payslip Button */}
+                                    <Button
+                                        onClick={() => setShowPrintablePayslip(true)}
+                                        variant="outline"
+                                        className="font-bold rounded-xl text-xs gap-1.5"
+                                        size="sm"
+                                    >
+                                        <Printer className="h-4 w-4 text-sky-500" />
+                                        Printable Payslip
+                                    </Button>
+
+                                    {/* Export Copy Text Payslip Button */}
                                     <Button
                                         onClick={handleExportPayslip}
                                         variant="outline"
@@ -976,7 +1052,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                         size="sm"
                                     >
                                         {copiedPayslipNotice ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                                        {copiedPayslipNotice ? "Copied!" : "Export Payslip"}
+                                        {copiedPayslipNotice ? "Copied!" : "Export Text"}
                                     </Button>
 
                                     <Button
@@ -1089,6 +1165,76 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* 🎁 13TH MONTH PAY & ANNUAL BONUS PROGRESS TRACKER CARD */}
+                                <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 space-y-3 shadow-md">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Gift className="h-5 w-5 text-amber-500" />
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase tracking-tight">
+                                                    {activeProfile.country === "PH" ? `${selectedMonth.split("-")[0]} YTD 13th-Month Pay Accrual` : `${selectedMonth.split("-")[0]} Year-End Bonus Projection`}
+                                                </h4>
+                                                <p className="text-[10px] text-muted-foreground font-semibold">
+                                                    {activeProfile.country === "PH"
+                                                        ? "Mandatory 13th-month pay accrued based on basic earnings (DOLE PD 851)"
+                                                        : "Taiwan Year-End Bonus (年終獎金) estimated projection"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <span className="text-sm font-black tabular-nums text-amber-500">
+                                            {formatCurrency(
+                                                activeProfile.country === "PH" ? ytdEarnings.accrued13th : ytdEarnings.accrued13th * (activeProfile.year_end_bonus_multiplier || 1),
+                                                activeProfile.currency,
+                                                showAmounts
+                                            )}
+                                        </span>
+                                    </div>
+
+                                    {/* Progress Bar */}
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
+                                            <span>Accrual Progress</span>
+                                            <span>{Math.round(ytdEarnings.percent13th)}% of 1 Full Month Salary ({formatCurrency(ytdEarnings.target13th, activeProfile.currency, showAmounts)})</span>
+                                        </div>
+                                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                            <motion.div
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${ytdEarnings.percent13th}%` }}
+                                                transition={{ duration: 0.8 }}
+                                                className="h-full bg-amber-500 rounded-full"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 💱 REMITTANCE FX RATE LOCK CARD */}
+                                {activeProfile.currency !== "PHP" && (
+                                    <div className="bg-card/40 border border-border/20 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <Lock className="h-4 w-4 text-sky-500" />
+                                            <div>
+                                                <span className="font-bold text-foreground">Remittance FX Rate Lock: </span>
+                                                <span className="font-black text-sky-500">1 {activeProfile.currency} = ₱{remittanceFxRate.toFixed(2)} PHP</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={remittanceFxRate}
+                                                onChange={e => {
+                                                    const val = parseFloat(e.target.value) || 0
+                                                    setRemittanceFxRateState(val)
+                                                    saveRemittanceFxRate(val, activeProfile.currency, "PHP")
+                                                }}
+                                                className="w-20 px-2 py-1 bg-background border border-border/60 rounded-lg text-xs font-bold tabular-nums"
+                                                placeholder="Rate ₱"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground font-bold">≈ ₱{(payrollSummary.netPay * remittanceFxRate).toLocaleString("en-US", { minimumFractionDigits: 2 })} PHP payout</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -1482,21 +1628,13 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                 </>
             )}
 
-            {/* Profile Modal */}
+            {/* Delete Confirmation Modal */}
             <Modal
-                isOpen={showProfileModal}
-                onClose={() => setShowProfileModal(false)}
-                title={editingProfile ? "Edit Job Profile" : "Create Work Profile"}
+                isOpen={deleteConfirmLogId !== null}
+                onClose={() => setDeleteConfirmLogId(null)}
+                title="Delete Time Log Entry"
                 className="max-w-md"
             >
-                <form onSubmit={handleSaveProfile} className="p-6 space-y-4 text-xs font-medium">
-                    {/* Quick Presets */}
-                    {!editingProfile && (
-                        <div className="flex gap-2 mb-2">
-                            <button
-                                type="button"
-                                onClick={() => handleQuickPreset("TW_2_2")}
-                                className="flex-1 p-2 bg-muted/60 hover:bg-muted rounded-xl border border-border/30 font-bold text-center transition-all"
                             >
                                 🇹🇼 Taiwan 2-2 Factory
                             </button>

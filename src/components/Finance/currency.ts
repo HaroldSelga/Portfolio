@@ -27,18 +27,21 @@ const BASE_CURRENCY_KEY = "finance_primary_base_currency"
 
 /**
  * Fetch live exchange rates with caching & fallback to default rates
+ * @param forceRefresh - If true, ignores cache and fetches fresh live rates
  */
-export async function getExchangeRates(): Promise<ExchangeRates> {
-    const cached = localStorage.getItem(RATES_CACHE_KEY)
-    if (cached) {
-        try {
-            const { rates, timestamp } = JSON.parse(cached)
-            // Cache valid for 2 hours
-            if (Date.now() - timestamp < 2 * 60 * 60 * 1000) {
-                return { ...DEFAULT_RATES_IN_USD, ...rates }
+export async function getExchangeRates(forceRefresh = false): Promise<ExchangeRates> {
+    if (!forceRefresh) {
+        const cached = localStorage.getItem(RATES_CACHE_KEY)
+        if (cached) {
+            try {
+                const { rates, timestamp } = JSON.parse(cached)
+                // Cache valid for 15 minutes for fresh auto-resync
+                if (Date.now() - timestamp < 15 * 60 * 1000) {
+                    return { ...DEFAULT_RATES_IN_USD, ...rates }
+                }
+            } catch {
+                // Ignore cache parse error
             }
-        } catch {
-            // Ignore cache parse error
         }
     }
 
@@ -162,4 +165,31 @@ export function getDirectRate(
     customRates: Partial<ExchangeRates> = {}
 ): number {
     return convertCurrency(1, fromCurrency, toCurrency, liveRates, customRates)
+}
+
+const REMITTANCE_FX_KEY = "finance_remittance_fx_rate"
+
+export function getRemittanceFxRate(
+    fromCurrency: CurrencyCode = "NTD",
+    toCurrency: CurrencyCode = "PHP",
+    fallbackRate?: number
+): number {
+    try {
+        const stored = localStorage.getItem(`${REMITTANCE_FX_KEY}_${fromCurrency}_${toCurrency}`)
+        if (stored) {
+            const val = parseFloat(stored)
+            if (!isNaN(val) && val > 0) return val
+        }
+    } catch {
+        // ignore
+    }
+    return fallbackRate || (fromCurrency === "NTD" && toCurrency === "PHP" ? 1.80 : 1.0)
+}
+
+export function saveRemittanceFxRate(rate: number, fromCurrency: CurrencyCode = "NTD", toCurrency: CurrencyCode = "PHP"): void {
+    try {
+        localStorage.setItem(`${REMITTANCE_FX_KEY}_${fromCurrency}_${toCurrency}`, String(rate))
+    } catch {
+        // ignore
+    }
 }

@@ -4,7 +4,7 @@
  * Now reads all multipliers/rates from computationConfig for user editability.
  */
 
-import type { WorkProfile, TimeLog, DayPayBreakdown, PayrollSummary, DayType, PayrollDeduction } from "./types"
+import type { WorkProfile, TimeLog, DayPayBreakdown, PayrollSummary, DayType, PayrollDeduction, KinsenasPeriod } from "./types"
 import { getComputationConfig } from "./computationConfig"
 
 // ═══════════════════════════════════════════
@@ -298,9 +298,24 @@ export function calculateDayPay(log: TimeLog, profile: WorkProfile): DayPayBreak
 // PUBLIC: Calculate payroll summary for a set of logs
 // ═══════════════════════════════════════════
 
-export function calculatePayroll(logs: TimeLog[], profile: WorkProfile, deductions: PayrollDeduction[] = []): PayrollSummary {
+export function calculatePayroll(
+    logs: TimeLog[],
+    profile: WorkProfile,
+    deductions: PayrollDeduction[] = [],
+    period: KinsenasPeriod = "full"
+): PayrollSummary {
     const config = getComputationConfig()
-    const days = logs.map(log => calculateDayPay(log, profile))
+
+    // Filter logs for selected Kinsenas period
+    const filteredLogs = logs.filter(log => {
+        if (period === "full") return true
+        const dayNum = parseInt(log.date.split("-")[2] || "1", 10)
+        if (period === "kinsenas1") return dayNum <= 15
+        if (period === "kinsenas2") return dayNum > 15
+        return true
+    })
+
+    const days = filteredLogs.map(log => calculateDayPay(log, profile))
 
     const totalRegularHours = days.reduce((s, d) => s + d.regularHours, 0)
     const totalOvertimeHours = days.reduce((s, d) => s + d.overtimeHours, 0)
@@ -311,16 +326,15 @@ export function calculatePayroll(logs: TimeLog[], profile: WorkProfile, deductio
     const totalHolidayPremium = days.reduce((s, d) => s + d.holidayPremium, 0)
     const grossPay = totalRegularPay + totalOvertimePay + totalNightPay + totalHolidayPremium
 
-    // Tax withholding estimate
+    // Tax withholding estimate (pro-rated for kinsenas if period != "full")
     const hourlyRate = getHourlyRate(profile)
     let taxWithheld = 0
     if (profile.country === "TW") {
-        // Taiwan: flat withholding from config
         taxWithheld = grossPay * config.tw.withholdingRate
     } else {
-        // PH: rough monthly withholding estimate based on annualized income
-        const annualized = grossPay * 12
-        taxWithheld = calculatePHTaxMonthly(annualized) / 12
+        const annualized = (period === "full" ? grossPay : grossPay * 2) * 12
+        const monthlyTax = calculatePHTaxMonthly(annualized) / 12
+        taxWithheld = period === "full" ? monthlyTax : monthlyTax / 2
     }
 
     // Calculate recurring deductions for this profile
@@ -329,11 +343,15 @@ export function calculatePayroll(logs: TimeLog[], profile: WorkProfile, deductio
     let totalDeductionsAmount = 0
 
     for (const ded of activeDeductions) {
-        // Monthly deductions: full amount once
-        // Kinsenas deductions: amount is per-kinsenas, so monthly total = amount × 2
-        const monthlyAmount = ded.frequency === "kinsenas" ? ded.amount * 2 : ded.amount
-        deductionBreakdown.push({ label: ded.label, amount: monthlyAmount })
-        totalDeductionsAmount += monthlyAmount
+        let dedAmount = 0
+        if (period === "full") {
+            dedAmount = ded.frequency === "kinsenas" ? ded.amount * 2 : ded.amount
+        } else {
+            // Kinsenas period (1st or 2nd half)
+            dedAmount = ded.frequency === "kinsenas" ? ded.amount : ded.amount / 2
+        }
+        deductionBreakdown.push({ label: ded.label, amount: dedAmount })
+        totalDeductionsAmount += dedAmount
     }
 
     // 13th month pay accrued (PH: basic salary only, no OT/holiday/night)

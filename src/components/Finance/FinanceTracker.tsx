@@ -89,11 +89,17 @@ export default function FinanceTracker() {
         return []
     })
 
-    // Load rates on mount
+    // Auto-resync live exchange rates on mount and every 15 minutes in background
     useEffect(() => {
-        getExchangeRates().then(fetchedRates => {
-            setRates(fetchedRates)
-        })
+        const syncRates = () => {
+            getExchangeRates(true).then(fetchedRates => {
+                setRates(fetchedRates)
+            })
+        }
+
+        syncRates()
+        const interval = setInterval(syncRates, 15 * 60 * 1000)
+        return () => clearInterval(interval)
     }, [])
     
     const [useLocalStorageWishlist, setUseLocalStorageWishlist] = useState(false)

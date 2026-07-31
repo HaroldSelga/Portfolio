@@ -141,6 +141,7 @@ export function SalarySection({
         date: new Date().toISOString().split("T")[0],
         time_in: "08:00",
         time_out: "20:00",
+        break_minutes: 0,
         day_type: "regular" as DayType,
         notes: "",
     })
@@ -1628,7 +1629,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                             value={profileFormData.custom_monthly_hours || ""}
                             onChange={e => setProfileFormData({ ...profileFormData, custom_monthly_hours: e.target.value ? parseFloat(e.target.value) : undefined })}
                             className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none text-xs"
-                            placeholder={profileFormData.country === "TW" ? "Default: 173.2 hrs (TW)" : "Default: 176 hrs (PH)"}
+                            placeholder={`Default: ${getStandardMonthlyHours(profileFormData as any)} hrs/mo (${profileFormData.country})`}
                         />
                     </div>
 
@@ -1639,12 +1640,19 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                         const computedMonthly = getMonthlySalary(profileFormData as any)
                         const computedDaily = getDailyRate(profileFormData as any)
 
+                        const ot1Rate = computedHourly * (profileFormData.country === "TW" ? 1.34 : 1.25)
+                        const ot2Rate = computedHourly * (profileFormData.country === "TW" ? 1.67 : 1.25)
+                        const nightRate = profileFormData.country === "TW" ? 20 : computedHourly * 0.10
+                        const holidayDailyPay = computedHourly * 2.0 * profileFormData.shift_hours
+
                         return (
-                            <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-2 text-xs">
+                            <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-2.5 text-xs">
                                 <div className="flex justify-between items-center text-muted-foreground font-bold text-[10px] uppercase tracking-wider">
-                                    <span>⚡ Auto-Calculated Base Rates</span>
-                                    <span className="text-primary font-bold">{monthlyHours} hrs/month</span>
+                                    <span className="flex items-center gap-1 text-primary">⚡ Auto-Calculated Base & Premium Rates</span>
+                                    <span className="text-primary font-black bg-primary/10 px-2 py-0.5 rounded-md">{monthlyHours} hrs/month</span>
                                 </div>
+
+                                {/* Primary Rates Row */}
                                 <div className="grid grid-cols-3 gap-2 border-t border-border/20 pt-2">
                                     <div className="bg-background/80 p-2 rounded-lg border border-border/30">
                                         <span className="text-[9px] text-muted-foreground font-bold uppercase block">Monthly Base</span>
@@ -1653,20 +1661,59 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                         </span>
                                     </div>
                                     <div className="bg-background/80 p-2 rounded-lg border border-border/30">
-                                        <span className="text-[9px] text-muted-foreground font-bold uppercase block">Hourly Base Rate</span>
+                                        <span className="text-[9px] text-muted-foreground font-bold uppercase block">Hourly Base</span>
                                         <span className="text-xs font-black text-emerald-500 tabular-nums">
                                             {formatCurrency(computedHourly, profileFormData.currency)}
                                         </span>
                                     </div>
                                     <div className="bg-background/80 p-2 rounded-lg border border-border/30">
-                                        <span className="text-[9px] text-muted-foreground font-bold uppercase block">Daily Shift Rate</span>
+                                        <span className="text-[9px] text-muted-foreground font-bold uppercase block">Daily Shift ({profileFormData.shift_hours}h)</span>
                                         <span className="text-xs font-black text-amber-500 tabular-nums">
                                             {formatCurrency(computedDaily, profileFormData.currency)}
                                         </span>
                                     </div>
                                 </div>
-                                <div className="text-[10px] text-muted-foreground font-medium pt-0.5">
-                                    💡 Formula: {formatCurrency(computedMonthly, profileFormData.currency)} ÷ {monthlyHours} hrs = <span className="font-bold text-emerald-500">{formatCurrency(computedHourly, profileFormData.currency)}/hr</span> base for OT & Night shift.
+
+                                {/* Overtime & Night Premium Rates Row */}
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="bg-background/80 p-2 rounded-lg border border-border/30">
+                                        <span className="text-[9px] text-amber-500 font-bold uppercase block">
+                                            OT 1st 2h ({profileFormData.country === "TW" ? "1.34x" : "1.25x"})
+                                        </span>
+                                        <span className="text-[11px] font-black text-amber-500 tabular-nums">
+                                            {formatCurrency(ot1Rate, profileFormData.currency)}/hr
+                                        </span>
+                                    </div>
+                                    <div className="bg-background/80 p-2 rounded-lg border border-border/30">
+                                        <span className="text-[9px] text-amber-500 font-bold uppercase block">
+                                            OT Next ({profileFormData.country === "TW" ? "1.67x" : "1.25x"})
+                                        </span>
+                                        <span className="text-[11px] font-black text-amber-500 tabular-nums">
+                                            {formatCurrency(ot2Rate, profileFormData.currency)}/hr
+                                        </span>
+                                    </div>
+                                    <div className="bg-background/80 p-2 rounded-lg border border-border/30">
+                                        <span className="text-[9px] text-indigo-400 font-bold uppercase block">
+                                            Night Diff ({profileFormData.country === "TW" ? "NT$20/h" : "+10%"})
+                                        </span>
+                                        <span className="text-[11px] font-black text-indigo-400 tabular-nums">
+                                            +{formatCurrency(nightRate, profileFormData.currency)}/hr
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Holiday Double Pay Card */}
+                                <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-center justify-between text-[11px]">
+                                    <span className="font-bold text-rose-500 flex items-center gap-1">
+                                        🎉 Double Pay Holiday Shift ({profileFormData.shift_hours}h shift):
+                                    </span>
+                                    <span className="font-black text-rose-500 tabular-nums">
+                                        {formatCurrency(holidayDailyPay, profileFormData.currency)}
+                                    </span>
+                                </div>
+
+                                <div className="text-[10px] text-muted-foreground font-medium pt-0.5 leading-relaxed">
+                                    💡 <span className="font-bold text-foreground">Formula:</span> {formatCurrency(computedMonthly, profileFormData.currency)} ÷ {monthlyHours} hrs = <span className="font-bold text-emerald-500">{formatCurrency(computedHourly, profileFormData.currency)}/hr</span> base for OT, night diff & statutory double pay.
                                 </div>
                             </div>
                         )
@@ -1766,6 +1813,43 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                 required
                             />
                         </div>
+                    </div>
+
+                    {/* Unpaid Break Time (Minutes) */}
+                    <div>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Unpaid Break / Meal Time</label>
+                            <span className="text-[10px] font-bold text-primary">
+                                {logFormData.break_minutes ? `${logFormData.break_minutes} mins (${(logFormData.break_minutes / 60).toFixed(1)}h)` : "No break"}
+                            </span>
+                        </div>
+                        <div className="flex gap-1.5 mb-1.5">
+                            {[0, 30, 60, 120].map(mins => (
+                                <button
+                                    type="button"
+                                    key={mins}
+                                    onClick={() => setLogFormData({ ...logFormData, break_minutes: mins })}
+                                    className={cn(
+                                        "flex-1 py-1 rounded-lg text-[10px] font-bold border transition-all",
+                                        logFormData.break_minutes === mins
+                                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                            : "bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted"
+                                    )}
+                                >
+                                    {mins === 0 ? "None" : mins === 60 ? "1h Break" : mins === 120 ? "2h Break" : `${mins}m`}
+                                </button>
+                            ))}
+                        </div>
+                        <input
+                            type="number"
+                            min="0"
+                            max="480"
+                            step="15"
+                            value={logFormData.break_minutes || 0}
+                            onChange={e => setLogFormData({ ...logFormData, break_minutes: Math.max(0, parseInt(e.target.value) || 0) })}
+                            className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl focus:outline-none text-xs font-bold"
+                            placeholder="e.g. 120 mins for 2hr meal breaks"
+                        />
                     </div>
 
                     <div>

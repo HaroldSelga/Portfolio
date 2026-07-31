@@ -19,12 +19,13 @@ function toMinutes(t: string): number {
     return hours * 60 + minutes
 }
 
-export function calculateTotalHours(timeIn: string, timeOut: string): number {
+export function calculateTotalHours(timeIn: string, timeOut: string, breakMinutes: number = 0): number {
     let inMin = toMinutes(timeIn)
     let outMin = toMinutes(timeOut)
     // Handle overnight shifts (e.g., 22:00 → 06:00)
     if (outMin <= inMin) outMin += 24 * 60
-    return (outMin - inMin) / 60
+    const netMinutes = Math.max((outMin - inMin) - breakMinutes, 0)
+    return netMinutes / 60
 }
 
 // ═══════════════════════════════════════════
@@ -260,7 +261,8 @@ function calculateDayPayPH(
 // ═══════════════════════════════════════════
 
 export function calculateDayPay(log: TimeLog, profile: WorkProfile): DayPayBreakdown {
-    const totalHours = calculateTotalHours(log.time_in, log.time_out)
+    const breakMins = log.break_minutes ?? profile.unpaid_break_minutes ?? 0
+    const totalHours = calculateTotalHours(log.time_in, log.time_out, breakMins)
     const nightHours = calculateNightHours(log.time_in, log.time_out)
     const hourlyRate = getHourlyRate(profile)
 

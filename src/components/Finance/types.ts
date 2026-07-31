@@ -155,6 +155,7 @@ export interface WorkProfile {
     custom_monthly_hours?: number
     custom_work_days?: number
     custom_rest_days?: number
+    unpaid_break_minutes?: number
     currency: CurrencyCode
     wallet_id: string | null
     cycle_start_date: string | null
@@ -168,6 +169,7 @@ export interface TimeLog {
     date: string
     time_in: string
     time_out: string
+    break_minutes?: number
     day_type: DayType
     notes: string | null
     created_at: string

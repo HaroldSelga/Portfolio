@@ -292,6 +292,7 @@ export function SalarySection({
                 date: new Date().toISOString().split("T")[0],
                 time_in: "08:00",
                 time_out: "20:00",
+                break_minutes: activeProfile?.shift_hours === 12 ? 120 : 0,
                 day_type: "regular",
                 notes: "",
             })
@@ -435,6 +436,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                     date: todayStr,
                                     time_in: "08:00",
                                     time_out: activeProfile?.shift_hours === 12 ? "20:00" : "17:00",
+                                    break_minutes: activeProfile?.shift_hours === 12 ? 120 : 0,
                                     day_type: todayHoliday.type,
                                     notes: `Holiday shift: ${todayHoliday.name}`
                                 })
@@ -690,6 +692,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                         date: dateStr,
                                                         time_in: "08:00",
                                                         time_out: activeProfile.shift_hours === 12 ? "20:00" : "17:00",
+                                                        break_minutes: activeProfile.shift_hours === 12 ? 120 : 0,
                                                         day_type: autoType,
                                                         notes: ""
                                                     })
@@ -869,6 +872,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                                             date: dateStr,
                                                                             time_in: "08:00",
                                                                             time_out: activeProfile.shift_hours === 12 ? "20:00" : "17:00",
+                                                                            break_minutes: activeProfile.shift_hours === 12 ? 120 : 0,
                                                                             day_type: autoType,
                                                                             notes: ""
                                                                         })
@@ -1229,6 +1233,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                             date: h.date,
                                                             time_in: "08:00",
                                                             time_out: activeProfile?.shift_hours === 12 ? "20:00" : "17:00",
+                                                            break_minutes: activeProfile?.shift_hours === 12 ? 120 : 0,
                                                             day_type: h.type,
                                                             notes: ""
                                                         })
@@ -1285,6 +1290,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                                             date: h.date,
                                                             time_in: "08:00",
                                                             time_out: shiftHrs === 12 ? "20:00" : "17:00",
+                                                            break_minutes: shiftHrs === 12 ? 120 : 0,
                                                             day_type: h.type,
                                                             notes: ""
                                                         })

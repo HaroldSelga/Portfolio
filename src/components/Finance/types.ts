@@ -85,6 +85,7 @@ export interface Debt {
     interest_rate?: number
     due_date?: string
     min_monthly_payment?: number
+    currency?: CurrencyCode
     created_at: string
 }
 
@@ -130,6 +131,7 @@ export interface SavingsFund {
     current_amount: number
     target_date: string | null
     notes: string | null
+    currency?: CurrencyCode
     created_at: string
 }
 

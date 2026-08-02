@@ -128,6 +128,7 @@ export default function FinanceTracker() {
         amount: "",
         fee: "",
         notes: "",
+        customRate: "",
     })
 
     useEffect(() => {
@@ -646,10 +647,14 @@ export default function FinanceTracker() {
             const fromCurr = fromWallet.currency || "PHP"
             const toCurr = toWallet.currency || "PHP"
             
-            // Calculate converted amount for destination wallet if currencies differ
+            // Calculate converted amount for destination wallet using live or custom user FX rate
+            const defaultRate = getDirectRate(fromCurr, toCurr, rates, customRates)
+            const customRateVal = transferData.customRate ? parseFloat(transferData.customRate) : 0
+            const effectiveRate = customRateVal > 0 ? customRateVal : defaultRate
+
             const targetAmount = fromCurr === toCurr 
                 ? fromAmount 
-                : convertCurrency(fromAmount, fromCurr, toCurr, rates, customRates)
+                : fromAmount * effectiveRate
 
             const notesSuffix = notes ? ` (${notes})` : ""
 
@@ -692,7 +697,7 @@ export default function FinanceTracker() {
                 currency: toCurr,
             })
 
-            setTransferData({ from: "", to: "", amount: "", fee: "", notes: "" })
+            setTransferData({ from: "", to: "", amount: "", fee: "", notes: "", customRate: "" })
             setShowTransfer(false)
         } catch (e) {
             console.error("Error transferring:", e)
@@ -1745,13 +1750,50 @@ export default function FinanceTracker() {
                                 </div>
                             )}
 
-                            {/* Conversion Rate Preview if transferring across different currencies */}
-                            {fromW && toW && fromCurr !== toCurr && amt > 0 && (
-                                <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-500 font-medium text-center">
-                                    <span>Recipient receives: </span>
-                                    <span className="font-black tabular-nums">{formatCurrency(convertCurrency(amt, fromCurr, toCurr, rates, customRates), toCurr, showAmounts)}</span>
-                                </div>
-                            )}
+                            {/* Conversion Rate Preview & Editable Rate Field if transferring across different currencies */}
+                            {fromW && toW && fromCurr !== toCurr && (() => {
+                                const defaultDirectRate = getDirectRate(fromCurr, toCurr, rates, customRates)
+                                const customRateVal = parseFloat(transferData.customRate)
+                                const effectiveRate = !isNaN(customRateVal) && customRateVal > 0 ? customRateVal : defaultDirectRate
+                                const recipientAmount = amt * effectiveRate
+
+                                return (
+                                    <div className="bg-card/80 border border-primary/20 rounded-xl p-3 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                                                <Globe className="h-3.5 w-3.5 text-primary" />
+                                                Exchange Rate (1 {fromCurr} = {CURRENCIES[toCurr]?.symbol || ""})
+                                            </label>
+                                            {transferData.customRate !== "" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTransferData(prev => ({ ...prev, customRate: "" }))}
+                                                    className="text-[10px] text-primary font-bold hover:underline"
+                                                >
+                                                    Reset to Live Rate
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                min="0.00000001"
+                                                placeholder={defaultDirectRate.toString()}
+                                                value={transferData.customRate !== "" ? transferData.customRate : defaultDirectRate.toString()}
+                                                onChange={e => setTransferData({ ...transferData, customRate: e.target.value })}
+                                                className="w-full px-3 py-1.5 bg-background border border-border/60 rounded-xl text-xs font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                            />
+                                        </div>
+                                        {amt > 0 && (
+                                            <div className="bg-sky-500/10 border border-sky-500/20 rounded-lg p-2.5 text-xs text-sky-500 font-medium text-center">
+                                                <span>Recipient receives: </span>
+                                                <span className="font-black tabular-nums text-sm">{formatCurrency(recipientAmount, toCurr, showAmounts)}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })()}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>

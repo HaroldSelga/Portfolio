@@ -100,9 +100,17 @@ export function ReportsSection({
         return convertCurrency(entry.amount, entryCurr, baseCurrency, rates, customRates)
     }
 
-    // Compute month data (excluding transfers and virtual savings deposits/withdrawals from core spending)
+    // Compute month data (excluding internal transfers from core spending, but including transfer fees)
     const getMonthData = (monthKey: string) => {
-        const monthEntries = entries.filter(e => e.date.startsWith(monthKey) && e.category !== "transfer")
+        // Exclude purely internal wallet transfers, but keep transfer fees
+        const monthEntries = entries.filter(e => {
+            if (!e.date.startsWith(monthKey)) return false
+            if (e.category === "transfer") {
+                const isFee = (e.description || "").toLowerCase().includes("fee")
+                return isFee // keep transfer fees as real expense entries
+            }
+            return true
+        })
         
         // Income (excluding fund withdrawals which are just returns to wallets)
         const income = monthEntries
@@ -115,17 +123,18 @@ export function ReportsSection({
             .reduce((s, e) => s + getConvertedAmount(e), 0)
 
         // Savings entries recorded this month
-        const savedToFunds = monthEntries
-            .filter(e => e.category === "savings_deposit")
+        const savedToFunds = entries
+            .filter(e => e.date.startsWith(monthKey) && e.category === "savings_deposit")
             .reduce((s, e) => s + getConvertedAmount(e), 0)
 
-        const withdrawnFromFunds = monthEntries
-            .filter(e => e.category === "savings_withdraw")
+        const withdrawnFromFunds = entries
+            .filter(e => e.date.startsWith(monthKey) && e.category === "savings_withdraw")
             .reduce((s, e) => s + getConvertedAmount(e), 0)
 
-        // Net saved includes standard surplus + net funds savings
-        const netSavingsVolume = (income - expense) + (savedToFunds - withdrawnFromFunds)
-        const net = income - expense // Basic cash net
+        // Net Savings Volume = Income minus Real Expenses (represents total surplus created)
+        const netSavingsVolume = income - expense
+        // Net Cash Flow = Liquid surplus remaining in wallets after funding savings goals
+        const net = (income - expense) - (savedToFunds - withdrawnFromFunds)
 
         const daysInMonth = new Date(parseInt(monthKey.split("-")[0]), parseInt(monthKey.split("-")[1]), 0).getDate()
         const today = new Date()
@@ -214,7 +223,7 @@ export function ReportsSection({
     const monthlyData = useMemo(() => {
         const months: Record<string, { income: number; expense: number }> = {}
         entries.forEach(e => {
-            if (e.category === "transfer") return
+            if (e.category === "transfer" && !(e.description || "").toLowerCase().includes("fee")) return
             const key = e.date.substring(0, 7)
             if (!months[key]) months[key] = { income: 0, expense: 0 }
             const cAmt = getConvertedAmount(e)
@@ -297,6 +306,12 @@ export function ReportsSection({
         refund: "bg-cyan-500",
         savings_withdraw: "bg-emerald-400",
         transfer: "bg-stone-500",
+        debt_received: "bg-blue-500",
+        platform_earnings: "bg-purple-500",
+        cashout: "bg-emerald-600",
+        commission: "bg-yellow-500",
+        tips: "bg-rose-400",
+        rental_income: "bg-teal-600",
         other: "bg-stone-400",
     }
 

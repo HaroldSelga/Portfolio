@@ -89,6 +89,13 @@ export function FundsSection({ funds, wallets, showAmounts = true, baseCurrency 
         if (!txModal || !txForm.amount || !txForm.wallet_id) return
 
         const amount = parseFloat(txForm.amount)
+        if (isNaN(amount) || amount <= 0) return
+
+        if (txModal.type === "withdraw" && (amount > txModal.fund.current_amount || txModal.fund.current_amount <= 0)) {
+            alert("Cannot withdraw more than your available saved balance.")
+            return
+        }
+
         onFundTransaction(
             txModal.fund.id,
             amount,
@@ -348,8 +355,13 @@ export function FundsSection({ funds, wallets, showAmounts = true, baseCurrency 
                                     <div className="flex gap-1.5">
                                         <Button
                                             onClick={() => handleOpenTx(fund, "withdraw")}
-                                            className="font-bold text-xs h-7 border border-rose-500/20 text-rose-500 hover:bg-rose-500/5 hover:border-rose-500/30 rounded-lg gap-1"
+                                            disabled={fund.current_amount <= 0}
+                                            className={cn(
+                                                "font-bold text-xs h-7 border border-rose-500/20 text-rose-500 hover:bg-rose-500/5 hover:border-rose-500/30 rounded-lg gap-1",
+                                                fund.current_amount <= 0 && "opacity-40 cursor-not-allowed hover:bg-transparent"
+                                            )}
                                             size="sm"
+                                            title={fund.current_amount <= 0 ? "No funds available to withdraw" : "Withdraw savings"}
                                         >
                                             <ArrowDownRight className="h-3.5 w-3.5" />
                                             Withdraw

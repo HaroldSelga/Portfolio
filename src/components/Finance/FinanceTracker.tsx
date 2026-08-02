@@ -1514,6 +1514,8 @@ export default function FinanceTracker() {
                                     baseCurrency={baseCurrency}
                                     rates={rates}
                                     deductions={payrollDeductions}
+                                    funds={funds}
+                                    onFundTransaction={handleFundTransaction}
                                     onAddProfile={handleAddProfile}
                                     onUpdateProfile={handleUpdateProfile}
                                     onDeleteProfile={handleDeleteProfile}

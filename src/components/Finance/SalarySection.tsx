@@ -81,12 +81,14 @@ interface SalarySectionProps {
     baseCurrency: CurrencyCode
     rates?: ExchangeRates
     deductions?: PayrollDeduction[]
+    funds?: SavingsFund[]
     onAddProfile: (profile: Omit<WorkProfile, "id" | "created_at">) => Promise<void>
     onUpdateProfile: (id: string, profile: Partial<WorkProfile>) => Promise<void>
     onDeleteProfile: (id: string) => Promise<void>
     onAddTimeLog: (log: Omit<TimeLog, "id" | "created_at">) => Promise<void>
     onDeleteTimeLog: (id: string) => Promise<void>
     onReceiveIncome: (params: { amount: number; description: string; wallet_id: string; currency: CurrencyCode }) => Promise<void>
+    onFundTransaction?: (id: string, amount: number, type: "deposit" | "withdraw", walletId: string, notes: string | null) => void
 }
 
 type SubTab = "timesheet" | "payroll" | "tax" | "profiles" | "holidays"
@@ -98,12 +100,14 @@ export function SalarySection({
     showAmounts,
     rates,
     deductions = [],
+    funds = [],
     onAddProfile,
     onUpdateProfile,
     onDeleteProfile,
     onAddTimeLog,
     onDeleteTimeLog,
-    onReceiveIncome
+    onReceiveIncome,
+    onFundTransaction
 }: SalarySectionProps) {
     // Active work profile selection
     const [selectedProfileId, setSelectedProfileId] = useState<string>(() => profiles[0]?.id || "")
@@ -404,8 +408,43 @@ export function SalarySection({
                 wallet_id: walletId,
                 currency: activeProfile.currency
             })
-            setIncomeAddedNotice(`Successfully added ${formatCurrency(payrollSummary.netPay, activeProfile.currency, showAmounts)} to your wallet as income!`)
-            setTimeout(() => setIncomeAddedNotice(null), 5000)
+
+            // Auto-allocate savings goals if configured
+            let autoAllocatedSummary = ""
+            try {
+                const storedAllocates = localStorage.getItem("finance_savings_auto_allocate")
+                if (storedAllocates && onFundTransaction && funds && funds.length > 0) {
+                    const allocates: Record<string, number> = JSON.parse(storedAllocates)
+                    const allocatedItems: string[] = []
+
+                    for (const [fundId, percent] of Object.entries(allocates)) {
+                        if (percent > 0) {
+                            const fund = funds.find(f => f.id === fundId)
+                            if (fund) {
+                                const allocAmount = (payrollSummary.netPay * percent) / 100
+                                if (allocAmount > 0) {
+                                    onFundTransaction(
+                                        fundId,
+                                        allocAmount,
+                                        "deposit",
+                                        walletId,
+                                        `Auto-allocated ${percent}% from ${desc}`
+                                    )
+                                    allocatedItems.push(`${fund.label} (${percent}% = ${formatCurrency(allocAmount, activeProfile.currency, showAmounts)})`)
+                                }
+                            }
+                        }
+                    }
+                    if (allocatedItems.length > 0) {
+                        autoAllocatedSummary = ` 🎉 Auto-allocated to Savings Goals: ${allocatedItems.join(", ")}`
+                    }
+                }
+            } catch (allocErr) {
+                console.warn("Auto allocate on salary receive error:", allocErr)
+            }
+
+            setIncomeAddedNotice(`Successfully added ${formatCurrency(payrollSummary.netPay, activeProfile.currency, showAmounts)} to your wallet as income!${autoAllocatedSummary}`)
+            setTimeout(() => setIncomeAddedNotice(null), 8000)
         } catch (err) {
             console.error("Error receiving income:", err)
         }
@@ -1289,6 +1328,33 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Taiwan 183-Day Residency Progress Bar Card */}
+                                {activeProfile.country === "TW" && (
+                                    <div className="bg-card/40 border border-border/30 rounded-2xl p-4 space-y-2">
+                                        <div className="flex justify-between items-center text-xs font-bold">
+                                            <span className="flex items-center gap-1.5">
+                                                <span>🇹🇼 Taiwan Residency Counter (183-Day Rule)</span>
+                                            </span>
+                                            <span className={cn("px-2.5 py-0.5 rounded-md font-black text-[10px]", daysInCountry >= 183 ? "bg-emerald-500/20 text-emerald-500" : "bg-amber-500/20 text-amber-500")}>
+                                                {daysInCountry >= 183 ? "RESIDENT QUALIFIED (5% TAX RATE)" : `${183 - daysInCountry} MORE DAYS NEEDED`}
+                                            </span>
+                                        </div>
+                                        <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                                            <div
+                                                className={cn(
+                                                    "h-full rounded-full transition-all duration-500",
+                                                    daysInCountry >= 183 ? "bg-emerald-500" : "bg-gradient-to-r from-amber-500 to-emerald-400"
+                                                )}
+                                                style={{ width: `${Math.min((daysInCountry / 183) * 100, 100)}%` }}
+                                            />
+                                        </div>
+                                        <div className="flex justify-between text-[10px] text-muted-foreground font-semibold">
+                                            <span>{daysInCountry} / 183 Days Completed ({Math.round(Math.min((daysInCountry / 183) * 100, 100))}%)</span>
+                                            <span>{daysInCountry >= 183 ? "🎉 100% Tax Refund Eligible in August!" : "Withheld @ 18% (Will refund 13% difference in August once 183d reached)"}</span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Main Refund Highlight Banner */}
                                 {activeProfile.country === "TW" ? (

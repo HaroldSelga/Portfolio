@@ -266,6 +266,63 @@ export function SettingsSection({
         setShowRateModal(false)
     }
 
+    // Backup & Restore Handlers
+    const handleExportBackup = () => {
+        const backupData = {
+            version: "1.0",
+            exportedAt: new Date().toISOString(),
+            wallets,
+            budgets,
+            profiles,
+            deductions,
+            entries,
+            debts,
+            payments,
+            bills,
+            wishlist,
+            funds,
+            timeLogs,
+            baseCurrency,
+            customRates
+        }
+        const jsonStr = JSON.stringify(backupData, null, 2)
+        const blob = new Blob([jsonStr], { type: "application/json" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `FinanceTracker_Backup_${new Date().toISOString().split("T")[0]}.json`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+    }
+
+    const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target?.result as string)
+                if (data.wallets) localStorage.setItem("finance_wallets", JSON.stringify(data.wallets))
+                if (data.entries) localStorage.setItem("finance_entries", JSON.stringify(data.entries))
+                if (data.debts) localStorage.setItem("finance_debts", JSON.stringify(data.debts))
+                if (data.bills) localStorage.setItem("finance_bills", JSON.stringify(data.bills))
+                if (data.wishlist) localStorage.setItem("wishlist_items", JSON.stringify(data.wishlist))
+                if (data.funds) localStorage.setItem("savings_funds", JSON.stringify(data.funds))
+                if (data.budgets) localStorage.setItem("category_budgets", JSON.stringify(data.budgets))
+                if (data.profiles) localStorage.setItem("work_profiles", JSON.stringify(data.profiles))
+                if (data.timeLogs) localStorage.setItem("time_logs", JSON.stringify(data.timeLogs))
+                if (data.deductions) localStorage.setItem("finance_payroll_deductions", JSON.stringify(data.deductions))
+                alert("🎉 Backup imported successfully! Refreshing page...")
+                window.location.reload()
+            } catch (err) {
+                alert("❌ Failed to parse backup file. Please select a valid FinanceTracker JSON backup.")
+            }
+        }
+        reader.readAsText(file)
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -344,6 +401,38 @@ export function SettingsSection({
                         </option>
                     ))}
                 </select>
+            </div>
+
+            {/* Data Backup & Restore Card */}
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                        <Save className="h-4 w-4 text-emerald-500" /> Data Backup & Restore (JSON)
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                        Export a full offline backup of all your wallets, salary logs, debts, and savings goals or restore from a JSON file.
+                    </p>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <Button
+                        onClick={handleExportBackup}
+                        className="font-bold text-xs rounded-xl gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 flex-1 sm:flex-none"
+                        size="sm"
+                    >
+                        <Download className="h-4 w-4" /> Export Backup
+                    </Button>
+                    <label className="cursor-pointer">
+                        <input
+                            type="file"
+                            accept=".json"
+                            onChange={handleImportBackup}
+                            className="hidden"
+                        />
+                        <span className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl font-bold text-xs transition-all h-9">
+                            <RotateCcw className="h-4 w-4" /> Import Backup
+                        </span>
+                    </label>
+                </div>
             </div>
 
             {/* Add Wallet Form */}

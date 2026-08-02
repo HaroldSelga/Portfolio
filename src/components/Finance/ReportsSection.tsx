@@ -245,15 +245,29 @@ export function ReportsSection({
             }))
     }, [entries])
 
-    // Totals (all time, excluding transfers)
-    const totalDebt = debts.reduce((s, d) => s + d.total_amount, 0)
-    const totalDebtPaid = debts.reduce((s, d) => s + d.paid_amount, 0)
-    const walletTotal = wallets.reduce((s, w) => s + w.balance, 0)
-    const netWorth = walletTotal - (totalDebt - totalDebtPaid)
+    // Multi-currency converted totals
+    const totalRemainingDebt = debts.reduce((s, d) => {
+        const rem = d.total_amount - d.paid_amount
+        const dCurr = d.currency || "PHP"
+        return s + convertCurrency(rem, dCurr, baseCurrency, rates, customRates)
+    }, 0)
+
+    const walletTotal = wallets.reduce((s, w) => {
+        const wCurr = w.currency || "PHP"
+        return s + convertCurrency(w.balance, wCurr, baseCurrency, rates, customRates)
+    }, 0)
+
+    const netWorth = walletTotal - totalRemainingDebt
 
     // Savings Funds summary stats
-    const totalSavedFunds = funds.reduce((sum, f) => sum + f.current_amount, 0)
-    const totalTargetFunds = funds.reduce((sum, f) => sum + f.target_amount, 0)
+    const totalSavedFunds = funds.reduce((sum, f) => {
+        const fCurr = f.currency || "PHP"
+        return sum + convertCurrency(f.current_amount, fCurr, baseCurrency, rates, customRates)
+    }, 0)
+    const totalTargetFunds = funds.reduce((sum, f) => {
+        const fCurr = f.currency || "PHP"
+        return sum + convertCurrency(f.target_amount, fCurr, baseCurrency, rates, customRates)
+    }, 0)
 
     const maxMonthly = Math.max(...monthlyData.map(m => Math.max(m.income, m.expense)), 1)
     const maxCategory = Math.max(...categoryData.map(c => c.amount), 1)
@@ -912,14 +926,33 @@ export function ReportsSection({
                             )
                         })}
                     </div>
-                    <div className="border-t border-border/30 pt-2 flex items-center justify-between text-xs">
-                        <span className="font-black">Net Worth</span>
-                        <span className={cn(
-                            "font-black tabular-nums",
-                            netWorth >= 0 ? "text-emerald-500" : "text-rose-500"
-                        )}>
-                            {netWorth < 0 && "-"}{formatCurrency(netWorth, baseCurrency, showAmounts)}
-                        </span>
+                    <div className="border-t border-border/30 pt-2 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between text-muted-foreground font-medium">
+                            <span>Total Liquid Assets (Wallets):</span>
+                            <span className="font-black text-emerald-500 tabular-nums">
+                                {formatCurrency(walletTotal, baseCurrency, showAmounts)}
+                            </span>
+                        </div>
+                        {totalRemainingDebt > 0 && (
+                            <div className="flex items-center justify-between text-muted-foreground font-medium">
+                                <span>Unpaid Liabilities (Debts):</span>
+                                <span className="font-black text-rose-500 tabular-nums">
+                                    -{formatCurrency(totalRemainingDebt, baseCurrency, showAmounts)}
+                                </span>
+                            </div>
+                        )}
+                        <div className="flex items-center justify-between border-t border-border/20 pt-1.5 font-black text-foreground">
+                            <div>
+                                <span>Net Worth</span>
+                                <span className="text-[10px] text-muted-foreground font-medium block">Assets − Liabilities</span>
+                            </div>
+                            <span className={cn(
+                                "font-black tabular-nums text-sm",
+                                netWorth >= 0 ? "text-emerald-500" : "text-rose-500"
+                            )}>
+                                {netWorth < 0 && "-"}{formatCurrency(Math.abs(netWorth), baseCurrency, showAmounts)}
+                            </span>
+                        </div>
                     </div>
                 </div>
 

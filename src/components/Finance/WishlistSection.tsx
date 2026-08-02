@@ -103,7 +103,7 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
                         <Target className="h-5 w-5 text-sky-500" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight">Wishlist / Buy Soon</h3>
+                        <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">Wishlist / Buy Soon</h3>
                         <p className="text-xs font-bold text-muted-foreground">
                             Estimated: <span className="text-sky-500">{formatCurrency(totalEstimatedActive, baseCurrency, showAmounts)}</span> remaining
                         </p>

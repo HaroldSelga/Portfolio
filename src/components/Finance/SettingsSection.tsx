@@ -269,13 +269,13 @@ export function SettingsSection({
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-stone-500/10 rounded-xl">
-                        <Plus className="h-5 w-5 text-stone-400" />
+                    <div className="p-2.5 bg-primary/10 rounded-xl">
+                        <Building className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight">Finance Settings</h3>
+                        <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">Finance Settings</h3>
                         <p className="text-xs font-bold text-muted-foreground">
                             Multi-currency wallets, live exchange rates, and category budgets
                         </p>

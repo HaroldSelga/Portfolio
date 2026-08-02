@@ -112,13 +112,13 @@ export function FundsSection({ funds, wallets, showAmounts = true, baseCurrency 
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-emerald-500/10 rounded-xl">
                         <PiggyBank className="h-5 w-5 text-emerald-500" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight">Savings Funds & Goals</h3>
+                        <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">Savings Funds & Goals</h3>
                         <p className="text-xs font-bold text-muted-foreground">
                             Saved: <span className="text-emerald-500">{formatCurrency(totalSaved, baseCurrency, showAmounts)}</span>
                             {totalTarget > 0 && <span className="text-muted-foreground/60 ml-2">of {formatCurrency(totalTarget, baseCurrency, showAmounts)} target</span>}

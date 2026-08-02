@@ -121,14 +121,14 @@ export function ExpenseSection({
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-rose-500/10 rounded-xl">
                         <TrendingDown className="h-5 w-5 text-rose-500" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight">Expenses</h3>
-                        <p className="text-xs font-bold text-muted-foreground">
+                        <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">Expenses</h3>
+                        <p className="text-xs font-bold text-muted-foreground hidden sm:block">
                             Track daily spending, food, bills, and monthly category budgets
                         </p>
                     </div>
@@ -355,7 +355,7 @@ export function ExpenseSection({
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: i * 0.03 }}
-                                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group"
+                                    className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors group"
                                 >
                                     <span className="text-lg">{cat?.emoji || "📦"}</span>
                                     <div className="flex-1 min-w-0">
@@ -363,10 +363,10 @@ export function ExpenseSection({
                                         {entry.notes && (
                                             <p className="text-xs text-muted-foreground/80 italic font-normal truncate">{entry.notes}</p>
                                         )}
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                            <span>{new Date(entry.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
-                                            <span>·</span>
-                                            <span className="px-1.5 py-0.5 bg-muted rounded-md text-[10px] font-bold uppercase">
+                                        <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                                            <span className="text-[11px]">{new Date(entry.date).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}</span>
+                                            <span className="hidden sm:inline">·</span>
+                                            <span className="px-1.5 py-0.5 bg-muted rounded-md text-[10px] font-bold uppercase hidden sm:inline">
                                                 {cat?.label || entry.category}
                                             </span>
                                             {wallet && (
@@ -377,7 +377,7 @@ export function ExpenseSection({
                                             )}
                                         </div>
                                     </div>
-                                    <span className="text-sm font-black tabular-nums text-rose-500">
+                                    <span className="text-xs sm:text-sm font-black tabular-nums text-rose-500 shrink-0 ml-1">
                                         -{formatCurrency(entry.amount, entryCurrency, showAmounts)}
                                     </span>
                                     <button

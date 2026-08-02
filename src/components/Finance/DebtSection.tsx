@@ -88,13 +88,13 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-orange-500/10 rounded-xl">
                         <CreditCard className="h-5 w-5 text-orange-500" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight">Debts</h3>
+                        <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">Debts</h3>
                         <p className="text-xs font-bold text-muted-foreground tabular-nums">
                             Remaining: <span className="text-orange-500">{formatCurrency(totalRemaining, baseCurrency, showAmounts)}</span>
                             <span className="text-muted-foreground/60 ml-2">of {formatCurrency(totalDebt, baseCurrency, showAmounts)}</span>

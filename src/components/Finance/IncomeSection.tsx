@@ -127,8 +127,8 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                         <TrendingUp className="h-5 w-5 text-emerald-500" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight">Income</h3>
-                        <p className="text-xs font-bold text-muted-foreground">
+                        <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">Income</h3>
+                        <p className="text-xs font-bold text-muted-foreground hidden sm:block">
                             Record your salary, freelance earnings, or side hustle revenues
                         </p>
                     </div>
@@ -445,7 +445,7 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: i * 0.03 }}
-                                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group"
+                                    className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors group"
                                 >
                                     <span className="text-lg">{cat?.emoji || "💰"}</span>
                                     <div className="flex-1 min-w-0">
@@ -463,7 +463,7 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                                             )}
                                         </div>
                                     </div>
-                                    <span className="text-sm font-black tabular-nums text-emerald-500">
+                                    <span className="text-xs sm:text-sm font-black tabular-nums text-emerald-500 shrink-0 ml-1">
                                         +{formatCurrency(entry.amount, entryCurrency, showAmounts)}
                                     </span>
                                     <button

@@ -138,7 +138,7 @@ export function WalletCards({
                             Total Portfolio Balance <span className="text-[10px] px-1.5 py-0.2 bg-muted rounded font-black">{baseConfig.flag} {baseCurrency}</span>
                         </p>
                         <p className={cn(
-                            "text-2xl font-black tabular-nums tracking-tight",
+                            "text-xl sm:text-2xl font-black tabular-nums tracking-tight",
                             totalInBase >= 0 ? "text-emerald-500" : "text-rose-500"
                         )}>
                             {totalInBase < 0 && showAmounts && "-"}{formatCurrency(totalInBase, baseCurrency, showAmounts)}
@@ -151,7 +151,7 @@ export function WalletCards({
                         className="flex items-center justify-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted border border-border/40 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground transition-all shadow-sm self-start sm:self-auto"
                     >
                         <ArrowRightLeft className="h-4 w-4" />
-                        <span>Transfer</span>
+                        <span className="hidden sm:inline">Transfer</span>
                     </button>
                 )}
             </div>

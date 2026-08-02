@@ -64,7 +64,7 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                     </div>
 
                     {/* Filter Type */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                         <select
                             value={selectedType}
                             onChange={e => setSelectedType(e.target.value)}
@@ -117,10 +117,10 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                                     initial={{ opacity: 0, y: 5 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: Math.min(i * 0.02, 0.3) }}
-                                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors group"
+                                    className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors group"
                                 >
                                     {/* Icon/Emoji Wrapper */}
-                                    <span className="text-lg w-10 h-10 flex items-center justify-center bg-muted/60 rounded-xl shrink-0">
+                                    <span className="text-base sm:text-lg w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-muted/60 rounded-xl shrink-0">
                                         {catDetails?.emoji || "📦"}
                                     </span>
 
@@ -132,7 +132,7 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                                         {entry.notes && (
                                             <p className="text-xs text-muted-foreground/80 italic font-normal truncate">{entry.notes}</p>
                                         )}
-                                        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground mt-0.5 font-medium">
+                                        <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-[11px] sm:text-xs text-muted-foreground mt-0.5 font-medium">
                                             <span>
                                                 {new Date(entry.date).toLocaleDateString("en-PH", {
                                                     month: "short",
@@ -145,7 +145,7 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                                                 <WalletIcon className="h-3 w-3 inline text-muted-foreground/60" />
                                                 {wallet?.name || "Unknown Wallet"}
                                             </span>
-                                            <span>·</span>
+                                            <span className="hidden sm:inline">·</span>
                                             {entry.category === "transfer" ? (
                                                 <span className="px-1.5 py-0.5 bg-sky-500/10 border border-sky-500/30 text-sky-500 rounded-md text-[10px] font-black uppercase tracking-wide">
                                                     🔁 Wallet Transfer
@@ -160,7 +160,7 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
 
                                     {/* Value detail */}
                                     <span className={cn(
-                                        "text-sm font-black tabular-nums shrink-0 ml-2",
+                                        "text-xs sm:text-sm font-black tabular-nums shrink-0 ml-1",
                                         isIncome ? "text-emerald-500" : "text-rose-500"
                                     )}>
                                         {isIncome ? "+" : "-"}{formatCurrency(entry.amount, entryCurrency, showAmounts)}

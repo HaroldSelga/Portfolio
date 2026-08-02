@@ -353,25 +353,30 @@ export default function FinanceTracker() {
                 created_at: new Date().toISOString()
             }
 
-            // Update wallet balance
-            const wallet = wallets.find(w => w.id === entry.wallet_id)
-            if (wallet) {
-                const newBalance = entry.type === "income"
+            // Update wallet balance atomically using functional updater
+            // This ensures sequential calls (e.g. transfer + fee) always use the latest balance
+            let computedNewBalance: number | undefined
+            setWallets(prev => {
+                const wallet = prev.find(w => w.id === entry.wallet_id)
+                if (!wallet) return prev
+                computedNewBalance = entry.type === "income"
                     ? wallet.balance + entry.amount
                     : wallet.balance - entry.amount
+                return prev.map(w =>
+                    w.id === entry.wallet_id ? { ...w, balance: computedNewBalance! } : w
+                )
+            })
 
+            // Sync computed balance to Supabase
+            if (computedNewBalance !== undefined) {
                 try {
                     await supabase
                         .from("wallets")
-                        .update({ balance: newBalance })
+                        .update({ balance: computedNewBalance })
                         .eq("id", entry.wallet_id)
                 } catch (err) {
                     console.warn("Updating wallet balance in Supabase failed, updated locally:", err)
                 }
-
-                setWallets(prev => prev.map(w =>
-                    w.id === entry.wallet_id ? { ...w, balance: newBalance } : w
-                ))
             }
 
             setEntries(prev => [finalEntry, ...prev])
@@ -393,21 +398,28 @@ export default function FinanceTracker() {
 
             if (error) throw error
 
-            // Reverse wallet balance
-            const wallet = wallets.find(w => w.id === entry.wallet_id)
-            if (wallet) {
-                const newBalance = entry.type === "income"
+            // Reverse wallet balance atomically using functional updater
+            let computedNewBalance: number | undefined
+            setWallets(prev => {
+                const wallet = prev.find(w => w.id === entry.wallet_id)
+                if (!wallet) return prev
+                computedNewBalance = entry.type === "income"
                     ? wallet.balance - entry.amount
                     : wallet.balance + entry.amount
+                return prev.map(w =>
+                    w.id === entry.wallet_id ? { ...w, balance: computedNewBalance! } : w
+                )
+            })
 
-                await supabase
-                    .from("wallets")
-                    .update({ balance: newBalance })
-                    .eq("id", entry.wallet_id)
-
-                setWallets(prev => prev.map(w =>
-                    w.id === entry.wallet_id ? { ...w, balance: newBalance } : w
-                ))
+            if (computedNewBalance !== undefined) {
+                try {
+                    await supabase
+                        .from("wallets")
+                        .update({ balance: computedNewBalance })
+                        .eq("id", entry.wallet_id)
+                } catch (err) {
+                    console.warn("Reversing wallet balance in Supabase failed, updated locally:", err)
+                }
             }
 
             // Also check if this deletion affects any savings goal balance
@@ -1228,7 +1240,7 @@ export default function FinanceTracker() {
     }
 
     return (
-        <div className="min-h-screen bg-background pt-24 pb-20 px-4 md:px-8">
+        <div className="min-h-screen bg-background pt-24 pb-20 px-3 sm:px-4 md:px-8 overflow-x-hidden">
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Page Header */}
                 <motion.div
@@ -1237,11 +1249,11 @@ export default function FinanceTracker() {
                     transition={{ duration: 0.5 }}
                     className="flex items-start justify-between gap-4"
                 >
-                    <div className="space-y-2">
-                        <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase">
+                    <div className="space-y-1 sm:space-y-2 min-w-0">
+                        <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter uppercase">
                             Finance <span className="text-primary">Tracker</span>
                         </h1>
-                        <p className="text-muted-foreground font-medium max-w-xl">
+                        <p className="text-muted-foreground font-medium max-w-xl text-xs sm:text-sm hidden sm:block">
                             Track your salary, expenses, and debts in one place.
                         </p>
                     </div>
@@ -1438,7 +1450,7 @@ export default function FinanceTracker() {
                                 )}
                             >
                                 <tab.icon className={cn("h-4 w-4 shrink-0", isActive && tab.color)} />
-                                <span>{tab.label}</span>
+                                <span className="hidden sm:inline">{tab.label}</span>
                             </button>
                         )
                     })}
@@ -1649,6 +1661,21 @@ export default function FinanceTracker() {
                                         )
                                     })}
                                 </select>
+                                {/* From Wallet Balance Badge */}
+                                {fromW && (
+                                    <div className={cn(
+                                        "mt-1.5 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between",
+                                        fromW.balance <= 0
+                                            ? "bg-rose-500/10 border border-rose-500/20 text-rose-500"
+                                            : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-600"
+                                    )}>
+                                        <span>Current Balance:</span>
+                                        <span className="font-black tabular-nums">{formatCurrency(fromW.balance, fromCurr, showAmounts)}</span>
+                                    </div>
+                                )}
+                                {fromW && fromW.balance <= 0 && (
+                                    <p className="text-[10px] text-rose-500/80 font-medium mt-1">This wallet has no funds. Add income or adjust balance in Settings first.</p>
+                                )}
                             </div>
 
                             <div className="flex justify-center">
@@ -1686,8 +1713,14 @@ export default function FinanceTracker() {
                             <div>
                                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 flex justify-between items-center">
                                     <span>Amount to Transfer ({CURRENCIES[fromCurr]?.symbol || "₱"})</span>
-                                    {fromW && (
-                                        <span className="text-[10px] text-muted-foreground font-semibold">Available: {formatCurrency(fromW.balance, fromCurr, showAmounts)}</span>
+                                    {fromW && fromW.balance > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setTransferData({ ...transferData, amount: fromW.balance.toString() })}
+                                            className="text-[10px] text-primary font-bold hover:text-primary/80 hover:underline transition-colors cursor-pointer"
+                                        >
+                                            Use Max: {formatCurrency(fromW.balance, fromCurr, showAmounts)}
+                                        </button>
                                     )}
                                 </label>
                                 <input

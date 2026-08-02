@@ -314,7 +314,7 @@ export function ReportsSection({
             {/* ═══════════════════════════════════════════ */}
             {/* MONTH SELECTOR */}
             {/* ═══════════════════════════════════════════ */}
-            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3 flex items-center justify-between shadow-sm gap-2">
+            <div className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between shadow-sm gap-1 sm:gap-2">
                 <div className="flex items-center gap-1">
                     <button
                         onClick={goOlder}
@@ -337,14 +337,14 @@ export function ReportsSection({
                         <Calendar className="h-4 w-4 text-primary" />
                         <h2 className="text-sm font-black uppercase tracking-tight">{getMonthLabel(selectedMonthKey)}</h2>
                     </div>
-                    <p className="text-[10px] text-muted-foreground font-bold mt-0.5">
+                    <p className="text-[10px] text-muted-foreground font-bold mt-0.5 hidden sm:block">
                         comparing trends vs {getMonthLabel(prevMonthKey)}
                     </p>
                 </div>
 
                 <button
                     onClick={downloadCSV}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-all text-xs font-bold shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-all text-xs font-bold shadow-sm order-2 sm:order-3"
                     title="Export CSV Report"
                 >
                     <Download className="h-3.5 w-3.5" />
@@ -355,11 +355,11 @@ export function ReportsSection({
             {/* ═══════════════════════════════════════════ */}
             {/* MONTH vs PREVIOUS MONTH COMPARISON */}
             {/* ═══════════════════════════════════════════ */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                 {/* Income */}
                 <motion.div
                     initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}
-                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 shadow-sm"
+                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3 sm:p-4 shadow-sm"
                 >
                     <div className="p-2 rounded-xl w-fit mb-2 bg-emerald-500/10">
                         <TrendingUp className="h-4 w-4 text-emerald-500" />
@@ -377,13 +377,13 @@ export function ReportsSection({
                 {/* Expenses */}
                 <motion.div
                     initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 shadow-sm"
+                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3 sm:p-4 shadow-sm"
                 >
                     <div className="p-2 rounded-xl w-fit mb-2 bg-rose-500/10">
                         <TrendingDown className="h-4 w-4 text-rose-500" />
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Spend</p>
-                    <p className="text-lg font-black tabular-nums tracking-tight text-rose-500 mt-0.5">{formatCurrency(selectedData.expense, baseCurrency, showAmounts)}</p>
+                    <p className="text-base sm:text-lg font-black tabular-nums tracking-tight text-rose-500 mt-0.5">{formatCurrency(selectedData.expense, baseCurrency, showAmounts)}</p>
                     <div className="flex items-center gap-1 mt-1.5">
                         <DeltaArrow value={expenseDelta} invert />
                         <span className={cn("text-[10px] font-bold tabular-nums", expenseDelta <= 0 ? "text-emerald-500" : "text-rose-500")}>
@@ -395,7 +395,7 @@ export function ReportsSection({
                 {/* Net Savings Volume */}
                 <motion.div
                     initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 shadow-sm"
+                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3 sm:p-4 shadow-sm"
                 >
                     <div className="p-2 rounded-xl w-fit mb-2 bg-primary/10">
                         <Star className="h-4 w-4 text-primary" />
@@ -415,7 +415,7 @@ export function ReportsSection({
                 {/* Daily Average */}
                 <motion.div
                     initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-4 shadow-sm"
+                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3 sm:p-4 shadow-sm"
                 >
                     <div className="p-2 rounded-xl w-fit mb-2 bg-amber-500/10">
                         <BarChart3 className="h-4 w-4 text-amber-500" />

@@ -161,13 +161,13 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-amber-500/10 rounded-xl">
                         <Receipt className="h-5 w-5 text-amber-500" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight">Saved Bills</h3>
+                        <h3 className="text-base sm:text-lg font-black uppercase tracking-tight">Saved Bills</h3>
                         <p className="text-xs font-bold text-muted-foreground">
                             {unpaidCount === 0 ? (
                                 <span className="text-emerald-500">🎉 All bills paid for this month!</span>
@@ -325,7 +325,7 @@ export function BillsSection({ bills, wallets, entries, showAmounts = true, base
                                         <span className="text-xl p-2 bg-muted rounded-xl">{catInfo?.emoji || "📱"}</span>
                                         <div>
                                             <p className="text-sm font-black uppercase tracking-tight text-foreground">{bill.label}</p>
-                                            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground font-semibold">
+                                            <div className="flex items-center flex-wrap gap-1 sm:gap-1.5 mt-0.5 text-[10px] sm:text-[11px] text-muted-foreground font-semibold">
                                                 <span className="px-1.5 py-0.5 bg-muted rounded-md text-[9px] font-black uppercase">
                                                     {catInfo?.label || bill.category}
                                                 </span>

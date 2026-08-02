@@ -291,6 +291,12 @@ export const INCOME_CATEGORIES = [
     { value: "refund", label: "Refund", emoji: "🔄" },
     { value: "savings_withdraw", label: "Savings Withdrawal", emoji: "💵" },
     { value: "transfer", label: "Transfer", emoji: "🔄" },
+    { value: "debt_received", label: "Debt Received / Collected", emoji: "🤝" },
+    { value: "platform_earnings", label: "Platform Earnings (TikTok, YouTube, etc.)", emoji: "📱" },
+    { value: "cashout", label: "Cashout / Withdrawal (GCash, Maya, etc.)", emoji: "🏧" },
+    { value: "commission", label: "Commission", emoji: "🤑" },
+    { value: "tips", label: "Tips / Gratitudes", emoji: "🙏" },
+    { value: "rental_income", label: "Rental Income", emoji: "🏠" },
     { value: "other", label: "Other", emoji: "📦" },
 ] as const
 

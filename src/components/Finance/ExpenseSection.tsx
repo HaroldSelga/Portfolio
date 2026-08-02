@@ -101,7 +101,6 @@ export function ExpenseSection({
     const [showForm, setShowForm] = useState(false)
     const [showScanModal, setShowScanModal] = useState(false)
     const [scannedImage, setScannedImage] = useState<string | null>(null)
-    const [isScanning, setIsScanning] = useState(false)
     const [ocrInputText, setOcrInputText] = useState("")
     const [extractedData, setExtractedData] = useState<{
         amount: string
@@ -205,11 +204,9 @@ export function ExpenseSection({
         if (!file) return
         const imgUrl = URL.createObjectURL(file)
         setScannedImage(imgUrl)
-        setIsScanning(true)
 
         const parsed = parseReceiptText(file.name.replace(/[-_.]/g, " "))
         setExtractedData(parsed)
-        setIsScanning(false)
     }
 
     const expenseEntries = entries.filter(e => e.type === "expense").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

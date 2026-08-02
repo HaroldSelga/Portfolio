@@ -636,6 +636,57 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                 </div>
             </div>
 
+            {/* 🌟 FEATURED TOP UPCOMING HOLIDAY BANNER */}
+            {(() => {
+                const country = activeProfile ? activeProfile.country : "TW"
+                const upcoming = getUpcomingHolidays(country, 1)
+                if (upcoming.length === 0) return null
+                const nextH = upcoming[0]
+
+                return (
+                    <div className="bg-gradient-to-r from-rose-500/15 via-amber-500/15 to-primary/10 border border-rose-500/30 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2.5 bg-rose-500/20 text-rose-500 rounded-xl font-black shrink-0">
+                                <Sparkles className="h-5 w-5 animate-pulse" />
+                            </div>
+                            <div className="min-w-0 space-y-0.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                                        ⏳ Next Statutory Holiday ({nextH.daysAway === 0 ? "Today!" : `in ${nextH.daysAway} day${nextH.daysAway > 1 ? "s" : ""}`})
+                                    </span>
+                                    <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                                        🔥 {nextH.type === "regular_holiday" ? "2.0x Double Pay" : "1.30x Special Pay"}
+                                    </span>
+                                </div>
+                                <h4 className="text-sm font-black text-foreground tracking-tight flex items-center gap-1.5 truncate">
+                                    <span>{country === "TW" ? "🇹🇼" : "🇵🇭"} {nextH.name}</span>
+                                    <span className="text-xs font-semibold text-muted-foreground">({new Date(nextH.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })})</span>
+                                </h4>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                            <Button
+                                size="sm"
+                                onClick={() => {
+                                    setLogFormData({
+                                        date: nextH.date,
+                                        time_in: "08:00",
+                                        time_out: activeProfile?.shift_hours === 12 ? "20:00" : "17:00",
+                                        break_minutes: activeProfile?.shift_hours === 12 ? 120 : 60,
+                                        day_type: nextH.type,
+                                        notes: `Statutory Holiday (${nextH.name})`
+                                    })
+                                    setShowLogModal(true)
+                                }}
+                                className="bg-rose-500 text-white hover:bg-rose-600 font-bold rounded-xl text-xs gap-1.5 shadow-md shadow-rose-500/20 w-full sm:w-auto"
+                            >
+                                <Plus className="h-4 w-4" /> Log Holiday Shift
+                            </Button>
+                        </div>
+                    </div>
+                )
+            })()}
+
             {/* Success Notice */}
             <AnimatePresence>
                 {incomeAddedNotice && (

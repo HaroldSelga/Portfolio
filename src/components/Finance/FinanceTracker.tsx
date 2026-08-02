@@ -18,7 +18,8 @@ import {
     Bell,
     Plus,
     Calendar,
-    Globe
+    Globe,
+    Sparkles
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -46,6 +47,7 @@ import {
     DEFAULT_RATES_IN_USD,
     type ExchangeRates
 } from "./currency"
+import { getUpcomingHolidays } from "./holidays"
 
 type Tab = "income" | "expenses" | "history" | "bills" | "debts" | "funds" | "wishlist" | "salary" | "reports" | "settings"
 
@@ -1278,6 +1280,48 @@ export default function FinanceTracker() {
                         <span className="hidden sm:inline">{showAmounts ? "Hide Amounts" : "Privacy Mode"}</span>
                     </button>
                 </motion.div>
+
+                {/* 🌟 Top Statutory Holiday Alert Banner */}
+                {(() => {
+                    const activeProfile = workProfiles[0] || null
+                    const country = activeProfile ? activeProfile.country : "TW"
+                    const upcoming = getUpcomingHolidays(country, 2)
+                    if (upcoming.length === 0) return null
+                    const nextH = upcoming[0]
+
+                    return (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4 }}
+                        >
+                            <button
+                                onClick={() => setActiveTab("salary")}
+                                className="w-full p-3.5 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/15 flex items-center gap-3 text-left transition-all hover:shadow-md group"
+                            >
+                                <div className="p-2 rounded-xl shrink-0 bg-purple-500/20 text-purple-400">
+                                    <Sparkles className="h-5 w-5 text-purple-400 animate-pulse" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-black uppercase tracking-tight text-purple-400">
+                                        🎉 NEXT STATUTORY HOLIDAY ({nextH.daysAway === 0 ? "TODAY!" : `IN ${nextH.daysAway} DAY${nextH.daysAway > 1 ? "S" : ""}`})
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/20 text-purple-300">
+                                            {country === "TW" ? "🇹🇼" : "🇵🇭"} {nextH.name} ({new Date(nextH.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-400">
+                                            🔥 {nextH.type === "regular_holiday" ? "2.0x Double Pay" : "1.30x Special Pay"}
+                                        </span>
+                                    </div>
+                                </div>
+                                <span className="text-xs font-bold shrink-0 group-hover:translate-x-0.5 transition-transform text-purple-400">
+                                    View Salary & Holidays →
+                                </span>
+                            </button>
+                        </motion.div>
+                    )
+                })()}
 
                 {/* Bill Due Date Reminder Banner */}
                 {(() => {

@@ -17,7 +17,8 @@ import {
     Clock,
     Bell,
     Plus,
-    Calendar
+    Calendar,
+    Globe
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -41,7 +42,7 @@ import {
     getExchangeRates,
     getCustomExchangeRates,
     getPrimaryBaseCurrency,
-    convertCurrency,
+    getDirectRate,
     DEFAULT_RATES_IN_USD,
     type ExchangeRates
 } from "./currency"

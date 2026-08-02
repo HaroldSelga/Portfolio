@@ -2083,7 +2083,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                             : "bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted"
                                     )}
                                 >
-                                    {mins === 0 ? "None" : mins === 60 ? "1h Break" : mins === 120 ? "2h Break" : `${mins}m`}
+                                    {mins === 0 ? "None" : mins === 60 ? "1h Break" : mins === 120 ? "2h Break (Taiwan Default)" : `${mins}m`}
                                 </button>
                             ))}
                         </div>
@@ -2148,10 +2148,18 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                 </div>
                                 <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold">
                                     <span>Net Worked: <strong className="text-foreground">{shiftCalc.totalHours.toFixed(1)}h</strong> (Unpaid Break: {(logFormData.break_minutes / 60).toFixed(1)}h)</span>
-                                    {shiftCalc.overtimeHours > 0 && (
+                                    {shiftCalc.overtimeHours > 0 ? (
                                         <span className="text-amber-500 font-bold">Includes {shiftCalc.overtimeHours.toFixed(1)}h OT (+{formatCurrency(shiftCalc.overtimePay, activeProfile.currency, showAmounts)})</span>
+                                    ) : (
+                                        <span className="text-emerald-500/80 font-bold">Regular 8.0h Shift (0h OT)</span>
                                     )}
                                 </div>
+                                {shiftCalc.overtimeHours > 0 && (
+                                    <div className="text-[9px] text-amber-500/90 font-medium pt-1 border-t border-emerald-500/10 flex justify-between">
+                                        <span>Regular: {shiftCalc.regularHours.toFixed(1)}h @ 1.0x</span>
+                                        <span>Overtime: {shiftCalc.overtimeHours.toFixed(1)}h @ {activeProfile.country === "TW" ? "1.34x / 1.67x (勞基法 §24)" : "1.25x / 1.30x"}</span>
+                                    </div>
+                                )}
                             </div>
                         )
                     })()}

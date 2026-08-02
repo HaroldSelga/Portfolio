@@ -19,7 +19,8 @@ import {
     Plus,
     Calendar,
     Globe,
-    Sparkles
+    Sparkles,
+    Camera
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { supabase } from "../../lib/supabase"
@@ -1458,6 +1459,12 @@ export default function FinanceTracker() {
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl text-xs font-bold text-rose-500 transition-all"
                     >
                         <Plus className="h-3.5 w-3.5" /> Add Expense
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("expenses")}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-bold text-amber-500 transition-all"
+                    >
+                        <Camera className="h-3.5 w-3.5" /> Scan Receipt
                     </button>
                     <button
                         onClick={() => setActiveTab("income")}

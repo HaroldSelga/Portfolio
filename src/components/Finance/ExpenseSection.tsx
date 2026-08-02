@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Trash2, TrendingDown, X, AlertCircle, Sparkles } from "lucide-react"
+import { Plus, Trash2, TrendingDown, X, AlertCircle, Sparkles, Camera, FileText, Check, Upload, ArrowRight } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
+import { Modal } from "../ui/Modal"
 import type { FinanceEntry, Wallet, CategoryBudget, CurrencyCode } from "./types"
 import { EXPENSE_CATEGORIES, CURRENCIES, formatCurrency, getLocalDateString, getDefaultSmartWallet } from "./types"
 
@@ -16,6 +17,78 @@ interface ExpenseSectionProps {
     onDelete: (id: string) => void
 }
 
+// Receipt Text Parser Helper
+export function parseReceiptText(text: string) {
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean)
+    
+    // Known store patterns
+    const knownStores: Record<string, string> = {
+        "7-eleven": "food",
+        "711": "food",
+        "carrefour": "groceries",
+        "px mart": "groceries",
+        "pxmart": "groceries",
+        "costco": "groceries",
+        "supermarket": "groceries",
+        "mcdonald": "food",
+        "starbucks": "food",
+        "kfc": "food",
+        "jollibee": "food",
+        "shell": "gas_fuel",
+        "petron": "gas_fuel",
+        "caltex": "gas_fuel",
+        "uniqlo": "clothing",
+        "shopee": "shopping",
+        "lazada": "shopping",
+        "taiwan power": "bills",
+        "water": "bills",
+        "eec": "remittance",
+    }
+
+    let storeName = "Scanned Receipt"
+    let detectedCategory = "food"
+    const lowerText = text.toLowerCase()
+    
+    for (const [kw, cat] of Object.entries(knownStores)) {
+        if (lowerText.includes(kw)) {
+            detectedCategory = cat
+            const matchLine = lines.find(l => l.toLowerCase().includes(kw))
+            if (matchLine) storeName = matchLine
+            break
+        }
+    }
+
+    if (storeName === "Scanned Receipt" && lines.length > 0) {
+        const cleanFirst = lines.find(l => /[a-zA-Z]/.test(l) && l.length > 3 && !l.toLowerCase().includes("total"))
+        if (cleanFirst) storeName = cleanFirst
+    }
+
+    // Detect Amount (look for TOTAL, SUM, NT$, ₱, $, or numbers)
+    let amount = ""
+    const priceRegex = /(?:total|amount|sum|nt\$|₱|\$)\s*[:=]?\s*([0-9]+(?:[.,][0-9]{1,2})?)/i
+    const match = text.match(priceRegex)
+    
+    if (match && match[1]) {
+        amount = match[1].replace(",", ".")
+    } else {
+        const numbers = text.match(/\b\d+(?:[.,]\d{2})?\b/g)
+        if (numbers) {
+            const parsed = numbers.map(n => parseFloat(n.replace(",", "."))).filter(n => n > 0 && n < 100000)
+            if (parsed.length > 0) amount = String(Math.max(...parsed))
+        }
+    }
+
+    // Detect Date
+    let date = getLocalDateString()
+    const dateRegex = /\b(20\d{2}[-/.]\d{1,2}[-/.]\d{1,2})\b/
+    const dateMatch = text.match(dateRegex)
+    if (dateMatch && dateMatch[1]) {
+        date = dateMatch[1].replace(/[/.]/g, "-")
+    }
+
+    return { amount, description: storeName, category: detectedCategory, date }
+}
+
 export function ExpenseSection({
     entries,
     wallets,
@@ -26,6 +99,17 @@ export function ExpenseSection({
     onDelete
 }: ExpenseSectionProps) {
     const [showForm, setShowForm] = useState(false)
+    const [showScanModal, setShowScanModal] = useState(false)
+    const [scannedImage, setScannedImage] = useState<string | null>(null)
+    const [isScanning, setIsScanning] = useState(false)
+    const [ocrInputText, setOcrInputText] = useState("")
+    const [extractedData, setExtractedData] = useState<{
+        amount: string
+        description: string
+        category: string
+        date: string
+    } | null>(null)
+
     const [formData, setFormData] = useState({
         date: getLocalDateString(),
         category: "food",
@@ -116,6 +200,18 @@ export function ExpenseSection({
         setShowForm(false)
     }
 
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        const imgUrl = URL.createObjectURL(file)
+        setScannedImage(imgUrl)
+        setIsScanning(true)
+
+        const parsed = parseReceiptText(file.name.replace(/[-_.]/g, " "))
+        setExtractedData(parsed)
+        setIsScanning(false)
+    }
+
     const expenseEntries = entries.filter(e => e.type === "expense").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     return (
@@ -133,19 +229,29 @@ export function ExpenseSection({
                         </p>
                     </div>
                 </div>
-                <Button
-                    onClick={() => setShowForm(!showForm)}
-                    className={cn(
-                        "font-bold rounded-xl gap-2 transition-all",
-                        showForm
-                            ? "bg-muted text-muted-foreground hover:bg-muted/80"
-                            : "bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-500/20"
-                    )}
-                    size="sm"
-                >
-                    {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    {showForm ? "Cancel" : "Add Expense"}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={() => setShowScanModal(true)}
+                        className="font-bold rounded-xl gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                        size="sm"
+                    >
+                        <Camera className="h-4 w-4" />
+                        Scan Receipt
+                    </Button>
+                    <Button
+                        onClick={() => setShowForm(!showForm)}
+                        className={cn(
+                            "font-bold rounded-xl gap-2 transition-all",
+                            showForm
+                                ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                                : "bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-500/20"
+                        )}
+                        size="sm"
+                    >
+                        {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                        {showForm ? "Cancel" : "Add Expense"}
+                    </Button>
+                </div>
             </div>
 
             {/* Monthly Budget Warnings Panel */}
@@ -397,6 +503,130 @@ export function ExpenseSection({
                     </div>
                 )}
             </div>
+
+            {/* 📷 AI RECEIPT SCANNER MODAL */}
+            <Modal
+                isOpen={showScanModal}
+                onClose={() => {
+                    setShowScanModal(false)
+                    setScannedImage(null)
+                    setExtractedData(null)
+                    setOcrInputText("")
+                }}
+                title="📷 AI Receipt Scanner"
+            >
+                <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground font-medium">
+                        Upload or take a photo of your receipt (7-Eleven, Carrefour, PX Mart, Restaurant, Gas Station) to auto-extract amount & category!
+                    </p>
+
+                    {/* Image Upload Zone */}
+                    <div className="border-2 border-dashed border-border/60 hover:border-primary/50 rounded-2xl p-6 text-center space-y-3 bg-muted/20 transition-all">
+                        {scannedImage ? (
+                            <div className="space-y-3">
+                                <img src={scannedImage} alt="Receipt preview" className="max-h-48 mx-auto rounded-xl shadow-md border border-border/40 object-contain" />
+                                <div className="flex justify-center gap-2">
+                                    <label className="cursor-pointer">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            capture="environment"
+                                            onChange={(e) => handleImageSelect(e)}
+                                            className="hidden"
+                                        />
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted text-muted-foreground hover:text-foreground rounded-xl text-xs font-bold transition-all">
+                                            <Upload className="h-3.5 w-3.5" /> Retake / Choose New Photo
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        ) : (
+                            <label className="cursor-pointer space-y-2 block">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    onChange={(e) => handleImageSelect(e)}
+                                    className="hidden"
+                                />
+                                <div className="p-3 bg-primary/10 text-primary rounded-2xl w-12 h-12 mx-auto flex items-center justify-center">
+                                    <Camera className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-foreground block">Take Photo or Select Receipt Image</span>
+                                    <span className="text-[10px] text-muted-foreground">Supports JPG, PNG, WEBP receipts</span>
+                                </div>
+                            </label>
+                        )}
+                    </div>
+
+                    {/* Manual / Pasted Text Receipt OCR Zone */}
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <FileText className="h-3.5 w-3.5 text-primary" /> Receipt Text / Note Snippet (Optional OCR Text)
+                        </label>
+                        <textarea
+                            value={ocrInputText}
+                            onChange={(e) => {
+                                setOcrInputText(e.target.value)
+                                if (e.target.value.trim()) {
+                                    const parsed = parseReceiptText(e.target.value)
+                                    setExtractedData(parsed)
+                                }
+                            }}
+                            rows={3}
+                            placeholder="e.g. Carrefour Taiwan&#10;2026-08-02&#10;Milk, Bread, Fruits&#10;TOTAL: 450"
+                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                    </div>
+
+                    {/* Extracted Details Preview Card */}
+                    {extractedData && (
+                        <div className="bg-gradient-to-r from-emerald-500/10 via-sky-500/10 to-primary/10 border border-emerald-500/30 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                            <div className="flex items-center gap-2 text-xs font-black text-emerald-500 uppercase tracking-wider">
+                                <Check className="h-4 w-4" /> Extracted Receipt Details:
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="bg-background/80 p-2.5 rounded-xl border border-border/30">
+                                    <span className="text-[10px] text-muted-foreground block font-bold">Store / Description</span>
+                                    <span className="font-bold text-foreground truncate block">{extractedData.description}</span>
+                                </div>
+                                <div className="bg-background/80 p-2.5 rounded-xl border border-border/30">
+                                    <span className="text-[10px] text-muted-foreground block font-bold">Total Amount</span>
+                                    <span className="font-black text-emerald-500 text-sm tabular-nums block">
+                                        {extractedData.amount ? `${currInfo.symbol}${extractedData.amount}` : "Not detected"}
+                                    </span>
+                                </div>
+                                <div className="bg-background/80 p-2.5 rounded-xl border border-border/30">
+                                    <span className="text-[10px] text-muted-foreground block font-bold">Detected Category</span>
+                                    <span className="font-bold text-sky-500 uppercase text-[10px] block">{extractedData.category}</span>
+                                </div>
+                                <div className="bg-background/80 p-2.5 rounded-xl border border-border/30">
+                                    <span className="text-[10px] text-muted-foreground block font-bold">Date</span>
+                                    <span className="font-bold text-foreground text-[11px] block">{extractedData.date}</span>
+                                </div>
+                            </div>
+
+                            <Button
+                                onClick={() => {
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        amount: extractedData.amount || prev.amount,
+                                        description: extractedData.description || prev.description,
+                                        category: extractedData.category || prev.category,
+                                        date: extractedData.date || prev.date
+                                    }))
+                                    setShowScanModal(false)
+                                    setShowForm(true)
+                                }}
+                                className="w-full bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl text-xs gap-1.5 shadow-md shadow-emerald-500/20 mt-2"
+                            >
+                                <ArrowRight className="h-4 w-4" /> Apply & Auto-Fill Expense Form
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            </Modal>
         </div>
     )
 }

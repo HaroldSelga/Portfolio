@@ -34,7 +34,7 @@ import {
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
-import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType, PayrollDeduction, KinsenasPeriod } from "./types"
+import type { WorkProfile, TimeLog, Wallet, DayType, CurrencyCode, ScheduleType, PayrollDeduction, KinsenasPeriod, SavingsFund } from "./types"
 import { CURRENCIES, formatCurrency, getLocalDateString } from "./types"
 import { getComputationConfig } from "./computationConfig"
 import {

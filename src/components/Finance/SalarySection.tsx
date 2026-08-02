@@ -152,13 +152,18 @@ export function SalarySection({
         notes: "",
     })
 
-    // Auto-detect day_type (holiday, rest day, regular) when showLogModal opens or date changes
+    // Auto-detect day_type & default break_minutes when showLogModal opens or date/profile changes
     useEffect(() => {
-        if (showLogModal && activeProfile && logFormData.date) {
+        if (showLogModal && activeProfile) {
             const autoType = getAutoDayType(logFormData.date, activeProfile)
-            setLogFormData(prev => ({ ...prev, day_type: autoType }))
+            const defaultBreak = activeProfile.shift_hours === 12 ? 120 : (activeProfile.shift_hours === 8 ? 60 : 0)
+            setLogFormData(prev => ({
+                ...prev,
+                day_type: autoType,
+                break_minutes: prev.break_minutes === 0 ? defaultBreak : prev.break_minutes
+            }))
         }
-    }, [showLogModal, logFormData.date, activeProfile])
+    }, [showLogModal, activeProfile])
 
     // Tax Estimator Inputs
     const [daysInCountry, setDaysInCountry] = useState<number>(365)
@@ -1963,7 +1968,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                             ...logFormData,
                                             time_in: "08:00",
                                             time_out: "20:00",
-                                            break_minutes: activeProfile?.shift_hours === 12 ? 120 : 60,
+                                            break_minutes: 120,
                                             day_type: autoType
                                         })}
                                         className="px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
@@ -1976,7 +1981,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                             ...logFormData,
                                             time_in: "20:00",
                                             time_out: "08:00",
-                                            break_minutes: activeProfile?.shift_hours === 12 ? 120 : 60,
+                                            break_minutes: 120,
                                             day_type: autoType
                                         })}
                                         className="px-2 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all"

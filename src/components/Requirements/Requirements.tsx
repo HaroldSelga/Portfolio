@@ -36,20 +36,24 @@ import type {
     ChecklistItem, 
     ValidID, 
     Certificate, 
-    FamilyMember
+    FamilyMember,
+    DateTrackerItem
 } from "./types"
 import {
     defaultDocuments,
     defaultChecklist,
     defaultValidIDs,
     defaultCertificates,
-    defaultFamilyMembers
+    defaultFamilyMembers,
+    defaultDateTrackers
 } from "./types"
 
 import DocumentModal from "./DocumentModal"
 import ChecklistModal from "./ChecklistModal"
 import ValidIDModal from "./ValidIDModal"
 import CertificateModal from "./CertificateModal"
+import DateTrackerModal from "./DateTrackerModal"
+import DateTrackerView from "./DateTrackerView"
 import { ConfirmDialog, ToastContainer } from "./ConfirmDialog"
 
 
@@ -86,6 +90,12 @@ export default function Requirements() {
     const [isCertModalOpen, setIsCertModalOpen] = useState(false)
     const [editingCert, setEditingCert] = useState<Certificate | null>(null)
 
+    // Date Tracker states
+    const [dateTrackers, setDateTrackers] = useState<DateTrackerItem[]>([])
+    const [isDateTrackerLoading, setIsDateTrackerLoading] = useState(true)
+    const [isDateTrackerModalOpen, setIsDateTrackerModalOpen] = useState(false)
+    const [editingDateTracker, setEditingDateTracker] = useState<DateTrackerItem | null>(null)
+
     // Family states
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
     const [marriageDate, setMarriageDate] = useState<string>("November 26, 1995")
@@ -105,6 +115,11 @@ export default function Requirements() {
     const [formBirthday, setFormBirthday] = useState("")
     const [formContact, setFormContact] = useState("")
     const [formLinkedTo, setFormLinkedTo] = useState<string>("")
+    const [formFavoriteFood, setFormFavoriteFood] = useState("")
+    const [formClothingSize, setFormClothingSize] = useState("")
+    const [formHobbies, setFormHobbies] = useState("")
+    const [formWishlist, setFormWishlist] = useState("")
+    const [formNotes, setFormNotes] = useState("")
 
     // Confirm Dialog State
     const [confirmDialog, setConfirmDialog] = useState<{
@@ -182,6 +197,44 @@ export default function Requirements() {
             }
         }
         fetchInitialFamilyAndMeta()
+    }, [])
+
+    // Fetch Date Trackers on mount
+    useEffect(() => {
+        async function fetchDateTrackers() {
+            try {
+                setIsDateTrackerLoading(true)
+                const { data, error } = await supabase
+                    .from("date_trackers")
+                    .select("*")
+
+                if (error) throw error
+                if (data && data.length > 0) {
+                    setDateTrackers(data)
+                } else {
+                    const saved = localStorage.getItem("requirements_date_trackers")
+                    if (saved) {
+                        setDateTrackers(JSON.parse(saved))
+                    } else {
+                        setDateTrackers(defaultDateTrackers)
+                        localStorage.setItem("requirements_date_trackers", JSON.stringify(defaultDateTrackers))
+                    }
+                }
+            } catch (e) {
+                console.warn("Error fetching date trackers from Supabase, using LocalStorage fallback:", e)
+                const saved = localStorage.getItem("requirements_date_trackers")
+                if (saved) {
+                    setDateTrackers(JSON.parse(saved))
+                } else {
+                    setDateTrackers(defaultDateTrackers)
+                    localStorage.setItem("requirements_date_trackers", JSON.stringify(defaultDateTrackers))
+                }
+            } finally {
+                setIsDateTrackerLoading(false)
+            }
+        }
+
+        fetchDateTrackers()
     }, [])
 
     // Sync tab data depending on selected tab & selected person
@@ -516,7 +569,12 @@ export default function Requirements() {
             relationship: formRelationship,
             birthday: formBirthday,
             contact: formContact,
-            linked_to: formLinkedTo || undefined
+            linked_to: formLinkedTo || undefined,
+            favorite_food: formFavoriteFood.trim() || undefined,
+            clothing_size: formClothingSize.trim() || undefined,
+            hobbies: formHobbies.trim() || undefined,
+            wishlist: formWishlist.trim() || undefined,
+            notes: formNotes.trim() || undefined
         }
 
         try {
@@ -872,14 +930,80 @@ export default function Requirements() {
         })
     }
 
+    // Save Date Tracker
+    const handleSaveDateTracker = async (item: DateTrackerItem) => {
+        try {
+            const { data, error } = await supabase
+                .from("date_trackers")
+                .upsert(item)
+                .select()
+                .single()
 
-    const categories = ["All", "IDs & Clearances", "Birth & Baptism", "School & Credentials", "Employment & Contributions", "Photos", "Checklist", "Credentials", "Family"]
+            if (error) throw error
+            if (data) {
+                setDateTrackers(prev => {
+                    const exists = prev.some(t => t.id === data.id)
+                    const updated = exists ? prev.map(t => t.id === data.id ? data : t) : [data, ...prev]
+                    localStorage.setItem("requirements_date_trackers", JSON.stringify(updated))
+                    return updated
+                })
+            }
+        } catch (e) {
+            console.warn("Saving date tracker to database failed, using LocalStorage fallback:", e)
+            setDateTrackers(prev => {
+                const exists = prev.some(t => t.id === item.id)
+                const updated = exists ? prev.map(t => t.id === item.id ? item : t) : [item, ...prev]
+                localStorage.setItem("requirements_date_trackers", JSON.stringify(updated))
+                return updated
+            })
+        }
+        showToast(editingDateTracker ? "Date tracker updated." : "Date tracker added.", "success")
+    }
+
+    // Delete Date Tracker
+    const handleDeleteDateTracker = (id: string, title: string) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: `Delete Tracker "${title}"?`,
+            message: "Are you sure you want to remove this date tracker?",
+            variant: "danger",
+            confirmLabel: "Delete",
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase
+                        .from("date_trackers")
+                        .delete()
+                        .eq("id", id)
+
+                    if (error) throw error
+                    setDateTrackers(prev => {
+                        const updated = prev.filter(t => t.id !== id)
+                        localStorage.setItem("requirements_date_trackers", JSON.stringify(updated))
+                        return updated
+                    })
+                } catch (e) {
+                    console.warn("Deleting date tracker failed, using LocalStorage fallback:", e)
+                    setDateTrackers(prev => {
+                        const updated = prev.filter(t => t.id !== id)
+                        localStorage.setItem("requirements_date_trackers", JSON.stringify(updated))
+                        return updated
+                    })
+                }
+                showToast("Date tracker removed.", "info")
+                setConfirmDialog(prev => ({ ...prev, isOpen: false }))
+            }
+        })
+    }
+
+
+    const categories = ["All", "IDs & Clearances", "Birth & Baptism", "School & Credentials", "Employment & Contributions", "Photos", "Checklist", "Credentials", "Family", "Date Tracker"]
 
     const getCategoryCount = (category: string) => {
         if (category === "All") return documents.length
         if (category === "Checklist") return checklistItems.length
         if (category === "Credentials") return validIDs.length + certificates.length
         if (category === "Family") return familyMembers.length
+        if (category === "Date Tracker") return dateTrackers.length
         return documents.filter((doc) => doc.category === category).length
     }
 
@@ -1159,6 +1283,11 @@ export default function Requirements() {
                                                 setFormBirthday("")
                                                 setFormContact("")
                                                 setFormLinkedTo("")
+                                                setFormFavoriteFood("")
+                                                setFormClothingSize("")
+                                                setFormHobbies("")
+                                                setFormWishlist("")
+                                                setFormNotes("")
                                                 setIsFamilyModalOpen(true)
                                             }}
                                             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
@@ -1264,6 +1393,11 @@ export default function Requirements() {
                                                                         setFormBirthday(member.birthday)
                                                                         setFormContact(member.contact)
                                                                         setFormLinkedTo(member.linked_to || "")
+                                                                        setFormFavoriteFood(member.favorite_food || "")
+                                                                        setFormClothingSize(member.clothing_size || "")
+                                                                        setFormHobbies(member.hobbies || "")
+                                                                        setFormWishlist(member.wishlist || "")
+                                                                        setFormNotes(member.notes || "")
                                                                         setIsFamilyModalOpen(true)
                                                                     }}
                                                                     className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-all"
@@ -1298,6 +1432,42 @@ export default function Requirements() {
                                                                 <span>Contact: <strong className="text-foreground font-mono">{maskValue(member.contact)}</strong></span>
                                                             </div>
                                                         </div>
+
+                                                        {/* Personal Favorites & Preferences */}
+                                                        {(member.favorite_food || member.clothing_size || member.hobbies || member.wishlist || member.notes) && (
+                                                            <div className="border-t border-border/20 pt-3 space-y-1.5 text-xs">
+                                                                {member.favorite_food && (
+                                                                    <div className="flex items-start gap-2 text-muted-foreground">
+                                                                        <span className="shrink-0">🍕</span>
+                                                                        <span><strong className="text-foreground">Fav Food:</strong> {member.favorite_food}</span>
+                                                                    </div>
+                                                                )}
+                                                                {member.clothing_size && (
+                                                                    <div className="flex items-start gap-2 text-muted-foreground">
+                                                                        <span className="shrink-0">👕</span>
+                                                                        <span><strong className="text-foreground">Sizes:</strong> {member.clothing_size}</span>
+                                                                    </div>
+                                                                )}
+                                                                {member.hobbies && (
+                                                                    <div className="flex items-start gap-2 text-muted-foreground">
+                                                                        <span className="shrink-0">🎨</span>
+                                                                        <span><strong className="text-foreground">Hobbies:</strong> {member.hobbies}</span>
+                                                                    </div>
+                                                                )}
+                                                                {member.wishlist && (
+                                                                    <div className="flex items-start gap-2 text-muted-foreground">
+                                                                        <span className="shrink-0">🎁</span>
+                                                                        <span><strong className="text-foreground">Wishlist:</strong> {member.wishlist}</span>
+                                                                    </div>
+                                                                )}
+                                                                {member.notes && (
+                                                                    <div className="flex items-start gap-2 text-muted-foreground">
+                                                                        <span className="shrink-0">📝</span>
+                                                                        <span><strong className="text-foreground">Notes:</strong> {member.notes}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )
@@ -1343,6 +1513,26 @@ export default function Requirements() {
                                 </>
                             )}
                         </motion.div>
+                    ) : selectedCategory === "Date Tracker" ? (
+                        isDateTrackerLoading ? (
+                            <div className="flex flex-col items-center justify-center py-20 bg-card border border-border/40 rounded-3xl space-y-4 shadow-xl">
+                                <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                <p className="text-sm text-muted-foreground font-semibold">Loading date trackers...</p>
+                            </div>
+                        ) : (
+                            <DateTrackerView
+                                trackers={dateTrackers}
+                                onAddTracker={() => {
+                                    setEditingDateTracker(null)
+                                    setIsDateTrackerModalOpen(true)
+                                }}
+                                onEditTracker={(tracker) => {
+                                    setEditingDateTracker(tracker)
+                                    setIsDateTrackerModalOpen(true)
+                                }}
+                                onDeleteTracker={handleDeleteDateTracker}
+                            />
+                        )
                     ) : selectedCategory === "Checklist" ? (
                         <motion.div
                             key="checklist"
@@ -1493,6 +1683,7 @@ export default function Requirements() {
                                                 <tr className="bg-stone-900 text-white text-left">
                                                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Document Name</th>
                                                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Category</th>
+                                                    <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Validity & Expiration</th>
                                                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap">Size & Type</th>
                                                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider whitespace-nowrap text-right">Actions</th>
                                                 </tr>
@@ -1513,6 +1704,35 @@ export default function Requirements() {
                                                                 <span className="text-[11px] text-primary/70 font-semibold truncate bg-primary/5 border border-primary/10 rounded-full px-2.5 py-0.5 w-fit">
                                                                     {doc.category}
                                                                 </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-xs">
+                                                                {doc.expiration_date ? (() => {
+                                                                    const expInfo = getExpirationInfo(doc.expiration_date)
+                                                                    return (
+                                                                        <div className="space-y-0.5">
+                                                                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                                                                                expInfo.status === "expired"
+                                                                                    ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                                                                    : expInfo.status === "expiring_soon"
+                                                                                        ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                                                                        : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                                            }`}>
+                                                                                {expInfo.label}
+                                                                            </span>
+                                                                            {doc.issued_date && (
+                                                                                <span className="text-[10px] text-muted-foreground block font-medium">
+                                                                                    Issued: {doc.issued_date}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    )
+                                                                })() : doc.issued_date ? (
+                                                                    <span className="text-[10px] text-muted-foreground font-medium">
+                                                                        Issued: {doc.issued_date}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[10px] text-muted-foreground/40 font-bold">—</span>
+                                                                )}
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-xs text-muted-foreground font-mono">
                                                                 <span className="uppercase font-bold">{doc.type}</span> • {doc.size}
@@ -1705,19 +1925,45 @@ export default function Requirements() {
                                             className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60"
                                         >
                                             <option value="Self">Self (Me)</option>
-                                            <optgroup label="Family">
+                                            <optgroup label="Immediate Family">
                                                 <option value="Mother">Mother</option>
                                                 <option value="Father">Father</option>
                                                 <option value="Sister">Sister</option>
                                                 <option value="Brother">Brother</option>
+                                                <option value="Daughter">Daughter</option>
+                                                <option value="Son">Son</option>
+                                                <option value="Child">Child</option>
                                             </optgroup>
-                                            <optgroup label="Partner">
+                                            <optgroup label="Partner & Spouse">
                                                 <option value="Wife">Wife</option>
                                                 <option value="Husband">Husband</option>
                                                 <option value="Girlfriend">Girlfriend</option>
                                                 <option value="Boyfriend">Boyfriend</option>
+                                                <option value="Partner">Partner</option>
+                                                <option value="Fiancé">Fiancé</option>
+                                                <option value="Fiancée">Fiancée</option>
                                             </optgroup>
-                                            <option value="Other">Other</option>
+                                            <optgroup label="Extended Family">
+                                                <option value="Grandmother">Grandmother</option>
+                                                <option value="Grandfather">Grandfather</option>
+                                                <option value="Aunt">Aunt</option>
+                                                <option value="Uncle">Uncle</option>
+                                                <option value="Cousin">Cousin</option>
+                                                <option value="Niece">Niece</option>
+                                                <option value="Nephew">Nephew</option>
+                                            </optgroup>
+                                            <optgroup label="In-Laws">
+                                                <option value="Mother-in-law">Mother-in-law</option>
+                                                <option value="Father-in-law">Father-in-law</option>
+                                                <option value="Sister-in-law">Sister-in-law</option>
+                                                <option value="Brother-in-law">Brother-in-law</option>
+                                            </optgroup>
+                                            <optgroup label="Others">
+                                                <option value="Godmother">Godmother</option>
+                                                <option value="Godfather">Godfather</option>
+                                                <option value="Friend">Friend</option>
+                                                <option value="Other">Other</option>
+                                            </optgroup>
                                         </select>
                                     </div>
 
@@ -1763,8 +2009,77 @@ export default function Requirements() {
                                             value={formContact}
                                             onChange={(e) => setFormContact(e.target.value)}
                                             placeholder="e.g. 09164865929"
-                                            className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors font-mono disabled:opacity-60"
+                                            className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60 font-mono"
                                         />
+                                    </div>
+
+                                    {/* Personal Preferences & Favorites Section */}
+                                    <div className="border-t border-border/30 pt-3 space-y-3">
+                                        <p className="text-xs font-black uppercase tracking-wider text-primary">Personal Favorites & Gift Preferences</p>
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-muted-foreground uppercase">🍕 Favorite Foods / Drinks</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={isFamilySaving}
+                                                    value={formFavoriteFood}
+                                                    onChange={(e) => setFormFavoriteFood(e.target.value)}
+                                                    placeholder="e.g. Sinigang, Pizza, Coffee"
+                                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-medium"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-muted-foreground uppercase">👕 Clothing & Shoe Sizes</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={isFamilySaving}
+                                                    value={formClothingSize}
+                                                    onChange={(e) => setFormClothingSize(e.target.value)}
+                                                    placeholder="e.g. Shirt: L, Shoes: 42"
+                                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-medium"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-muted-foreground uppercase">🎨 Hobbies & Passions</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={isFamilySaving}
+                                                    value={formHobbies}
+                                                    onChange={(e) => setFormHobbies(e.target.value)}
+                                                    placeholder="e.g. Gaming, Gardening, Art"
+                                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-medium"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-muted-foreground uppercase">🎁 Gift Wishlist</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={isFamilySaving}
+                                                    value={formWishlist}
+                                                    onChange={(e) => setFormWishlist(e.target.value)}
+                                                    placeholder="e.g. Keyboard, Watch, Books"
+                                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-medium"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-muted-foreground uppercase">📝 Personal Notes / Allergies</label>
+                                            <input
+                                                type="text"
+                                                disabled={isFamilySaving}
+                                                value={formNotes}
+                                                onChange={(e) => setFormNotes(e.target.value)}
+                                                placeholder="e.g. Allergic to peanuts, Loves dark chocolate"
+                                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-medium"
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="pt-4 flex items-center justify-end gap-2.5">
@@ -1830,6 +2145,14 @@ export default function Requirements() {
                     onClose={() => setIsCertModalOpen(false)}
                     onSave={handleSaveCertificate}
                     editingCert={editingCert}
+                    personId={selectedPerson}
+                />
+
+                <DateTrackerModal
+                    isOpen={isDateTrackerModalOpen}
+                    onClose={() => setIsDateTrackerModalOpen(false)}
+                    onSave={handleSaveDateTracker}
+                    editingItem={editingDateTracker}
                     personId={selectedPerson}
                 />
 

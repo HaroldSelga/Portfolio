@@ -9,6 +9,8 @@ export interface ReqDocument {
     type: "pdf" | "jpg" | "xlsx" | "docx" | "html" | "png"
     size: string
     sort_order?: number
+    issued_date?: string
+    expiration_date?: string
 }
 
 export interface ChecklistItem {
@@ -56,10 +58,15 @@ export interface Certificate {
 export interface FamilyMember {
     id: string
     name: string
-    relationship: "Mother" | "Father" | "Sister" | "Brother" | "Wife" | "Husband" | "Girlfriend" | "Boyfriend" | "Other" | "Self"
+    relationship: string
     birthday: string
     contact: string
     linked_to?: string  // ID of partner/spouse for couple grouping
+    favorite_food?: string
+    clothing_size?: string
+    hobbies?: string
+    wishlist?: string
+    notes?: string
 }
 
 export interface PersonOption {
@@ -86,8 +93,39 @@ export const CHECKLIST_STATUSES = [
     { value: "info", label: "Info / Confirmed" },
 ] as const
 
-// Relationship options
-export const RELATIONSHIPS = ["Mother", "Father", "Sister", "Brother", "Wife", "Husband", "Girlfriend", "Boyfriend", "Other"] as const
+// Relationship options for Family tab
+export const RELATIONSHIPS = [
+    "Self",
+    "Mother",
+    "Father",
+    "Sister",
+    "Brother",
+    "Daughter",
+    "Son",
+    "Child",
+    "Wife",
+    "Husband",
+    "Girlfriend",
+    "Boyfriend",
+    "Partner",
+    "Fiancé",
+    "Fiancée",
+    "Grandmother",
+    "Grandfather",
+    "Aunt",
+    "Uncle",
+    "Cousin",
+    "Niece",
+    "Nephew",
+    "Mother-in-law",
+    "Father-in-law",
+    "Sister-in-law",
+    "Brother-in-law",
+    "Godmother",
+    "Godfather",
+    "Friend",
+    "Other"
+] as const
 
 // ── Default Data (localStorage fallback) ────────────────────────────────
 
@@ -109,6 +147,7 @@ export const defaultDocuments: Omit<ReqDocument, "person_id">[] = [
     { name: "Transcript of Records (TOR Copy)", path: "/documents/requirements/School Documents/TOR (1).pdf", category: "School & Credentials", type: "pdf", size: "3.76 MB" },
     { name: "National Certificate II: Computer System Services", path: "/documents/requirements/Certificate/NATIONAL CERT - COMPUTER SYSTEMS SERVICING.pdf", category: "School & Credentials", type: "pdf", size: "1.62 MB" },
     { name: "National Certificate III: Events Management Services", path: "/documents/requirements/Certificate/NATIONAL CERT - EVENTS MANAGEMENT SERVICES.pdf", category: "School & Credentials", type: "pdf", size: "1.71 MB" },
+    { name: "Taiwan Work Contract (3-Year Term)", path: "/documents/requirements/Taiwan_Work_Contract.pdf", category: "Employment & Contributions", type: "pdf", size: "1.85 MB", issued_date: "2026-08-12", expiration_date: "2029-08-12" },
     { name: "Certificate of Employment (Old Capitol)", path: "/documents/requirements/COE/COE OLD CAP.jpg", category: "Employment & Contributions", type: "jpg", size: "4.27 MB" },
     { name: "Certificate of Employment (TRB Express)", path: "/documents/requirements/COE/John Harold SELGA.docx.pdf", category: "Employment & Contributions", type: "pdf", size: "266 KB" },
     { name: "SSS Contribution Form", path: "/documents/requirements/need to print/SSS.docx", category: "Employment & Contributions", type: "docx", size: "159 KB" },
@@ -165,21 +204,71 @@ export const defaultValidIDs: Omit<ValidID, "person_id">[] = [
 ]
 
 export const defaultCertificates: Omit<Certificate, "person_id">[] = [
-    { name: "Transcript of Records (TOR)", printed: true, id_number: "CRT", issued_date: "—", expiration: "—", date_created: "—", user_id: "—", password: "—", remarks: "—", link: "" },
-    { name: "Diploma", printed: true, id_number: "CRT", issued_date: "July 2, 2022", expiration: "—", date_created: "—", user_id: "—", password: "—", remarks: "—", link: "" },
-    { name: "Certificate of Employment (COE)", printed: true, id_number: "TRB EXPRESS INC", issued_date: "June 2025", expiration: "—", date_created: "—", user_id: "2024082152978", password: "Selga John Harold", remarks: "Supervisor IT Jr.", link: "https://drive.google.com/file/d/1IPrksP4kfHS2dqnJTIF7_i560DbbzQgk/view" },
-    { name: "PEOS Certificate", printed: false, id_number: "2974206", issued_date: "—", expiration: "—", date_created: "August 26, 2024", user_id: "jharoldselga18@gmail.com", password: "AManWord18@", remarks: "—", link: "https://drive.google.com/file/d/1pS7MKjxwUVswWVOPrGxmI224SydtM6ZA/view" },
-    { name: "E-Registration Certificate", printed: false, id_number: "2024082152978", issued_date: "—", expiration: "—", date_created: "August 26, 2024", user_id: "—", password: "—", remarks: "—", link: "https://drive.google.com/file/d/1RhhGCOUu4_QyK1Sf2btrvwUYJX1Wirw6/view" },
-    { name: "NC II - Computer System Services", printed: true, id_number: "210349022116611", issued_date: "June 1, 2021", expiration: "May 31, 2026", date_created: "—", user_id: "—", password: "—", remarks: "TESDA", link: "" },
-    { name: "NC II - Events Management Services", printed: true, id_number: "22034039109", issued_date: "October 20, 2022", expiration: "October 19, 2027", date_created: "—", user_id: "—", password: "—", remarks: "TESDA", link: "" },
+    { name: "Birth Certificate (PSA)", printed: true, id_number: "123-456-789", issued_date: "2020-01-01", expiration: "Lifetime", date_created: "2020-01-01", user_id: "", password: "", remarks: "PSA Copy", link: "" },
+    { name: "Baptismal Certificate", printed: true, id_number: "BAP-2000-01", issued_date: "2000-04-15", expiration: "Lifetime", date_created: "2000-04-15", user_id: "", password: "", remarks: "Original Church Copy", link: "" },
 ]
 
 export const defaultFamilyMembers: FamilyMember[] = [
-    { id: "self", name: "John Harold Eugenio Selga", relationship: "Self", birthday: "March 18, 2000", contact: "09363324878" },
-    { id: "1", name: "Luvy Molina Eugenio", relationship: "Mother", birthday: "February 01, 1975", contact: "09164865929" },
-    { id: "2", name: "Arnold Sacdal Selga", relationship: "Father", birthday: "February 16, 1976", contact: "09914961969" },
-    { id: "3", name: "Hanna Mae Selga Alfonso", relationship: "Sister", birthday: "July 02, 1996", contact: "09917753390 or 09362090237" },
-    { id: "4", name: "Jhana Claire Eugenio Selga", relationship: "Sister", birthday: "November 08, 2004", contact: "09060964339" },
+    {
+        id: "self",
+        name: "John Harold Eugenio Selga",
+        relationship: "Self",
+        birthday: "March 18, 2000",
+        contact: "09363324878",
+        favorite_food: "Pizza, Sinigang, Coffee",
+        clothing_size: "Shirt: L, Shoes: 42",
+        hobbies: "Software Engineering, Gaming, Tech Gadgets",
+        wishlist: "Mechanical Keyboards, Smartwatch",
+        notes: "Full-Stack Software Engineer"
+    },
+    {
+        id: "1",
+        name: "Luvy Molina Eugenio",
+        relationship: "Mother",
+        birthday: "February 01, 1975",
+        contact: "09164865929",
+        favorite_food: "Homecooked Dishes, Pastries",
+        clothing_size: "Medium",
+        hobbies: "Cooking, Gardening, Family Gatherings",
+        wishlist: "Kitchen Accessories, Perfume",
+        notes: "Mom"
+    },
+    {
+        id: "2",
+        name: "Arnold Sacdal Selga",
+        relationship: "Father",
+        birthday: "February 16, 1976",
+        contact: "09914961969",
+        favorite_food: "Grilled Pork, Native Coffee",
+        clothing_size: "Large",
+        hobbies: "Fixing House/Carpentry, Watching Basketball",
+        wishlist: "Power Tools Set, Outdoor Gear",
+        notes: "Dad"
+    },
+    {
+        id: "3",
+        name: "Hanna Mae Selga Alfonso",
+        relationship: "Sister",
+        birthday: "July 02, 1996",
+        contact: "09917753390 or 09362090237",
+        favorite_food: "Milk Tea, Japanese Cuisine",
+        clothing_size: "Medium",
+        hobbies: "Shopping, Music, Travel",
+        wishlist: "Skincare Set, Handbag",
+        notes: "Eldest Sister"
+    },
+    {
+        id: "4",
+        name: "Jhana Claire Eugenio Selga",
+        relationship: "Sister",
+        birthday: "November 08, 2004",
+        contact: "09060964339",
+        favorite_food: "Pasta, Chocolates, Snacks",
+        clothing_size: "Small / Medium",
+        hobbies: "Reading, Art & Sketching",
+        wishlist: "Art Supplies, Books",
+        notes: "Youngest Sister"
+    },
 ]
 
 // ── Expiration Helpers ──────────────────────────────────────────────────
@@ -241,5 +330,126 @@ export function getExpirationInfo(expirationDateStr: string): ExpirationInfo {
             daysRemaining,
             label: `Valid (${daysRemaining} days remaining)`
         }
+    }
+}
+
+// ── Date Tracker Types & Utilities ──────────────────────────────────────
+
+export interface DateTrackerItem {
+    id: string
+    person_id: string
+    title: string
+    event_type: string // Can be preset ("birthday", "marriage_anniversary", etc.) or custom string
+    date: string // YYYY-MM-DD or readable date string (e.g. March 18, 2000)
+    person_name?: string
+    notes?: string
+}
+
+export const EVENT_TYPES = [
+    { value: "birthday", label: "Birthday", emoji: "🎂" },
+    { value: "marriage_anniversary", label: "Marriage Anniversary", emoji: "💍" },
+    { value: "couple_anniversary", label: "Couple Anniversary", emoji: "❤️" },
+    { value: "milestone", label: "Important Milestone", emoji: "🌟" },
+    { value: "other", label: "Custom Event", emoji: "📅" }
+] as const
+
+export const defaultDateTrackers: DateTrackerItem[] = [
+    {
+        id: "dt-1",
+        person_id: "self",
+        title: "My Birthday",
+        event_type: "birthday",
+        date: "2000-03-18",
+        person_name: "John Harold Eugenio Selga",
+        notes: "John's Birthday celebration"
+    },
+    {
+        id: "dt-2",
+        person_id: "mother",
+        title: "Mom's Birthday",
+        event_type: "birthday",
+        date: "1975-02-01",
+        person_name: "Luvy Molina Eugenio",
+        notes: "Mother's Birthday"
+    },
+    {
+        id: "dt-3",
+        person_id: "father",
+        title: "Dad's Birthday",
+        event_type: "birthday",
+        date: "1976-02-16",
+        person_name: "Arnold Sacdal Selga",
+        notes: "Father's Birthday"
+    },
+    {
+        id: "dt-4",
+        person_id: "sister1",
+        title: "Hanna's Birthday",
+        event_type: "birthday",
+        date: "1996-07-02",
+        person_name: "Hanna Mae Selga Alfonso",
+        notes: "Sister's Birthday"
+    },
+    {
+        id: "dt-5",
+        person_id: "sister2",
+        title: "Jhana's Birthday",
+        event_type: "birthday",
+        date: "2004-11-08",
+        person_name: "Jhana Claire Eugenio Selga",
+        notes: "Sister's Birthday"
+    },
+    {
+        id: "dt-6",
+        person_id: "family",
+        title: "Parents' Marriage Anniversary",
+        event_type: "marriage_anniversary",
+        date: "1995-11-26",
+        person_name: "Luvy & Arnold Selga",
+        notes: "Marriage Anniversary celebration"
+    },
+    {
+        id: "dt-taiwan-job-contract",
+        person_id: "self",
+        title: "Taiwan Job Contract Expiration (3 Years)",
+        event_type: "contract_renewal",
+        date: "2029-08-12",
+        person_name: "John Harold Eugenio Selga",
+        notes: "3-Year Taiwan Work Contract Term (Starting Aug 12, 2026 – Expires Aug 12, 2029)"
+    }
+]
+
+export function calculateDaysAway(dateStr: string): { daysAway: number; yearsCount: number; isToday: boolean; nextOccurrenceDate: string } {
+    if (!dateStr) return { daysAway: 999, yearsCount: 0, isToday: false, nextOccurrenceDate: "" }
+    
+    const parsed = new Date(dateStr)
+    if (isNaN(parsed.getTime())) {
+        return { daysAway: 999, yearsCount: 0, isToday: false, nextOccurrenceDate: "" }
+    }
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const currentYear = today.getFullYear()
+    const birthYear = parsed.getFullYear()
+
+    let nextOccurrence = new Date(currentYear, parsed.getMonth(), parsed.getDate())
+    
+    // If date has already passed this year, jump to next year
+    if (nextOccurrence < today) {
+        nextOccurrence.setFullYear(currentYear + 1)
+    }
+
+    const diffTime = nextOccurrence.getTime() - today.getTime()
+    const daysAway = Math.round(diffTime / (1000 * 60 * 60 * 24))
+    const isToday = daysAway === 0
+
+    // Number of years celebrating
+    const yearsCount = nextOccurrence.getFullYear() - birthYear
+
+    return {
+        daysAway,
+        yearsCount: Math.max(0, yearsCount),
+        isToday,
+        nextOccurrenceDate: nextOccurrence.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { X, Save, Upload, Loader2, FileText } from "lucide-react"
+import { X, Save, Upload, Loader2, FileText, Calendar } from "lucide-react"
 import type { ReqDocument } from "./types"
 import { DOC_CATEGORIES } from "./types"
 import { supabase } from "../../lib/supabase"
@@ -19,6 +19,8 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
     const [path, setPath] = useState("")
     const [fileType, setFileType] = useState<ReqDocument["type"]>("pdf")
     const [size, setSize] = useState("")
+    const [issuedDate, setIssuedDate] = useState("")
+    const [expirationDate, setExpirationDate] = useState("")
     const [isUploading, setIsUploading] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
@@ -29,6 +31,8 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
             setPath(editingDoc.path)
             setFileType(editingDoc.type)
             setSize(editingDoc.size)
+            setIssuedDate(editingDoc.issued_date || "")
+            setExpirationDate(editingDoc.expiration_date || "")
             setFile(null)
         } else {
             setName("")
@@ -36,6 +40,8 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
             setPath("")
             setFileType("pdf")
             setSize("")
+            setIssuedDate("")
+            setExpirationDate("")
             setFile(null)
         }
     }, [editingDoc, isOpen])
@@ -125,7 +131,9 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
                 path: finalPath,
                 category,
                 type: fileType,
-                size
+                size,
+                issued_date: issuedDate.trim() || undefined,
+                expiration_date: expirationDate.trim() || undefined
             }
 
             await onSave(docData)
@@ -143,7 +151,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
 
     return (
         <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-card w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-border/50">
+            <div className="bg-card w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-border/50">
                 {/* Modal Header */}
                 <div className="px-6 py-4 bg-muted/50 border-b border-border/50 flex items-center justify-between">
                     <h3 className="font-bold text-lg text-foreground">
@@ -167,7 +175,7 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
                             disabled={isSaving}
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="e.g. Passport, NBI Clearance"
+                            placeholder="e.g. Taiwan Work Contract (3-Year Term), Passport"
                             className="w-full px-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-sm font-semibold transition-colors disabled:opacity-60 text-foreground"
                         />
                     </div>
@@ -186,27 +194,51 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
                         </select>
                     </div>
 
+                    {/* Validity & Expiration Tracking */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/30 p-3.5 rounded-2xl border border-border/30">
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                <Calendar className="h-3 w-3 text-primary" /> Issued / Effective Date
+                            </label>
+                            <input
+                                type="date"
+                                disabled={isSaving}
+                                value={issuedDate}
+                                onChange={(e) => setIssuedDate(e.target.value)}
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-semibold text-foreground"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                <Calendar className="h-3 w-3 text-rose-500" /> Expiration / Renewal Date
+                            </label>
+                            <input
+                                type="date"
+                                disabled={isSaving}
+                                value={expirationDate}
+                                onChange={(e) => setExpirationDate(e.target.value)}
+                                className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-primary text-xs font-semibold text-foreground"
+                            />
+                        </div>
+                    </div>
+
                     {/* File upload section */}
                     <div className="space-y-1.5">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                             {editingDoc ? "Replace File (Optional)" : "Select File"}
                         </label>
                         <div className="flex items-center justify-center w-full">
-                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-border/60 border-dashed rounded-xl cursor-pointer hover:bg-muted/30 transition-all relative overflow-hidden bg-background">
-                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                    <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-border/60 border-dashed rounded-xl cursor-pointer hover:bg-muted/30 transition-all relative overflow-hidden bg-background">
+                                <div className="flex flex-col items-center justify-center pt-4 pb-5">
+                                    <Upload className="w-7 h-7 text-muted-foreground mb-1.5" />
                                     <p className="text-xs text-muted-foreground font-semibold">
                                         {file ? file.name : "Click to select a file"}
                                     </p>
-                                    {size && (
-                                        <p className="text-[10px] text-muted-foreground mt-1">
-                                            {size} — ({fileType.toUpperCase()})
-                                        </p>
-                                    )}
                                 </div>
-                                <input 
-                                    type="file" 
-                                    className="hidden" 
+                                <input
+                                    type="file"
+                                    className="hidden"
                                     onChange={handleFileChange}
                                     disabled={isSaving}
                                 />
@@ -227,14 +259,14 @@ export default function DocumentModal({ isOpen, onClose, onSave, editingDoc, per
                             type="button"
                             disabled={isSaving}
                             onClick={onClose}
-                            className="px-4 py-2.5 bg-muted hover:bg-muted/80 text-foreground border border-border/40 font-bold text-xs rounded-xl shadow-sm transition-all disabled:opacity-50"
+                            className="px-4 py-2.5 bg-muted hover:bg-muted/80 text-foreground border border-border/40 font-bold text-xs rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={isSaving}
-                            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 transition-all disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md shadow-primary/15 hover:shadow-primary/25 hover:bg-primary/90 transition-all disabled:opacity-50 cursor-pointer"
                         >
                             {isSaving ? (
                                 <>

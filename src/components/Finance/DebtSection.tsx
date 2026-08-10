@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, CreditCard, ChevronDown, ChevronUp, Check, X, AlertTriangle } from "lucide-react"
+import { Plus, CreditCard, ChevronDown, ChevronUp, Check, X, AlertTriangle, Pencil } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
@@ -16,11 +16,13 @@ interface DebtSectionProps {
     onAddDebt: (debt: Omit<Debt, "id" | "created_at" | "paid_amount" | "is_settled">) => void
     onAddPayment: (payment: Omit<DebtPayment, "id" | "created_at">) => void
     onDeleteDebt: (id: string) => void
+    onEditDebt?: (id: string, updates: Partial<Omit<Debt, "id" | "created_at">>) => void
 }
 
-export function DebtSection({ debts, payments, wallets, showAmounts = true, baseCurrency = "PHP", onAddDebt, onAddPayment, onDeleteDebt }: DebtSectionProps) {
+export function DebtSection({ debts, payments, wallets, showAmounts = true, baseCurrency = "PHP", onAddDebt, onAddPayment, onDeleteDebt, onEditDebt }: DebtSectionProps) {
     const [expandedDebt, setExpandedDebt] = useState<string | null>(null)
     const [showAddDebt, setShowAddDebt] = useState(false)
+    const [editingDebt, setEditingDebt] = useState<Debt | null>(null)
     const [paymentModal, setPaymentModal] = useState<string | null>(null)
     const [newDebt, setNewDebt] = useState({ 
         label: "", 
@@ -286,6 +288,15 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
                                                     Pay
                                                 </Button>
                                             )}
+                                            {onEditDebt && (
+                                                <button
+                                                    onClick={() => setEditingDebt(debt)}
+                                                    className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-sky-500 hover:bg-sky-500/10 transition-all"
+                                                    title="Edit debt details"
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => {
                                                     if (confirm(`Are you sure you want to remove debt "${debt.label}"?`)) {
@@ -497,6 +508,94 @@ export function DebtSection({ debts, payments, wallets, showAmounts = true, base
                     </Button>
                 </form>
             </Modal>
+            {/* ✏️ EDIT DEBT MODAL */}
+            {onEditDebt && (
+                <Modal
+                    isOpen={!!editingDebt}
+                    onClose={() => setEditingDebt(null)}
+                    title="Edit Debt Details"
+                    className="max-w-md"
+                >
+                    {editingDebt && (
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault()
+                                const formEl = e.currentTarget
+                                const fd = new FormData(formEl)
+                                onEditDebt(editingDebt.id, {
+                                    label: fd.get("label") as string,
+                                    total_amount: parseFloat(fd.get("total_amount") as string),
+                                    interest_rate: fd.get("interest_rate") ? parseFloat(fd.get("interest_rate") as string) : undefined,
+                                    due_date: (fd.get("due_date") as string) || undefined,
+                                    min_monthly_payment: fd.get("min_monthly_payment") ? parseFloat(fd.get("min_monthly_payment") as string) : undefined,
+                                })
+                                setEditingDebt(null)
+                            }}
+                            className="p-6 space-y-4"
+                        >
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Label / Name</label>
+                                <input
+                                    type="text"
+                                    name="label"
+                                    defaultValue={editingDebt.label}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Total Amount ({baseCurrency})</label>
+                                <input
+                                    type="number"
+                                    name="total_amount"
+                                    step="0.01"
+                                    min="0.01"
+                                    defaultValue={editingDebt.total_amount}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Interest Rate (%/yr)</label>
+                                    <input
+                                        type="number"
+                                        name="interest_rate"
+                                        step="0.1"
+                                        min="0"
+                                        defaultValue={editingDebt.interest_rate ?? ""}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Due Date</label>
+                                    <input
+                                        type="date"
+                                        name="due_date"
+                                        defaultValue={editingDebt.due_date ?? ""}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Min. Monthly Payment</label>
+                                <input
+                                    type="number"
+                                    name="min_monthly_payment"
+                                    step="0.01"
+                                    min="0"
+                                    defaultValue={editingDebt.min_monthly_payment ?? ""}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                />
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                                <Button type="button" onClick={() => setEditingDebt(null)} className="flex-1 bg-muted text-foreground hover:bg-muted/80 font-bold rounded-xl">Cancel</Button>
+                                <Button type="submit" className="flex-1 bg-orange-500 text-white hover:bg-orange-600 font-bold rounded-xl shadow-lg shadow-orange-500/20">Save Changes</Button>
+                            </div>
+                        </form>
+                    )}
+                </Modal>
+            )}
         </div>
     )
 }

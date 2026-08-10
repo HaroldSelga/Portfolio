@@ -82,6 +82,7 @@ interface SalarySectionProps {
     rates?: ExchangeRates
     deductions?: PayrollDeduction[]
     funds?: SavingsFund[]
+    initialSubTab?: SubTab
     onAddProfile: (profile: Omit<WorkProfile, "id" | "created_at">) => Promise<void>
     onUpdateProfile: (id: string, profile: Partial<WorkProfile>) => Promise<void>
     onDeleteProfile: (id: string) => Promise<void>
@@ -101,6 +102,7 @@ export function SalarySection({
     rates,
     deductions = [],
     funds = [],
+    initialSubTab,
     onAddProfile,
     onUpdateProfile,
     onDeleteProfile,
@@ -117,7 +119,13 @@ export function SalarySection({
         return profiles.find(p => p.id === selectedProfileId) || profiles[0] || null
     }, [profiles, selectedProfileId])
 
-    const [activeSubTab, setActiveSubTab] = useState<SubTab>("timesheet")
+    const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialSubTab || "timesheet")
+
+    useEffect(() => {
+        if (initialSubTab) {
+            setActiveSubTab(initialSubTab)
+        }
+    }, [initialSubTab])
     const [timesheetViewMode, setTimesheetViewMode] = useState<"list" | "calendar">("list")
     const [selectedHolidayCountry, setSelectedHolidayCountry] = useState<"TW" | "PH">(() => activeProfile?.country || "TW")
 
@@ -2054,7 +2062,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                     )}
 
                     <div className="flex gap-2 pt-2">
-                        <Button type="button" onClick={() => setShowProfileModal(false)} className="flex-1 bg-muted font-bold rounded-xl">
+                        <Button type="button" onClick={() => setShowProfileModal(false)} className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl">
                             Cancel
                         </Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground font-bold rounded-xl">
@@ -2259,7 +2267,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
 
                         return (
                             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-1.5">
-                                <div className="flex justify-between items-center text-xs font-black text-emerald-500">
+                                <div className="flex justify-between items-center text-xs font-black text-emerald-600 dark:text-emerald-400">
                                     <span className="flex items-center gap-1.5">
                                         <Calculator className="h-4 w-4 shrink-0" />
                                         <span>Estimated Shift Pay</span>
@@ -2271,15 +2279,15 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                                 <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold">
                                     <span>Net Worked: <strong className="text-foreground">{shiftCalc.totalHours.toFixed(1)}h</strong> (Unpaid Break: {(logFormData.break_minutes / 60).toFixed(1)}h)</span>
                                     {shiftCalc.overtimeHours > 0 ? (
-                                        <span className="text-amber-500 font-bold">Includes {shiftCalc.overtimeHours.toFixed(1)}h OT (+{formatCurrency(shiftCalc.overtimePay, activeProfile.currency, showAmounts)})</span>
+                                        <span className="text-amber-700 dark:text-amber-400 font-bold">Includes {shiftCalc.overtimeHours.toFixed(1)}h OT (+{formatCurrency(shiftCalc.overtimePay, activeProfile.currency, showAmounts)})</span>
                                     ) : (
-                                        <span className="text-emerald-500/80 font-bold">Regular 8.0h Shift (0h OT)</span>
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">Regular 8.0h Shift (0h OT)</span>
                                     )}
                                 </div>
                                 {shiftCalc.overtimeHours > 0 && (
-                                    <div className="text-[9px] text-amber-500/90 font-medium pt-1 border-t border-emerald-500/10 flex justify-between">
+                                    <div className="text-[9px] text-amber-800 dark:text-amber-300 font-semibold pt-1 border-t border-emerald-500/20 flex justify-between">
                                         <span>Regular: {shiftCalc.regularHours.toFixed(1)}h @ 1.0x</span>
-                                        <span>Overtime: {shiftCalc.overtimeHours.toFixed(1)}h @ {activeProfile.country === "TW" ? "1.34x / 1.67x (勞基法 §24)" : "1.25x / 1.30x"}</span>
+                                        <span>Overtime: {shiftCalc.overtimeHours.toFixed(1)}h @ {activeProfile.country === "TW" ? "勞基法 §24 (1.34x / 1.67x)" : "1.25x / 1.30x"}</span>
                                     </div>
                                 )}
                             </div>
@@ -2287,7 +2295,7 @@ ${currency !== "PHP" && rates ? `\n≈ PHP Remittance Value: ₱${phpConverted.t
                     })()}
 
                     <div className="flex gap-2 pt-2">
-                        <Button type="button" onClick={() => setShowLogModal(false)} className="flex-1 bg-muted font-bold rounded-xl">
+                        <Button type="button" onClick={() => setShowLogModal(false)} className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl">
                             Cancel
                         </Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground font-bold rounded-xl">

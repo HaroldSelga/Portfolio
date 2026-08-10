@@ -45,6 +45,7 @@ import {
     getCustomExchangeRates,
     getPrimaryBaseCurrency,
     getDirectRate,
+    convertCurrency,
     DEFAULT_RATES_IN_USD,
     type ExchangeRates
 } from "./currency"
@@ -67,6 +68,7 @@ const TABS: { key: Tab; label: string; icon: React.ElementType; color: string }[
 
 export default function FinanceTracker() {
     const [activeTab, setActiveTab] = useState<Tab>("income")
+    const [salarySubTab, setSalarySubTab] = useState<"timesheet" | "payroll" | "tax" | "profiles" | "holidays">("timesheet")
     const [isLoading, setIsLoading] = useState(true)
     const [showAmounts, setShowAmounts] = useState(() => {
         return localStorage.getItem("finance_show_amounts") !== "false"
@@ -390,6 +392,71 @@ export default function FinanceTracker() {
         }
     }
 
+    // Edit finance entry
+    const handleEditEntry = async (id: string, updates: Partial<Omit<FinanceEntry, "id" | "created_at">>) => {
+        const oldEntry = entries.find(e => e.id === id)
+        if (!oldEntry) return
+
+        try {
+            // Reverse old wallet balance
+            let oldNewBalance: number | undefined
+            setWallets(prev => {
+                const wallet = prev.find(w => w.id === oldEntry.wallet_id)
+                if (!wallet) return prev
+                oldNewBalance = oldEntry.type === "income"
+                    ? wallet.balance - oldEntry.amount
+                    : wallet.balance + oldEntry.amount
+                return prev.map(w =>
+                    w.id === oldEntry.wallet_id ? { ...w, balance: oldNewBalance! } : w
+                )
+            })
+
+            if (oldNewBalance !== undefined) {
+                try {
+                    await supabase.from("wallets").update({ balance: oldNewBalance }).eq("id", oldEntry.wallet_id)
+                } catch (err) {
+                    console.warn("Reversing old wallet balance failed:", err)
+                }
+            }
+
+            // Apply new wallet balance
+            const updatedEntry = { ...oldEntry, ...updates }
+            let newNewBalance: number | undefined
+            setWallets(prev => {
+                const wallet = prev.find(w => w.id === updatedEntry.wallet_id)
+                if (!wallet) return prev
+                newNewBalance = updatedEntry.type === "income"
+                    ? wallet.balance + updatedEntry.amount
+                    : wallet.balance - updatedEntry.amount
+                return prev.map(w =>
+                    w.id === updatedEntry.wallet_id ? { ...w, balance: newNewBalance! } : w
+                )
+            })
+
+            if (newNewBalance !== undefined) {
+                try {
+                    await supabase.from("wallets").update({ balance: newNewBalance }).eq("id", updatedEntry.wallet_id)
+                } catch (err) {
+                    console.warn("Applying new wallet balance failed:", err)
+                }
+            }
+
+            // Update entry in Supabase
+            try {
+                await supabase
+                    .from("finance_entries")
+                    .update(updates)
+                    .eq("id", id)
+            } catch (err) {
+                console.warn("Updating entry in Supabase failed:", err)
+            }
+
+            setEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e))
+        } catch (e) {
+            console.error("Error editing entry:", e)
+        }
+    }
+
     // Delete finance entry
     const handleDeleteEntry = async (id: string) => {
         const entry = entries.find(e => e.id === id)
@@ -561,6 +628,25 @@ export default function FinanceTracker() {
             setPayments(prev => prev.filter(p => p.debt_id !== id))
         } catch (e) {
             console.error("Error deleting debt:", e)
+        }
+    }
+
+    // Edit debt
+    const handleEditDebt = async (id: string, updates: Partial<Omit<Debt, "id" | "created_at">>) => {
+        try {
+            const { data, error } = await supabase
+                .from("debts")
+                .update(updates)
+                .eq("id", id)
+                .select()
+                .single()
+
+            if (error) throw error
+            if (data) setDebts(prev => prev.map(d => d.id === id ? data : d))
+        } catch (e) {
+            console.error("Error editing debt:", e)
+            // Fallback: update locally anyway
+            setDebts(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d))
         }
     }
 
@@ -834,6 +920,30 @@ export default function FinanceTracker() {
             } catch (e) {
                 console.error("Error deleting from wishlist database:", e)
                 setWishlist(prev => prev.filter(i => i.id !== id))
+            }
+        }
+    }
+
+    // Edit wishlist item
+    const handleEditWishlistItem = async (id: string, updates: Partial<Omit<WishlistItem, "id" | "created_at">>) => {
+        if (useLocalStorageWishlist) {
+            const updated = wishlist.map(i => i.id === id ? { ...i, ...updates } : i)
+            setWishlist(updated)
+            localStorage.setItem("wishlist_items", JSON.stringify(updated))
+        } else {
+            try {
+                const { data, error } = await supabase
+                    .from("wishlist_items")
+                    .update(updates)
+                    .eq("id", id)
+                    .select()
+                    .single()
+
+                if (error) throw error
+                if (data) setWishlist(prev => prev.map(i => i.id === id ? data : i))
+            } catch (e) {
+                console.error("Error editing wishlist item:", e)
+                setWishlist(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i))
             }
         }
     }
@@ -1235,6 +1345,34 @@ export default function FinanceTracker() {
         }
     }
 
+    // Dashboard Monthly Cash Flow Summary (Current Month)
+    const dashboardCashFlow = useMemo(() => {
+        const currentMonthPrefix = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
+
+        const thisMonthEntries = entries.filter(e => e.date.startsWith(currentMonthPrefix) && e.category !== "transfer")
+
+        const income = thisMonthEntries
+            .filter(e => e.type === "income" && e.category !== "savings_withdraw")
+            .reduce((sum, e) => {
+                const wallet = wallets.find(w => w.id === e.wallet_id)
+                const entryCurr = e.currency || wallet?.currency || "PHP"
+                return sum + convertCurrency(e.amount, entryCurr, baseCurrency, rates, customRates)
+            }, 0)
+
+        const expenses = thisMonthEntries
+            .filter(e => e.type === "expense" && e.category !== "savings_deposit")
+            .reduce((sum, e) => {
+                const wallet = wallets.find(w => w.id === e.wallet_id)
+                const entryCurr = e.currency || wallet?.currency || "PHP"
+                return sum + convertCurrency(e.amount, entryCurr, baseCurrency, rates, customRates)
+            }, 0)
+
+        const net = income - expenses
+        const savingsRate = income > 0 ? Math.round((net / income) * 100) : 0
+
+        return { income, expenses, net, savingsRate }
+    }, [entries, wallets, baseCurrency, rates, customRates])
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-background pt-24 pb-20 px-4">
@@ -1297,26 +1435,29 @@ export default function FinanceTracker() {
                             transition={{ duration: 0.4 }}
                         >
                             <button
-                                onClick={() => setActiveTab("salary")}
-                                className="w-full p-3.5 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/15 flex items-center gap-3 text-left transition-all hover:shadow-md group"
+                                onClick={() => {
+                                    setActiveTab("salary")
+                                    setSalarySubTab("holidays")
+                                }}
+                                className="w-full p-3.5 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/15 flex items-center gap-3 text-left transition-all hover:shadow-md group cursor-pointer"
                             >
-                                <div className="p-2 rounded-xl shrink-0 bg-purple-500/20 text-purple-400">
-                                    <Sparkles className="h-5 w-5 text-purple-400 animate-pulse" />
+                                <div className="p-2 rounded-xl shrink-0 bg-purple-500/20 text-purple-600 dark:text-purple-400">
+                                    <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-pulse" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-black uppercase tracking-tight text-purple-400">
+                                    <p className="text-sm font-black uppercase tracking-tight text-purple-700 dark:text-purple-300">
                                         🎉 NEXT STATUTORY HOLIDAY ({nextH.daysAway === 0 ? "TODAY!" : `IN ${nextH.daysAway} DAY${nextH.daysAway > 1 ? "S" : ""}`})
                                     </p>
                                     <div className="flex flex-wrap gap-1.5 mt-1">
-                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/20 text-purple-300">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 border border-purple-500/30 text-purple-800 dark:text-purple-200">
                                             {country === "TW" ? "🇹🇼" : "🇵🇭"} {nextH.name} ({new Date(nextH.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
                                         </span>
-                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-400">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300">
                                             🔥 {nextH.type === "regular_holiday" ? "2.0x Double Pay" : "1.30x Special Pay"}
                                         </span>
                                     </div>
                                 </div>
-                                <span className="text-xs font-bold shrink-0 group-hover:translate-x-0.5 transition-transform text-purple-400">
+                                <span className="text-xs font-bold shrink-0 group-hover:translate-x-0.5 transition-transform text-purple-700 dark:text-purple-300">
                                     View Salary & Holidays →
                                 </span>
                             </button>
@@ -1431,6 +1572,78 @@ export default function FinanceTracker() {
                     )
                 })()}
 
+                {/* 📊 Dashboard Monthly Cash Flow Banner */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.05 }}
+                    className="bg-card/60 backdrop-blur-sm border border-border/30 rounded-2xl p-3.5 sm:p-4 shadow-sm"
+                >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="p-2 bg-primary/10 rounded-xl text-primary">
+                                <BarChart3 className="h-4 w-4" />
+                            </span>
+                            <div>
+                                <h3 className="text-xs font-black uppercase tracking-wider">This Month's Cash Flow</h3>
+                                <p className="text-[10px] font-semibold text-muted-foreground">
+                                    {new Date().toLocaleDateString("en-PH", { month: "long", year: "numeric" })} summary
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setActiveTab("reports")}
+                            className="text-xs font-bold text-primary hover:underline flex items-center gap-1 self-start sm:self-auto"
+                        >
+                            View Full Reports →
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-3 pt-3 border-t border-border/20">
+                        {/* Income */}
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 sm:p-3">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-0.5">
+                                ➕ Income
+                            </span>
+                            <span className="text-xs sm:text-base font-black tabular-nums text-emerald-600 dark:text-emerald-400 block">
+                                +{formatCurrency(dashboardCashFlow.income, baseCurrency, showAmounts)}
+                            </span>
+                        </div>
+
+                        {/* Expenses */}
+                        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-2.5 sm:p-3">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block mb-0.5">
+                                ➖ Expenses
+                            </span>
+                            <span className="text-xs sm:text-base font-black tabular-nums text-rose-600 dark:text-rose-400 block">
+                                -{formatCurrency(dashboardCashFlow.expenses, baseCurrency, showAmounts)}
+                            </span>
+                        </div>
+
+                        {/* Net Surplus */}
+                        <div className={cn(
+                            "border rounded-xl p-2.5 sm:p-3",
+                            dashboardCashFlow.net >= 0
+                                ? "bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-400"
+                                : "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
+                        )}>
+                            <div className="flex justify-between items-center mb-0.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wider block">
+                                    💰 Net Cash Flow
+                                </span>
+                                {dashboardCashFlow.income > 0 && (
+                                    <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-background/80">
+                                        {dashboardCashFlow.savingsRate}% saved
+                                    </span>
+                                )}
+                            </div>
+                            <span className="text-xs sm:text-base font-black tabular-nums block">
+                                {dashboardCashFlow.net < 0 && "-"}{formatCurrency(dashboardCashFlow.net, baseCurrency, showAmounts)}
+                            </span>
+                        </div>
+                    </div>
+                </motion.div>
+
                 {/* Wallet Cards */}
                 <motion.div
                     initial={{ opacity: 0, y: 15 }}
@@ -1479,8 +1692,11 @@ export default function FinanceTracker() {
                         <Receipt className="h-3.5 w-3.5" /> Pay Bill
                     </button>
                     <button
-                        onClick={() => setActiveTab("salary")}
-                        className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-xs font-bold text-sky-500 transition-all"
+                        onClick={() => {
+                            setActiveTab("salary")
+                            setSalarySubTab("timesheet")
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-xs font-bold text-sky-500 transition-all cursor-pointer"
                     >
                         <Calendar className="h-3.5 w-3.5" /> Log Shift
                     </button>
@@ -1535,6 +1751,7 @@ export default function FinanceTracker() {
                                     netSalaryPreset={netSalaryPreset}
                                     onAdd={handleAddEntry}
                                     onDelete={handleDeleteEntry}
+                                    onEdit={handleEditEntry}
                                 />
                             )}
                              {activeTab === "expenses" && (
@@ -1546,6 +1763,7 @@ export default function FinanceTracker() {
                                     baseCurrency={baseCurrency}
                                     onAdd={handleAddEntry}
                                     onDelete={handleDeleteEntry}
+                                    onEdit={handleEditEntry}
                                 />
                             )}
                             {activeTab === "history" && (
@@ -1566,6 +1784,7 @@ export default function FinanceTracker() {
                                     rates={rates}
                                     deductions={payrollDeductions}
                                     funds={funds}
+                                    initialSubTab={salarySubTab}
                                     onFundTransaction={handleFundTransaction}
                                     onAddProfile={handleAddProfile}
                                     onUpdateProfile={handleUpdateProfile}
@@ -1608,6 +1827,7 @@ export default function FinanceTracker() {
                                     onAddDebt={handleAddDebt}
                                     onAddPayment={handleAddPayment}
                                     onDeleteDebt={handleDeleteDebt}
+                                    onEditDebt={handleEditDebt}
                                 />
                             )}
                             {activeTab === "funds" && (
@@ -1630,6 +1850,7 @@ export default function FinanceTracker() {
                                     onAddItem={handleAddWishlistItem}
                                     onPurchaseItem={handlePurchaseWishlistItem}
                                     onDeleteItem={handleDeleteWishlistItem}
+                                    onEditItem={handleEditWishlistItem}
                                 />
                             )}
                             {activeTab === "reports" && (

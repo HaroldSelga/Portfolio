@@ -15,11 +15,16 @@ interface HistorySectionProps {
 export function HistorySection({ entries, wallets, showAmounts = true, onDelete }: HistorySectionProps) {
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedWallet, setSelectedWallet] = useState("all")
-    const [selectedType, setSelectedType] = useState("all") // "all" | "income" | "expense"
+    const [selectedType, setSelectedType] = useState("all") // "all" | "income" | "expense" | "transfer"
+    const [datePreset, setDatePreset] = useState("all") // "all" | "this_month" | "last_30" | "last_90" | "custom"
+    const [startDate, setStartDate] = useState("")
+    const [endDate, setEndDate] = useState("")
     const [visibleCount, setVisibleCount] = useState(25)
 
     // Filtered and sorted entries
     const filteredEntries = useMemo(() => {
+        const now = new Date()
+
         return entries
             .filter(entry => {
                 const matchesSearch = entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,15 +37,32 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                         ? entry.category === "transfer"
                         : entry.type === selectedType
 
-                return matchesSearch && matchesWallet && matchesType
+                // Date filter logic
+                let matchesDate = true
+                const entryTime = new Date(entry.date).getTime()
+                if (datePreset === "this_month") {
+                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+                    matchesDate = entryTime >= startOfMonth
+                } else if (datePreset === "last_30") {
+                    const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000
+                    matchesDate = entryTime >= thirtyDaysAgo
+                } else if (datePreset === "last_90") {
+                    const ninetyDaysAgo = now.getTime() - 90 * 24 * 60 * 60 * 1000
+                    matchesDate = entryTime >= ninetyDaysAgo
+                } else if (datePreset === "custom") {
+                    if (startDate && entry.date < startDate) matchesDate = false
+                    if (endDate && entry.date > endDate) matchesDate = false
+                }
+
+                return matchesSearch && matchesWallet && matchesType && matchesDate
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    }, [entries, searchQuery, selectedWallet, selectedType])
+    }, [entries, searchQuery, selectedWallet, selectedType, datePreset, startDate, endDate])
 
     // Reset pagination when filter settings change using useEffect instead of useMemo
     useEffect(() => {
         setVisibleCount(25)
-    }, [searchQuery, selectedWallet, selectedType])
+    }, [searchQuery, selectedWallet, selectedType, datePreset, startDate, endDate])
 
     const visibleEntries = useMemo(() => {
         return filteredEntries.slice(0, visibleCount)
@@ -63,8 +85,21 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                         />
                     </div>
 
-                    {/* Filter Type */}
+                    {/* Filter Type, Wallet, and Date Range */}
                     <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                        {/* Filter Date Range */}
+                        <select
+                            value={datePreset}
+                            onChange={e => setDatePreset(e.target.value)}
+                            className="px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        >
+                            <option value="all">🗓️ All Time</option>
+                            <option value="this_month">📅 This Month</option>
+                            <option value="last_30">⏳ Last 30 Days</option>
+                            <option value="last_90">📆 Last 90 Days</option>
+                            <option value="custom">✏️ Custom Range</option>
+                        </select>
+
                         <select
                             value={selectedType}
                             onChange={e => setSelectedType(e.target.value)}
@@ -89,6 +124,34 @@ export function HistorySection({ entries, wallets, showAmounts = true, onDelete 
                         </select>
                     </div>
                 </div>
+
+                {/* Custom Date Inputs (shown only when datePreset === 'custom') */}
+                {datePreset === "custom" && (
+                    <div className="flex items-center gap-3 pt-1 text-xs">
+                        <span className="font-bold text-muted-foreground">From:</span>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            className="px-3 py-1.5 bg-background border border-border/60 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        <span className="font-bold text-muted-foreground">To:</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            className="px-3 py-1.5 bg-background border border-border/60 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        {(startDate || endDate) && (
+                            <button
+                                onClick={() => { setStartDate(""); setEndDate("") }}
+                                className="px-2.5 py-1 bg-muted hover:bg-muted/80 text-muted-foreground font-bold rounded-lg transition-all"
+                            >
+                                Clear Dates
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* History Table/List */}

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Target, Check, Trash2, X, AlertTriangle, Calendar, ExternalLink } from "lucide-react"
+import { Plus, Target, Check, Trash2, X, AlertTriangle, Calendar, ExternalLink, Pencil } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import { Modal } from "../ui/Modal"
@@ -15,10 +15,12 @@ interface WishlistSectionProps {
     onAddItem: (item: Omit<WishlistItem, "id" | "created_at" | "is_purchased" | "actual_price" | "purchased_date" | "wallet_id">) => void
     onPurchaseItem: (id: string, actualPrice: number, walletId: string, notes: string | null, date: string) => void
     onDeleteItem: (id: string) => void
+    onEditItem?: (id: string, updates: Partial<Omit<WishlistItem, "id" | "created_at">>) => void
 }
 
-export function WishlistSection({ items, wallets, showAmounts = true, baseCurrency = "PHP", onAddItem, onPurchaseItem, onDeleteItem }: WishlistSectionProps) {
+export function WishlistSection({ items, wallets, showAmounts = true, baseCurrency = "PHP", onAddItem, onPurchaseItem, onDeleteItem, onEditItem }: WishlistSectionProps) {
     const [showAddForm, setShowAddForm] = useState(false)
+    const [editingItem, setEditingItem] = useState<WishlistItem | null>(null)
     const [purchaseModalItem, setPurchaseModalItem] = useState<WishlistItem | null>(null)
     const [newWishlist, setNewWishlist] = useState({
         label: "",
@@ -277,6 +279,15 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
                                 </div>
 
                                 <div className="flex items-center justify-end gap-2 border-t border-border/10 pt-3 mt-1">
+                                    {onEditItem && (
+                                        <button
+                                            onClick={() => setEditingItem(item)}
+                                            className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-sky-500 hover:bg-sky-500/10 transition-all"
+                                            title="Edit wishlist item"
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => onDeleteItem(item.id)}
                                         className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
@@ -441,6 +452,103 @@ export function WishlistSection({ items, wallets, showAmounts = true, baseCurren
                     </Button>
                 </form>
             </Modal>
+            {/* ✏️ EDIT WISHLIST ITEM MODAL */}
+            {onEditItem && (
+                <Modal
+                    isOpen={!!editingItem}
+                    onClose={() => setEditingItem(null)}
+                    title="Edit Wishlist Item"
+                    className="max-w-md"
+                >
+                    {editingItem && (
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault()
+                                const formEl = e.currentTarget
+                                const fd = new FormData(formEl)
+                                onEditItem(editingItem.id, {
+                                    label: fd.get("label") as string,
+                                    estimated_price: parseFloat(fd.get("estimated_price") as string),
+                                    priority: fd.get("priority") as "low" | "medium" | "high",
+                                    notes: (fd.get("notes") as string) || null,
+                                    target_date: (fd.get("target_date") as string) || null,
+                                    url: (fd.get("url") as string) || undefined,
+                                })
+                                setEditingItem(null)
+                            }}
+                            className="p-6 space-y-4"
+                        >
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Item Name</label>
+                                <input
+                                    type="text"
+                                    name="label"
+                                    defaultValue={editingItem.label}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Estimated Price ({baseCurrency})</label>
+                                    <input
+                                        type="number"
+                                        name="estimated_price"
+                                        step="0.01"
+                                        min="0"
+                                        defaultValue={editingItem.estimated_price}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Priority</label>
+                                    <select
+                                        name="priority"
+                                        defaultValue={editingItem.priority}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                    >
+                                        <option value="low">Low Priority</option>
+                                        <option value="medium">Medium Priority</option>
+                                        <option value="high">High Priority</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Target Purchase Date (optional)</label>
+                                <input
+                                    type="date"
+                                    name="target_date"
+                                    defaultValue={editingItem.target_date ?? ""}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Product URL (optional)</label>
+                                <input
+                                    type="url"
+                                    name="url"
+                                    defaultValue={editingItem.url ?? ""}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes / Specs (optional)</label>
+                                <textarea
+                                    name="notes"
+                                    rows={2}
+                                    defaultValue={editingItem.notes || ""}
+                                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                                />
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                                <Button type="button" onClick={() => setEditingItem(null)} className="flex-1 bg-muted text-foreground hover:bg-muted/80 font-bold rounded-xl">Cancel</Button>
+                                <Button type="submit" className="flex-1 bg-sky-500 text-white hover:bg-sky-600 font-bold rounded-xl shadow-lg shadow-sky-500/20">Save Changes</Button>
+                            </div>
+                        </form>
+                    )}
+                </Modal>
+            )}
         </div>
     )
 }

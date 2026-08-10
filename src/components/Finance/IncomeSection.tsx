@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Trash2, TrendingUp, X, Briefcase, Repeat, Check } from "lucide-react"
+import { Plus, Trash2, TrendingUp, X, Briefcase, Repeat, Check, Pencil } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/Button"
 import type { FinanceEntry, Wallet, CurrencyCode } from "./types"
 import { INCOME_CATEGORIES, CURRENCIES, formatCurrency, getLocalDateString, getDefaultSmartWallet } from "./types"
+import { Modal } from "../ui/Modal"
 
 interface NetSalaryPreset {
     amount: number
@@ -29,11 +30,13 @@ interface IncomeSectionProps {
     netSalaryPreset?: NetSalaryPreset | null
     onAdd: (entry: Omit<FinanceEntry, "id" | "created_at">) => void
     onDelete: (id: string) => void
+    onEdit?: (id: string, updates: Partial<Omit<FinanceEntry, "id" | "created_at">>) => void
 }
 
-export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryPreset, onAdd, onDelete }: IncomeSectionProps) {
+export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryPreset, onAdd, onDelete, onEdit }: IncomeSectionProps) {
     const [showForm, setShowForm] = useState(false)
     const [showRecurringManager, setShowRecurringManager] = useState(false)
+    const [editingEntry, setEditingEntry] = useState<FinanceEntry | null>(null)
     const [recurringTemplates, setRecurringTemplates] = useState<RecurringIncomeTemplate[]>(() => {
         try {
             const stored = localStorage.getItem("finance_recurring_income")
@@ -477,12 +480,129 @@ export function IncomeSection({ entries, wallets, showAmounts = true, netSalaryP
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                     </button>
+                                    {onEdit && (
+                                        <button
+                                            onClick={() => setEditingEntry(entry)}
+                                            className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-sky-500 hover:bg-sky-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                            title="Edit entry"
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
                                 </motion.div>
                             )
                         })}
                     </div>
                 )}
             </div>
+
+            {/* Edit Entry Modal */}
+            {onEdit && (
+                <Modal
+                    isOpen={!!editingEntry}
+                    onClose={() => setEditingEntry(null)}
+                    title="Edit Income Entry"
+                    className="max-w-md"
+                >
+                    {editingEntry && (() => {
+                        const editWallet = wallets.find(w => w.id === editingEntry.wallet_id)
+                        const editCurr: CurrencyCode = editWallet?.currency || "PHP"
+                        const editCurrInfo = CURRENCIES[editCurr] || CURRENCIES.PHP
+                        return (
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault()
+                                    const formEl = e.currentTarget
+                                    const fd = new FormData(formEl)
+                                    onEdit(editingEntry.id, {
+                                        date: fd.get("date") as string,
+                                        category: fd.get("category") as string,
+                                        description: (fd.get("description") as string) || INCOME_CATEGORIES.find(c => c.value === fd.get("category"))?.label || "Income",
+                                        amount: parseFloat(fd.get("amount") as string),
+                                        wallet_id: fd.get("wallet_id") as string,
+                                        notes: (fd.get("notes") as string) || undefined,
+                                    })
+                                    setEditingEntry(null)
+                                }}
+                                className="p-6 space-y-4"
+                            >
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Date</label>
+                                        <input
+                                            type="date"
+                                            name="date"
+                                            defaultValue={editingEntry.date}
+                                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Category</label>
+                                        <select
+                                            name="category"
+                                            defaultValue={editingEntry.category}
+                                            className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                        >
+                                            {INCOME_CATEGORIES.map(cat => (
+                                                <option key={cat.value} value={cat.value}>{cat.emoji} {cat.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Amount ({editCurrInfo.symbol})</label>
+                                    <input
+                                        type="number"
+                                        name="amount"
+                                        step="any"
+                                        min="0.000001"
+                                        defaultValue={editingEntry.amount}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Wallet</label>
+                                    <select
+                                        name="wallet_id"
+                                        defaultValue={editingEntry.wallet_id}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                    >
+                                        {wallets.map(w => {
+                                            const wCurr = w.currency || "PHP"
+                                            const flag = CURRENCIES[wCurr]?.flag || "🇵🇭"
+                                            return <option key={w.id} value={w.id}>{flag} {w.name}</option>
+                                        })}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Description</label>
+                                    <input
+                                        type="text"
+                                        name="description"
+                                        defaultValue={editingEntry.description}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Notes (optional)</label>
+                                    <textarea
+                                        name="notes"
+                                        rows={2}
+                                        defaultValue={editingEntry.notes || ""}
+                                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                    />
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                    <Button type="button" onClick={() => setEditingEntry(null)} className="flex-1 bg-muted text-foreground hover:bg-muted/80 font-bold rounded-xl">Cancel</Button>
+                                    <Button type="submit" className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-500/20">Save Changes</Button>
+                                </div>
+                            </form>
+                        )
+                    })()}
+                </Modal>
+            )}
         </div>
     )
 }

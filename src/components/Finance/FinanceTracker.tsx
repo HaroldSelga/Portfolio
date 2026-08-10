@@ -1599,13 +1599,13 @@ export default function FinanceTracker() {
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-3 pt-3 border-t border-border/20">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mt-3 pt-3 border-t border-border/20">
                         {/* Income */}
                         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 sm:p-3">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-0.5">
                                 ➕ Income
                             </span>
-                            <span className="text-xs sm:text-base font-black tabular-nums text-emerald-600 dark:text-emerald-400 block">
+                            <span className="text-[10px] sm:text-base font-black tabular-nums text-emerald-600 dark:text-emerald-400 block truncate">
                                 +{formatCurrency(dashboardCashFlow.income, baseCurrency, showAmounts)}
                             </span>
                         </div>
@@ -1615,7 +1615,7 @@ export default function FinanceTracker() {
                             <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block mb-0.5">
                                 ➖ Expenses
                             </span>
-                            <span className="text-xs sm:text-base font-black tabular-nums text-rose-600 dark:text-rose-400 block">
+                            <span className="text-[10px] sm:text-base font-black tabular-nums text-rose-600 dark:text-rose-400 block truncate">
                                 -{formatCurrency(dashboardCashFlow.expenses, baseCurrency, showAmounts)}
                             </span>
                         </div>
@@ -1637,7 +1637,7 @@ export default function FinanceTracker() {
                                     </span>
                                 )}
                             </div>
-                            <span className="text-xs sm:text-base font-black tabular-nums block">
+                            <span className="text-[10px] sm:text-base font-black tabular-nums block truncate">
                                 {dashboardCashFlow.net < 0 && "-"}{formatCurrency(dashboardCashFlow.net, baseCurrency, showAmounts)}
                             </span>
                         </div>
